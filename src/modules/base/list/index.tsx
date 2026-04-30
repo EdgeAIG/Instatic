@@ -70,7 +70,7 @@ export const ListModule: ModuleDefinition<ListProps> = {
 
   classStyleBindings: {
     color: rawBinding('color', { type: 'color', label: 'Text color' }, '#374151'),
-    fontSize: pxBinding('fontSize', { type: 'slider', label: 'Font size', min: 10, max: 48, step: 1, unit: 'px' }, 16),
+    fontSize: pxBinding('fontSize', { type: 'text', label: 'Font size', placeholder: '16px' }, 16),
     fontWeight: rawBinding(
       'fontWeight',
       {
@@ -85,9 +85,9 @@ export const ListModule: ModuleDefinition<ListProps> = {
       },
       '400',
     ),
-    lineHeight: unitlessStringBinding('lineHeight', { type: 'slider', label: 'Line height', min: 1, max: 3, step: 0.05 }, 1.6),
-    paddingLeft: pxBinding('paddingLeft', { type: 'slider', label: 'Left indent', min: 0, max: 80, step: 2, unit: 'px' }, 24),
-    marginBottom: pxBinding('marginBottom', { type: 'slider', label: 'Margin bottom', min: 0, max: 96, step: 2, unit: 'px' }, 16),
+    lineHeight: unitlessStringBinding('lineHeight', { type: 'text', label: 'Line height', placeholder: '1.6' }, 1.6),
+    paddingLeft: pxBinding('paddingLeft', { type: 'text', label: 'Left indent', placeholder: '24px' }, 24),
+    marginBottom: pxBinding('marginBottom', { type: 'text', label: 'Margin bottom', placeholder: '16px' }, 16),
   },
 
   component: ListEditor,

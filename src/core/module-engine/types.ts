@@ -29,7 +29,6 @@ export type PropertyControl = PropertyControlBase &
     | { type: 'text'; placeholder?: string }
     | { type: 'textarea'; rows?: number; placeholder?: string }
     | { type: 'number'; min?: number; max?: number; step?: number; unit?: string }
-    | { type: 'slider'; min: number; max: number; step: number; unit?: string }
     | { type: 'color'; format?: 'hex' | 'rgba' }
     | { type: 'select'; options: Array<{ label: string; value: unknown }> }
     | { type: 'toggle' }

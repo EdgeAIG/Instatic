@@ -12,7 +12,6 @@ import { Icon } from '../../../ui/icons/Icon'
 import { TextControl } from './TextControl'
 import { TextareaControl } from './TextareaControl'
 import { NumberControl } from './NumberControl'
-import { SliderControl } from './SliderControl'
 import { ColorControl } from './ColorControl'
 import { SelectControl } from './SelectControl'
 import { ToggleControl } from './ToggleControl'
@@ -80,19 +79,6 @@ export function PropertyControlRenderer({
         <NumberControl
           {...shared}
           value={Number(value ?? 0)}
-          min={control.min}
-          max={control.max}
-          step={control.step}
-          unit={control.unit}
-        />
-      )
-      break
-
-    case 'slider':
-      inner = (
-        <SliderControl
-          {...shared}
-          value={Number(value ?? control.min)}
           min={control.min}
           max={control.max}
           step={control.step}

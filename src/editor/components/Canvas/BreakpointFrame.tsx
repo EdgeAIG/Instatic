@@ -11,7 +11,7 @@
 
 import type { CSSProperties } from 'react'
 import type { Page, Breakpoint } from '../../../core/page-tree/types'
-import { NodeRenderer } from './NodeRenderer'
+import { CanvasBreakpointContext, NodeRenderer } from './NodeRenderer'
 import { Icon } from '../../../ui/icons/Icon'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
@@ -63,7 +63,9 @@ export function BreakpointFrame({
           <EmptyCanvasState />
         )}
 
-        <NodeRenderer nodeId={page.rootNodeId} />
+        <CanvasBreakpointContext.Provider value={breakpoint.id}>
+          <NodeRenderer nodeId={page.rootNodeId} />
+        </CanvasBreakpointContext.Provider>
       </div>
     </div>
   )

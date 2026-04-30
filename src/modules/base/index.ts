@@ -30,10 +30,3 @@ import './video'
 
 // Grid/column layout
 import './columns'
-
-// Field API demos
-import './demoCard'
-import './demoScene'
-
-// Visual Component instance (Task #438 — canvas integration)
-import './visualComponentRef'

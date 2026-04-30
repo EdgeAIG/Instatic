@@ -88,7 +88,7 @@ export const ImageModule: ModuleDefinition<ImageProps> = {
       'cover',
     ),
     objectPosition: rawBinding('objectPosition', { type: 'text', label: 'Object position', placeholder: 'center center' }, 'center center'),
-    borderRadius: pxBinding('borderRadius', { type: 'slider', label: 'Border radius', min: 0, max: 96, step: 1, unit: 'px' }, 0),
+    borderRadius: pxBinding('borderRadius', { type: 'text', label: 'Border radius', placeholder: '0px' }, 0),
   },
 
   component: ImageEditor,

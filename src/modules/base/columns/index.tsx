@@ -51,7 +51,7 @@ export const ColumnsModule: ModuleDefinition<ColumnsProps> = {
     columns: {
       label: 'Columns',
       properties: ['display', 'gridTemplateColumns'],
-      control: { type: 'slider', label: 'Columns', min: 1, max: 12, step: 1 },
+      control: { type: 'text', label: 'Columns', placeholder: '2' },
       defaultValue: 2,
       toCSS: (value) => {
         const columns = Math.max(1, Math.min(12, Math.round(Number(value) || 1)))
@@ -67,8 +67,8 @@ export const ColumnsModule: ModuleDefinition<ColumnsProps> = {
       },
       isSet: (styles) => Boolean(styles.gridTemplateColumns),
     },
-    columnGap: pxBinding('columnGap', { type: 'slider', label: 'Column gap', min: 0, max: 120, step: 2, unit: 'px' }, 24),
-    rowGap: pxBinding('rowGap', { type: 'slider', label: 'Row gap', min: 0, max: 120, step: 2, unit: 'px' }, 24),
+    columnGap: pxBinding('columnGap', { type: 'text', label: 'Column gap', placeholder: '24px' }, 24),
+    rowGap: pxBinding('rowGap', { type: 'text', label: 'Row gap', placeholder: '24px' }, 24),
     alignItems: rawBinding(
       'alignItems',
       {
@@ -97,8 +97,8 @@ export const ColumnsModule: ModuleDefinition<ColumnsProps> = {
       },
       'stretch',
     ),
-    paddingTop: pxBinding('paddingTop', { type: 'slider', label: 'Padding top', min: 0, max: 240, step: 2, unit: 'px' }, 0),
-    paddingBottom: pxBinding('paddingBottom', { type: 'slider', label: 'Padding bottom', min: 0, max: 240, step: 2, unit: 'px' }, 0),
+    paddingTop: pxBinding('paddingTop', { type: 'text', label: 'Padding top', placeholder: '0px' }, 0),
+    paddingBottom: pxBinding('paddingBottom', { type: 'text', label: 'Padding bottom', placeholder: '0px' }, 0),
     maxWidth: rawBinding('maxWidth', { type: 'text', label: 'Max width', placeholder: '100%' }, '100%'),
     backgroundColor: rawBinding('backgroundColor', { type: 'color', label: 'Background' }, 'transparent'),
   },

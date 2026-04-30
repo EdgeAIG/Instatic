@@ -31,6 +31,7 @@ import type {
 import { executeAgentActions } from './executor'
 import { AGENT_API_PATH } from './agentConfig'
 import { stripAgentActionBlocks } from './actionBlocks'
+import { collectAgentRenderSnapshots } from './renderEvidence'
 import type {
   AgentModuleContext,
   AgentModulePropContext,
@@ -52,6 +53,8 @@ export interface AgentSlice {
   isAgentStreaming: boolean
   agentMessages: AgentMessage[]
   agentError: string | null
+  agentSessionId: string | null
+  agentSessionProjectId: string | null
 
   // ── Actions ────────────────────────────────────────────────────────────────
   openAgent(): void
@@ -74,6 +77,24 @@ export interface AgentSlice {
 }
 
 type EditorStoreSet = Parameters<StateCreator<EditorStore, [], [], AgentSlice>>[0]
+
+const AGENT_SESSION_STORAGE_PREFIX = 'pb-agent-session:'
+
+function readStoredAgentSessionId(projectId: string | null | undefined): string | null {
+  if (!projectId || typeof localStorage === 'undefined') return null
+  const sessionId = localStorage.getItem(`${AGENT_SESSION_STORAGE_PREFIX}${projectId}`)
+  return sessionId && sessionId.trim() ? sessionId.trim() : null
+}
+
+function writeStoredAgentSessionId(projectId: string | null | undefined, sessionId: string): void {
+  if (!projectId || typeof localStorage === 'undefined') return
+  localStorage.setItem(`${AGENT_SESSION_STORAGE_PREFIX}${projectId}`, sessionId)
+}
+
+function clearStoredAgentSessionId(projectId: string | null | undefined): void {
+  if (!projectId || typeof localStorage === 'undefined') return
+  localStorage.removeItem(`${AGENT_SESSION_STORAGE_PREFIX}${projectId}`)
+}
 
 // ---------------------------------------------------------------------------
 // Implementation
@@ -120,6 +141,8 @@ export const createAgentSlice: StateCreator<EditorStore, [], [], AgentSlice> = (
     isAgentStreaming: false,
     agentMessages: [],
     agentError: null,
+    agentSessionId: null,
+    agentSessionProjectId: null,
 
     // ── UI actions ───────────────────────────────────────────────────────────
     openAgent() {
@@ -141,7 +164,13 @@ export const createAgentSlice: StateCreator<EditorStore, [], [], AgentSlice> = (
     },
 
     clearAgentMessages() {
-      set({ agentMessages: [], agentError: null })
+      clearStoredAgentSessionId(get().project?.id)
+      set({
+        agentMessages: [],
+        agentError: null,
+        agentSessionId: null,
+        agentSessionProjectId: null,
+      })
     },
 
     // ── sendAgentMessage ─────────────────────────────────────────────────────
@@ -151,6 +180,18 @@ export const createAgentSlice: StateCreator<EditorStore, [], [], AgentSlice> = (
       const endpoint = AGENT_API_PATH
 
       if (get().isAgentStreaming) return // one request at a time
+
+      const projectId = get().project?.id ?? null
+      const stateSessionId = get().agentSessionProjectId === projectId
+        ? get().agentSessionId
+        : null
+      const resumeSessionId = stateSessionId ?? readStoredAgentSessionId(projectId)
+      if (resumeSessionId && resumeSessionId !== get().agentSessionId) {
+        set({
+          agentSessionId: resumeSessionId,
+          agentSessionProjectId: projectId,
+        })
+      }
 
       // Add user message
       const userMsg: AgentMessage = {
@@ -180,13 +221,6 @@ export const createAgentSlice: StateCreator<EditorStore, [], [], AgentSlice> = (
         }),
       )
 
-      // Build page context snapshot
-      const storeState = get()
-      const activePage = storeState.project?.pages.find(
-        (p) => p.id === storeState.activePageId,
-      ) ?? storeState.project?.pages[0]
-      const pageContext: PageContext = buildPageContext(storeState, activePage)
-
       // Build conversation history (prior messages)
       const priorMessages = get()
         .agentMessages.filter((m) => m.id !== userMsg.id && m.id !== assistantId)
@@ -198,21 +232,24 @@ export const createAgentSlice: StateCreator<EditorStore, [], [], AgentSlice> = (
         }))
         .filter((m) => m.content.trim().length > 0)
 
-      const body: AgentRequestBody = {
-        prompt: content,
-        messages: priorMessages,
-        pageContext,
-      }
-
       // Start streaming
       _abortController = new AbortController()
 
-      try {
+      const runAgentRequest = async (
+        requestPrompt: string,
+        pageContext: PageContext,
+      ): Promise<void> => {
+        const body: AgentRequestBody = {
+          prompt: requestPrompt,
+          sessionId: resumeSessionId ?? undefined,
+          messages: priorMessages,
+          pageContext,
+        }
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
-          signal: _abortController.signal,
+          signal: _abortController?.signal,
         })
 
         if (!res.ok) {
@@ -260,7 +297,11 @@ export const createAgentSlice: StateCreator<EditorStore, [], [], AgentSlice> = (
 
         // Flush any remaining text
         flushPendingText()
+      }
 
+      try {
+        const initialPageContext = await buildCurrentLivePageContext(get)
+        await runAgentRequest(content, initialPageContext)
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
           // User aborted — treat as normal end
@@ -299,6 +340,8 @@ export async function processStreamEvent(
 ): Promise<void> {
   switch (event.type) {
     case 'text': {
+      const msg = get().agentMessages.find((m) => m.id === assistantId)
+      if (msg?.toolCalls.some((toolCall) => toolCall.status === 'error')) break
       appendText(assistantId, event.text)
       break
     }
@@ -311,6 +354,7 @@ export async function processStreamEvent(
       // Add tool call placeholders
       const toolCalls: AgentToolCall[] = actions.map((a) => ({
         id: nanoid(),
+        source: 'page-builder',
         actionType: a.type,
         params: a,
         result: null,
@@ -366,6 +410,58 @@ export async function processStreamEvent(
       break
     }
 
+    case 'toolStatus': {
+      set(
+        produce((state: EditorStore) => {
+          const msg = state.agentMessages.find((m) => m.id === assistantId)
+          if (!msg) return
+
+          const existing = msg.toolCalls.find((toolCall) => toolCall.externalId === event.toolCallId)
+          if (existing) {
+            existing.status = event.status
+            existing.params = event.input && typeof event.input === 'object'
+              ? event.input as Record<string, unknown>
+              : existing.params
+            existing.result = event.status === 'pending'
+              ? null
+              : {
+                  success: event.status === 'success',
+                  error: event.status === 'error' ? event.error ?? 'Tool call failed.' : undefined,
+                }
+            return
+          }
+
+          msg.toolCalls.push({
+            id: nanoid(),
+            externalId: event.toolCallId,
+            source: 'sdk',
+            actionType: event.name,
+            params: event.input && typeof event.input === 'object'
+              ? event.input as Record<string, unknown>
+              : {},
+            result: event.status === 'pending'
+              ? null
+              : {
+                  success: event.status === 'success',
+                  error: event.status === 'error' ? event.error ?? 'Tool call failed.' : undefined,
+                },
+            status: event.status,
+          })
+        }),
+      )
+      break
+    }
+
+    case 'session': {
+      const projectId = get().project?.id ?? null
+      writeStoredAgentSessionId(projectId, event.sessionId)
+      set({
+        agentSessionId: event.sessionId,
+        agentSessionProjectId: projectId,
+      })
+      break
+    }
+
     case 'error': {
       // CWE-209 (Constraint #388): server error messages may contain internal
       // details. Log them server-side; propagate only fixed copy to the UI.
@@ -379,9 +475,6 @@ export async function processStreamEvent(
     default:
       break
   }
-
-  // Keep TS happy — get() is used to access store if needed
-  void get
 }
 
 // ---------------------------------------------------------------------------
@@ -396,10 +489,13 @@ export function buildPageContext(
     return {
       pageTitle: 'Untitled',
       rootNodeId: '',
+      activeBreakpointId: state.activeBreakpointId,
+      breakpoints: [],
       nodes: [],
       availableModules: [],
       selectedNodeId: null,
       classes: [],
+      renderSnapshots: [],
     }
   }
 
@@ -419,6 +515,7 @@ export function buildPageContext(
     parentId: parentMap[node.id] ?? null,
     children: node.children,
     props: node.props,
+    breakpointOverrides: toSerializableBreakpointRecords(node.breakpointOverrides ?? {}),
     classIds: node.classIds ?? [],
   }))
 
@@ -428,20 +525,50 @@ export function buildPageContext(
     .sort((a, b) => a.id.localeCompare(b.id))
     .map(moduleDefinitionToAgentContext)
 
-  // Build class list — only id + name (styles stay server-side to keep payload lean)
   const classes = Object.values(state.project.classes ?? {}).map((c) => ({
     id: c.id,
     name: c.name,
+    styles: toSerializableRecord(c.styles ?? {}),
+    breakpointStyles: toSerializableBreakpointStyles(c.breakpointStyles ?? {}),
   }))
 
   return {
     pageTitle: activePage.title,
     rootNodeId: activePage.rootNodeId,
+    activeBreakpointId: state.activeBreakpointId,
+    breakpoints: state.project.breakpoints.map((breakpoint) => ({
+      id: breakpoint.id,
+      label: breakpoint.label,
+      width: breakpoint.width,
+      icon: breakpoint.icon,
+    })),
     nodes,
     availableModules,
     selectedNodeId: state.selectedNodeId,
     classes,
+    renderSnapshots: [],
   }
+}
+
+export async function buildLivePageContext(
+  state: EditorStore,
+  activePage: import('../page-tree/types').Page | undefined,
+): Promise<PageContext> {
+  const context = buildPageContext(state, activePage)
+  return {
+    ...context,
+    renderSnapshots: await collectAgentRenderSnapshots({
+      breakpoints: context.breakpoints,
+    }),
+  }
+}
+
+async function buildCurrentLivePageContext(get: () => EditorStore): Promise<PageContext> {
+  const storeState = get()
+  const activePage = storeState.project?.pages.find(
+    (p) => p.id === storeState.activePageId,
+  ) ?? storeState.project?.pages[0]
+  return buildLivePageContext(storeState, activePage)
 }
 
 function moduleDefinitionToAgentContext(mod: AnyModuleDefinition): AgentModuleContext {
@@ -453,8 +580,43 @@ function moduleDefinitionToAgentContext(mod: AnyModuleDefinition): AgentModuleCo
     canHaveChildren: mod.canHaveChildren,
     defaults: toSerializableRecord(mod.defaults ?? {}),
     props: schemaToAgentProps(mod.schema, mod.defaults ?? {}),
-    styles: styleBindingsToAgentStyles(mod.classStyleBindings ?? {}),
+    styles: agentStylesForModule(mod),
   }
+}
+
+function agentStylesForModule(mod: AnyModuleDefinition): AgentModuleStyleContext[] {
+  const styles = styleBindingsToAgentStyles(mod.classStyleBindings ?? {})
+  const existingKeys = new Set(styles.map((style) => style.key))
+  const extraStyles = genericAgentStyleHintsForModule(mod).filter((style) => !existingKeys.has(style.key))
+  return [...styles, ...extraStyles]
+}
+
+function genericAgentStyleHintsForModule(mod: AnyModuleDefinition): AgentModuleStyleContext[] {
+  if (mod.id === 'base.text' || mod.category.toLowerCase() === 'typography') {
+    return [
+      { key: 'fontFamily', type: 'text', label: 'Font family', defaultValue: 'inherit', cssProperties: ['fontFamily'] },
+      { key: 'fontSize', type: 'text', label: 'Font size', defaultValue: '16px', cssProperties: ['fontSize'] },
+      { key: 'fontWeight', type: 'select', label: 'Font weight', defaultValue: '400', cssProperties: ['fontWeight'], options: [
+        { label: 'Regular', value: '400' },
+        { label: 'Medium', value: '500' },
+        { label: 'Semi bold', value: '600' },
+        { label: 'Bold', value: '700' },
+        { label: 'Black', value: '900' },
+      ] },
+      { key: 'lineHeight', type: 'text', label: 'Line height', defaultValue: '1.4', cssProperties: ['lineHeight'] },
+      { key: 'letterSpacing', type: 'text', label: 'Letter spacing', defaultValue: '0px', cssProperties: ['letterSpacing'] },
+      { key: 'color', type: 'color', label: 'Text color', defaultValue: 'inherit', cssProperties: ['color'] },
+      { key: 'textAlign', type: 'select', label: 'Text align', defaultValue: 'left', cssProperties: ['textAlign'], options: [
+        { label: 'Left', value: 'left' },
+        { label: 'Center', value: 'center' },
+        { label: 'Right', value: 'right' },
+        { label: 'Justify', value: 'justify' },
+      ] },
+      { key: 'marginBottom', type: 'text', label: 'Bottom margin', defaultValue: '0px', cssProperties: ['marginBottom'] },
+    ]
+  }
+
+  return []
 }
 
 function schemaToAgentProps(
@@ -526,6 +688,22 @@ function toSerializableRecord(record: Record<string, unknown>): Record<string, u
   const result: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(record)) {
     result[key] = toSerializableValue(value)
+  }
+  return result
+}
+
+function toSerializableBreakpointStyles(
+  breakpointStyles: Record<string, Record<string, unknown>>,
+): Record<string, Record<string, unknown>> {
+  return toSerializableBreakpointRecords(breakpointStyles)
+}
+
+function toSerializableBreakpointRecords(
+  breakpointStyles: Record<string, Partial<Record<string, unknown>>>,
+): Record<string, Record<string, unknown>> {
+  const result: Record<string, Record<string, unknown>> = {}
+  for (const [breakpointId, styles] of Object.entries(breakpointStyles)) {
+    result[breakpointId] = toSerializableRecord(styles)
   }
   return result
 }

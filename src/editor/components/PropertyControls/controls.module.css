@@ -3,11 +3,10 @@
 /* ── Control row wrapper ─────────────────────────────────────────────────── */
 .controlWrapper {
     display: grid;
-    grid-template-columns: 120px 1fr;
+    grid-template-columns: 100px 1fr;
     gap: 4px;
     width: 100%;
     min-height: 28px;
-    margin-bottom: 14px;
 }
 
 .controlWrapperDisabled {
@@ -21,7 +20,6 @@
     justify-content: space-between;
     gap: 8px;
     min-height: 16px;
-    margin-bottom: 6px;
     color: var(--editor-text-secondary);
     font-size: 11px;
     font-weight: 620;
@@ -39,13 +37,6 @@
 .labelError {
     color: var(--editor-danger-light);
     font-size: 10px;
-}
-
-.sliderOutput {
-    color: var(--editor-text-muted);
-    font-size: 11px;
-    font-weight: 560;
-    font-variant-numeric: tabular-nums;
 }
 
 /* ── ColorControl ────────────────────────────────────────────────────────── */

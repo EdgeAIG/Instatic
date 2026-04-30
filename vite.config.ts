@@ -20,19 +20,17 @@ function agentDevPlugin(): Plugin {
     apply: 'serve',
 
     configureServer(server) {
-      // Lazily loaded on first request; cached for the life of the dev server.
-      let _handler: ((req: Request) => Promise<Response>) | null = null
+      const handlerPath = path.resolve(__dirname, 'server/agentHandler.ts')
 
       const getHandler = async () => {
-        if (!_handler) {
-          // ssrLoadModule uses Vite's esbuild pipeline — TypeScript + aliases work.
-          // External packages (like @anthropic-ai/claude-agent-sdk) are left as-is.
-          const mod = await server.ssrLoadModule(
-            path.resolve(__dirname, 'server/agentHandler.ts'),
-          )
-          _handler = mod.handleAgentRequest as (req: Request) => Promise<Response>
+        const cached = server.moduleGraph.getModuleById(handlerPath)
+        if (cached) {
+          server.moduleGraph.invalidateModule(cached)
         }
-        return _handler
+        // ssrLoadModule uses Vite's esbuild pipeline; reloading per request keeps
+        // AI prompt/tool changes visible during development without restarting Vite.
+        const mod = await server.ssrLoadModule(handlerPath)
+        return mod.handleAgentRequest as (req: Request) => Promise<Response>
       }
 
       // NOTE: this path must match AGENT_API_PATH in src/core/agent/agentConfig.ts

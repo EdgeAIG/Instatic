@@ -467,4 +467,23 @@ describe('DomPanel — tree keyboard navigation', () => {
     expect(screen.getAllByRole('treeitem').length).toBe(2)
     expect(useEditorStore.getState().selectedNodeId).toBe('root-1')
   })
+
+  it('commits inline tree rename to the node label', () => {
+    loadContainerProject()
+    render(<DomPanel />)
+
+    fireEvent.click(screen.getByRole('treeitem', { name: /root/i }))
+    const containerItem = screen.getByRole('treeitem', { name: /container/i })
+
+    fireEvent.contextMenu(containerItem, { clientX: 40, clientY: 40 })
+    fireEvent.click(screen.getByRole('menuitem', { name: /rename/i }))
+    const input = screen.getByRole('textbox', { name: /rename base\.container/i }) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'Hero Group' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    const renamedNode = useEditorStore.getState().project?.pages[0].nodes['container-1']
+    expect(renamedNode?.label).toBe('Hero Group')
+    expect(renamedNode?.props.label).toBeUndefined()
+    expect(screen.getByRole('treeitem', { name: /hero group/i })).toBeDefined()
+  })
 })

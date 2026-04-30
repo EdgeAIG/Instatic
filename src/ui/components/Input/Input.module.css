@@ -11,6 +11,10 @@
     outline: none;
 }
 
+.input:hover {
+    border-color: var(--input-border-hover);
+}
+
 .input:focus,
 .input:focus-within {
     background: var(--input-bg-focus);

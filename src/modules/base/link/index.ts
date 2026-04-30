@@ -102,7 +102,7 @@ export const LinkModule: ModuleDefinition<LinkProps> = {
       },
       '400',
     ),
-    fontSize: pxBinding('fontSize', { type: 'slider', label: 'Font size', min: 10, max: 64, step: 1, unit: 'px' }, 16),
+    fontSize: pxBinding('fontSize', { type: 'text', label: 'Font size', placeholder: '16px' }, 16),
   },
 
   component: LinkEditor,

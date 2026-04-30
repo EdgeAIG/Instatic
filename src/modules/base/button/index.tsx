@@ -100,7 +100,7 @@ export const ButtonModule: ModuleDefinition<ButtonProps> = {
     backgroundColor: rawBinding('backgroundColor', { type: 'color', label: 'Background color' }, '#6366f1'),
     color: rawBinding('color', { type: 'color', label: 'Text color' }, '#ffffff'),
     border: rawBinding('border', { type: 'text', label: 'Border', placeholder: '2px solid transparent' }, '2px solid transparent'),
-    borderRadius: pxBinding('borderRadius', { type: 'slider', label: 'Border radius', min: 0, max: 64, step: 1, unit: 'px' }, 8),
+    borderRadius: pxBinding('borderRadius', { type: 'text', label: 'Border radius', placeholder: '8px' }, 8),
     fontWeight: rawBinding(
       'fontWeight',
       {

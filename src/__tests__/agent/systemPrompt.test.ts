@@ -36,7 +36,7 @@ const BASE_CONTAINER_CONTEXT = {
   styles: [
     {
       key: 'paddingTop',
-      type: 'slider',
+      type: 'text',
       label: 'Padding top',
       defaultValue: 16,
       cssProperties: ['paddingTop'],
@@ -74,6 +74,11 @@ function makeContext(overrides: Partial<PageContext> = {}): PageContext {
   return {
     pageTitle: 'Home',
     rootNodeId: 'root-abc',
+    activeBreakpointId: 'desktop',
+    breakpoints: [
+      { id: 'mobile', label: 'Mobile', width: 375, icon: 'smartphone' },
+      { id: 'desktop', label: 'Desktop', width: 1440, icon: 'monitor' },
+    ],
     nodes: [
       {
         id: 'root-abc',
@@ -81,6 +86,7 @@ function makeContext(overrides: Partial<PageContext> = {}): PageContext {
         parentId: null,
         children: ['h1-id'],
         props: {},
+        breakpointOverrides: {},
         classIds: [],
       },
       {
@@ -90,12 +96,14 @@ function makeContext(overrides: Partial<PageContext> = {}): PageContext {
         parentId: 'root-abc',
         children: [],
         props: { text: 'Hello World', level: 'h1' },
+        breakpointOverrides: {},
         classIds: [],
       },
     ],
     availableModules: [BASE_CONTAINER_CONTEXT, BASE_TEXT_CONTEXT, BASE_BUTTON_CONTEXT],
     selectedNodeId: null,
     classes: [],
+    renderSnapshots: [],
     ...overrides,
   }
 }
@@ -158,18 +166,40 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(makeContext())
 
     expect(prompt).toContain('"classIds"')
-    expect(prompt).toContain('existing class IDs or class names created earlier in the same batch')
+    expect(prompt).toContain('existing class IDs, existing class names, or class names created earlier in the same batch')
     expect(prompt).toContain('{ "type": "assignClass", "nodeRef": "hero-title", "classId": "hero-title" }')
   })
 
-  it('requires styled builds and documents the efficient insertTree action', () => {
+  it('documents efficient styled tree builds without banning content-only insertions', () => {
     const prompt = buildSystemPrompt(makeContext())
 
-    expect(prompt).toContain('For page, section, landing page, or redesign requests')
-    expect(prompt).toContain('Do not build a page with only insertNode actions')
+    expect(prompt).toContain('If the user asks for content-only changes')
+    expect(prompt).not.toContain('Do not build a page with only insertNode actions')
     expect(prompt).toContain('### insertTree')
     expect(prompt).toContain('"classes"')
     expect(prompt).toContain('"children"')
+  })
+
+  it('documents dynamic breakpoint discovery and breakpoint-specific class styles', () => {
+    const prompt = buildSystemPrompt(makeContext())
+
+    expect(prompt).toContain('list_breakpoints')
+    expect(prompt).toContain('Current Breakpoints')
+    expect(prompt).toContain('mobile')
+    expect(prompt).toContain('desktop')
+    expect(prompt).toContain('"breakpointStyles"')
+    expect(prompt).toContain('"breakpointId"')
+  })
+
+  it('documents targeted edit and visual verification tools', () => {
+    const prompt = buildSystemPrompt(makeContext())
+
+    expect(prompt).toContain('search_nodes')
+    expect(prompt).toContain('inspect_node')
+    expect(prompt).toContain('inspect_class')
+    expect(prompt).toContain('inspect_layout')
+    expect(prompt).toContain('render_snapshot')
+    expect(prompt).toContain('For edits to existing content or styling')
   })
 
   it('only advertises modules from the provided page context', () => {
@@ -302,7 +332,9 @@ describe('buildSystemPrompt', () => {
     }))
     expect(prompt).toContain('<class-registry>')
     expect(prompt).toContain('</class-registry>')
-    expect(prompt).toContain('<class id="cls-abc" name="btn-primary" />')
+    expect(prompt).toContain('<class id="cls-abc" name="btn-primary">')
+    expect(prompt).toContain('<styles>{}</styles>')
+    expect(prompt).toContain('<breakpointStyles>{}</breakpointStyles>')
   })
 
   it('shows "(none yet)" when no classes exist', () => {
@@ -347,6 +379,7 @@ describe('buildSystemPrompt', () => {
           parentId: null,
           children: ['btn-id'],
           props: {},
+          breakpointOverrides: {},
           classIds: [],
         },
         {
@@ -355,6 +388,7 @@ describe('buildSystemPrompt', () => {
           parentId: 'root-abc',
           children: [],
           props: { text: 'Click' },
+          breakpointOverrides: {},
           classIds: ['cls-abc'],
         },
       ],

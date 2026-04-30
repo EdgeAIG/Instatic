@@ -136,7 +136,63 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value)
 }
 
+function formatBreakpointRegistry(ctx: PageContext): string {
+  if (ctx.breakpoints.length === 0) return '(none configured)'
+  return [
+    '<breakpoint-registry>',
+    ...ctx.breakpoints.map((breakpoint) => {
+      const attrs = [
+        `id="${escapeXml(breakpoint.id)}"`,
+        `label="${escapeXml(breakpoint.label)}"`,
+        `width="${breakpoint.width}"`,
+        `icon="${escapeXml(breakpoint.icon)}"`,
+        `active="${breakpoint.id === ctx.activeBreakpointId ? 'true' : 'false'}"`,
+      ]
+      return `  <breakpoint ${attrs.join(' ')} />`
+    }),
+    '</breakpoint-registry>',
+  ].join('\n')
+}
+
+function formatClassRegistry(ctx: PageContext): string {
+  if (ctx.classes.length === 0) return '(none yet)'
+  return [
+    '<class-registry>',
+    ...ctx.classes.map((c) => {
+      const lines = [`  <class id="${escapeXml(c.id)}" name="${escapeXml(c.name)}">`]
+      lines.push(`    <styles>${escapeXml(stableJson(c.styles ?? {}))}</styles>`)
+      lines.push(`    <breakpointStyles>${escapeXml(stableJson(c.breakpointStyles ?? {}))}</breakpointStyles>`)
+      lines.push('  </class>')
+      return lines.join('\n')
+    }),
+    '</class-registry>',
+  ].join('\n')
+}
+
+function formatRenderSnapshots(ctx: PageContext): string {
+  if (!ctx.renderSnapshots.length) {
+    return '(no browser render snapshot was captured for this request)'
+  }
+
+  return [
+    '<render-snapshots>',
+    ...ctx.renderSnapshots.map((snapshot) => {
+      const warningCount = snapshot.layout.warnings.length
+      const screenshotStatus = snapshot.screenshot.status
+      return [
+        `  <snapshot breakpointId="${escapeXml(snapshot.breakpointId)}" label="${escapeXml(snapshot.label)}" width="${snapshot.width}" screenshot="${screenshotStatus}">`,
+        `    <viewport>${escapeXml(stableJson(snapshot.layout.viewport))}</viewport>`,
+        `    <warnings count="${warningCount}">${escapeXml(stableJson(snapshot.layout.warnings.slice(0, 12)))}</warnings>`,
+        '  </snapshot>',
+      ].join('\n')
+    }),
+    '</render-snapshots>',
+  ].join('\n')
+}
+
 function buildActionDocs(ctx: PageContext): string {
+  const exampleBreakpointId = stableJson(ctx.breakpoints[0]?.id ?? '<configured-breakpoint-id>')
+
   return `
 ## Available Actions
 
@@ -144,15 +200,16 @@ Output actions in a \`<pb:actions>\` block containing a JSON array.
 Each action object must have a "type" field plus the parameters below.
 
 ### insertTree
-Efficiently insert a styled nested node tree in one action. Prefer this for page, section, landing page, card grid, hero, and multi-element builds.
+Efficiently insert a nested node tree in one action. Prefer this for page, section, card grid, hero, and other multi-element builds.
 Use "classes" to create/update reusable CSS classes first, then reference those class names from tree nodes with "classIds".
+Class definitions support "styles" for base/all-breakpoint styles and "breakpointStyles" for configured breakpoint IDs.
 The root tree node and child nodes support "ref", "moduleId", "props", "classIds", and "children".
 {
   "type": "insertTree",
   "parentId": "<existing-node-id>",
   "classes": [
     { "name": "hero-section", "styles": { "display": "flex", "flexDirection": "column", "gap": "24px", "paddingTop": "96px", "paddingRight": "64px", "paddingBottom": "96px", "paddingLeft": "64px", "backgroundColor": "#111827", "color": "#ffffff" } },
-    { "name": "hero-title", "styles": { "fontSize": "56px", "lineHeight": "1", "fontWeight": "700", "color": "#ffffff" } }
+    { "name": "hero-title", "styles": { "fontSize": "56px", "lineHeight": "1", "fontWeight": "700", "color": "#ffffff" }, "breakpointStyles": { ${exampleBreakpointId}: { "fontSize": "40px", "lineHeight": "1.05" } } }
   ],
   "tree": {
     "ref": "hero",
@@ -166,9 +223,9 @@ The root tree node and child nodes support "ref", "moduleId", "props", "classIds
 }
 
 ### insertNode
-Insert one new element into the page. Use insertTree instead for multi-node page or section builds.
+Insert one new element into the page. Use this for single elements and content-only additions; insertTree is usually more efficient for structured multi-node sections.
 Use "parentId" for an existing node ID. Use "ref" plus "parentRef" to nest nodes created earlier in the same batch.
-Use "classIds" with existing class IDs or class names created earlier in the same batch to style new nodes immediately.
+Use "classIds" only with existing class IDs, existing class names, or class names created earlier in the same batch. Unknown class names fail; create the class with styles first.
 { "type": "insertNode", "ref": "hero", "moduleId": "base.container", "parentId": "<existing-node-id>", "props": { "tag": "section" } }
 { "type": "insertNode", "ref": "hero-title", "moduleId": "base.text", "parentRef": "hero", "props": { "text": "Hello", "tag": "h1" }, "classIds": ["hero-title"] }
 
@@ -186,6 +243,8 @@ Remove a node and all its children.
 Change property values on an existing node.
 { "type": "updateNodeProps", "nodeId": "<node-id>", "patch": { "text": "New text", "tag": "h2" } }
 { "type": "updateNodeProps", "nodeRef": "hero-title", "patch": { "text": "New text" } }
+Use optional "breakpointId" only when changing node props for a configured breakpoint.
+{ "type": "updateNodeProps", "nodeId": "<node-id>", "breakpointId": ${exampleBreakpointId}, "patch": { "text": "Short breakpoint heading" } }
 
 ### moveNode
 Move a node to a different parent or position.
@@ -200,6 +259,8 @@ Set the display label for a node (shown in the DOM tree panel).
 ### createClass
 Create a reusable CSS class with initial styles. Use camelCase CSS property names.
 { "type": "createClass", "name": "btn-primary", "styles": { "backgroundColor": "#6366f1", "color": "#fff", "borderRadius": "6px", "padding": "8px 16px" } }
+Use "breakpointStyles" to add responsive overrides keyed by configured breakpoint IDs.
+{ "type": "createClass", "name": "hero-title", "styles": { "fontSize": "64px" }, "breakpointStyles": { ${exampleBreakpointId}: { "fontSize": "40px" } } }
 
 IMPORTANT: After creating a class you do NOT know its generated ID.
 Use the class NAME (not ID) in insertNode.classIds / assignClass / updateClassStyles for a class you just created —
@@ -211,6 +272,8 @@ Update the styles of an existing CSS class.
 For existing classes use the ID from the CSS Classes section below.
 For a class created in the same batch use its name.
 { "type": "updateClassStyles", "classId": "<class-id-or-name>", "patch": { "fontSize": "16px" } }
+Use optional "breakpointId" to update styles only for that configured breakpoint.
+{ "type": "updateClassStyles", "classId": "<class-id-or-name>", "breakpointId": ${exampleBreakpointId}, "patch": { "gridTemplateColumns": "1fr", "fontSize": "40px" } }
 
 ### assignClass
 Assign a CSS class to a node.
@@ -251,6 +314,9 @@ export function buildSystemPrompt(ctx: PageContext): string {
       const classNames = n.classIds.length
         ? `  classes: [${n.classIds.join(', ')}]`
         : ''
+      const breakpointOverrides = Object.keys(n.breakpointOverrides ?? {}).length
+        ? `  breakpointOverrides: ${JSON.stringify(n.breakpointOverrides)}`
+        : ''
       return [
         `- id: ${n.id}`,
         `  module: ${n.moduleId}`,
@@ -259,19 +325,16 @@ export function buildSystemPrompt(ctx: PageContext): string {
         children,
         classNames,
         `  props: ${JSON.stringify(n.props)}`,
+        breakpointOverrides,
       ]
         .filter(Boolean)
         .join('\n')
     })
     .join('\n\n')
 
-  // Class names are user-controlled — wrap in XML delimiters and XML-escape attribute
-  // values to prevent prompt injection (Constraint #398 / CWE-1336).
-  // escapeXml() prevents a name like `foo" extra="x` from breaking the XML structure.
-  const classList =
-    ctx.classes.length > 0
-      ? `<class-registry>\n${ctx.classes.map((c) => `  <class id="${escapeXml(c.id)}" name="${escapeXml(c.name)}" />`).join('\n')}\n</class-registry>`
-      : '(none yet)'
+  const classList = formatClassRegistry(ctx)
+  const breakpointList = formatBreakpointRegistry(ctx)
+  const renderSnapshots = formatRenderSnapshots(ctx)
 
   return `You are an expert AI assistant embedded in a professional visual page builder.
 Your role is to help users create and modify website pages by taking immediate action.
@@ -279,22 +342,34 @@ Your role is to help users create and modify website pages by taking immediate a
 ## Behaviour Rules
 1. Always take action first. Insert, modify, or delete elements immediately.
 2. Keep text replies concise — 1–2 sentences after acting.
-3. When the user asks to "add", "insert", "create", or "build" a multi-element page/section, use insertTree.
-4. When the user asks to "change", "update", or "edit" something, use updateNodeProps.
-5. When the user asks to "remove", "delete", or "get rid of" something, use deleteNode.
-6. Chain multiple actions in a single <pb:actions> block when building multi-element structures.
-7. Prefer base.container for layout sections, then nest content inside.
-8. For styled pages, create CSS classes first and attach them to inserted nodes with insertTree tree.classIds, insertNode.classIds, or assignClass.nodeRef.
-9. Never invent real node IDs — only use IDs from the current page tree below, or temporary insert refs with "ref" / "parentRef" / "nodeRef".
-10. Output actions ONLY in a <pb:actions> block. Never write JSON outside those tags.
-11. Do not write raw HTML, CSS, JavaScript, or JSON in the user-facing reply; use actions to change the page.
+3. Interpret the user's intent before choosing actions. If the user asks for content-only changes, insert or update content without inventing visual styles.
+4. When the user asks to "add", "insert", "create", or "build" a multi-element page/section, prefer insertTree because it is compact and preserves hierarchy.
+5. When the user asks to "change", "update", or "edit" something, use updateNodeProps.
+6. When the user asks to "remove", "delete", or "get rid of" something, use deleteNode.
+7. Chain multiple actions in a single <pb:actions> block when building multi-element structures.
+8. Prefer base.container for layout sections, then nest content inside.
+9. If the user asks for visual design, layout, page design, styling, or redesign, use CSS classes with real non-empty styles and attach them to the relevant nodes.
+10. For visual layout builds, account for the configured breakpoints. Use base styles for the broad/default design and breakpointStyles or breakpointId only for breakpoint-specific overrides.
+11. Use only breakpoint IDs from the Current Breakpoints section or list_breakpoints. Never assume breakpoint IDs are "mobile", "tablet", or "desktop" unless they are listed.
+12. Never claim that something is styled unless you created, updated, or reused classes whose styles or breakpointStyles are visible in the CSS Classes section or discovery tools.
+13. Never invent real node IDs — only use IDs from the current page tree below, or temporary insert refs with "ref" / "parentRef" / "nodeRef".
+14. Output actions ONLY in a <pb:actions> block. Never write JSON outside those tags.
+15. Do not write raw HTML, CSS, JavaScript, or JSON in the user-facing reply; use actions to change the page.
+16. For edits to existing content or styling, use search_nodes and inspect_node before choosing target IDs when the target is not already selected or obvious.
+17. For visual or responsive work, use inspect_layout or render_snapshot to check the actual canvas render and fix overflow, broken images, clipped content, and unreadable layout.
 
-## Design Quality Rules
-For page, section, landing page, or redesign requests, every inserted visible structure must include layout, spacing, typography, color, and media sizing classes.
-Do not build a page with only insertNode actions. Use insertTree with a "classes" array for any multi-node creation.
-Do not rely on module defaults for final visual design; defaults are only a neutral fallback.
-Use concrete class styles such as display, flexDirection, gap, paddingTop, paddingRight, paddingBottom, paddingLeft, maxWidth, backgroundColor, color, fontSize, lineHeight, fontWeight, borderRadius, width, height, objectFit, and boxShadow.
-Avoid remote image URLs unless the user provided them or the URL is exact and reliable; an empty or broken image is worse than a styled non-image layout.
+## Discovery Tools
+You may have read-only page-builder MCP tools available:
+- list_modules: inspect currently registered modules, props, and class-backed style targets.
+- list_classes: inspect existing reusable classes and their current styles.
+- list_breakpoints: inspect configured responsive breakpoints and the active breakpoint.
+- inspect_page: inspect the current page tree, selected node, breakpoints, and responsive prop overrides.
+- search_nodes: find existing nodes by text, label, module ID, class ID, or class name before small edits.
+- inspect_node: inspect one node with resolved props and resolved class styles for a configured breakpoint.
+- inspect_class: inspect one reusable class by ID or name, including breakpoint styles and assigned nodes.
+- inspect_layout: inspect browser-collected bounding boxes, image status, and layout warnings for a breakpoint.
+- render_snapshot: inspect a browser-collected screenshot for a breakpoint plus layout warnings.
+Use these tools when the request depends on what modules, reusable classes, breakpoints, target nodes, or rendered layout are actually available. Do not guess class names, node IDs, or breakpoint IDs; unknown classIds and unknown breakpointIds fail unless you create/declare the class first or use a listed breakpoint.
 
 ## Output Format
 Respond with a brief sentence, then actions, then a brief confirmation:
@@ -337,6 +412,13 @@ ${ctx.selectedNodeId ? `Selected node ID: ${ctx.selectedNodeId}` : 'No node is c
 
 ## CSS Classes
 ${classList}
+
+## Current Breakpoints
+Active breakpoint ID: ${ctx.activeBreakpointId || '(none)'}
+${breakpointList}
+
+## Current Render Snapshots
+${renderSnapshots}
 
 ## Page Tree (current state)
 ${nodeList || '(empty page — only the root container exists)'}

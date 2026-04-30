@@ -10,11 +10,70 @@
  */
 
 import { useEditorStore } from '@core/editor-store/store'
+import { useEffect, useState } from 'react'
+import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
+import { Icon } from '../../../ui/icons/Icon'
+import {
+  readAutoSavePreference,
+  subscribeToEditorPrefsChanged,
+} from '../../preferences/editorPreferences'
 import styles from './Toolbar.module.css'
 
-export function SaveIndicator() {
+interface SaveIndicatorProps {
+  onSave?: () => void | Promise<void>
+}
+
+export function SaveIndicator({ onSave }: SaveIndicatorProps) {
   const hasUnsaved = useEditorStore((s) => s.hasUnsavedChanges)
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(readAutoSavePreference)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveFailed, setSaveFailed] = useState(false)
+
+  useEffect(() => {
+    return subscribeToEditorPrefsChanged(() => {
+      setAutoSaveEnabled(readAutoSavePreference())
+    })
+  }, [])
+
+  async function handleManualSave() {
+    if (!onSave || isSaving) return
+    setIsSaving(true)
+    setSaveFailed(false)
+    try {
+      await onSave()
+    } catch (err) {
+      setSaveFailed(true)
+      console.error('[toolbar] Manual save failed:', err)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  if (!autoSaveEnabled && hasUnsaved) {
+    const label = isSaving
+      ? 'Saving...'
+      : saveFailed
+        ? 'Retry save'
+        : 'Save'
+
+    return (
+      <Button
+        variant="primary"
+        size="sm"
+        aria-label="Save project"
+        aria-busy={isSaving}
+        title="Save changes"
+        onClick={handleManualSave}
+        disabled={!onSave}
+        data-testid="save-indicator"
+        tone={saveFailed ? 'danger' : 'default'}
+      >
+        <Icon name={isSaving ? 'loader' : 'save'} size={14} aria-hidden="true" />
+        <span>{label}</span>
+      </Button>
+    )
+  }
 
   return (
     <div

@@ -39,7 +39,8 @@ const KNOWN_PROPERTIES = new Set<keyof CSSPropertyBag>([
   'color', 'textShadow',
   // Visual
   'backgroundColor', 'background', 'backgroundImage', 'backgroundSize',
-  'backgroundPosition', 'backgroundRepeat', 'opacity',
+  'backgroundPosition', 'backgroundRepeat', 'objectFit', 'objectPosition',
+  'opacity',
   'overflow', 'overflowX', 'overflowY',
   // Border
   'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft',

@@ -5,16 +5,17 @@
  *  1. LOAD on mount  — loads the project identified by the URL param from the
  *     adapter; falls back to the most-recently-opened project; falls back to
  *     creating a fresh blank project.
- *  2. AUTO-SAVE      — debounced 30 s after the `hasUnsavedChanges` flag
- *     transitions to true. Timer is properly reset on each new change so that
- *     rapid edits collapse into a single save.
- *  3. CMD+S / CTRL+S — immediate save, resets the unsaved-changes flag.
+ *  2. AUTO-SAVE      — when enabled in preferences, debounced 30 s after the
+ *     `hasUnsavedChanges` flag transitions to true. Timer is properly reset on
+ *     each new change so that rapid edits collapse into a single save.
+ *  3. MANUAL SAVE    — returned as a stable callback for toolbar Save and used
+ *     by Cmd+S / Ctrl+S. Resets the unsaved-changes flag.
  *
  * Constraint #230: raw adapter data is validated via `validateProject` before
  * being passed to `store.loadProject()`.
  *
- * Design: the hook is intentionally side-effect-only — it returns nothing.
- * Mount it once at the top of EditorLayout.
+ * Mount it once at the top of EditorLayout and pass the returned save callback
+ * to toolbar chrome that needs an explicit Save action.
  *
  * Guideline #239 / selector-stability note:
  *   All store reads inside effects use `useEditorStore.getState()` (point-in-time
@@ -30,11 +31,15 @@
  *   a brand-new object on every evaluation, causing the listener to fire on
  *   every store mutation and leaking unbounded setTimeout instances.
  */
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
 import type { IPersistenceAdapter } from '@core/persistence/types'
 import { localAdapter } from '@core/persistence/local'
 import { validateProject, ValidationError } from '@core/persistence/validate'
+import {
+  readAutoSavePreference,
+  subscribeToEditorPrefsChanged,
+} from '@editor/preferences/editorPreferences'
 
 /** localStorage key tracking the most-recently-opened project ID */
 const LAST_PROJECT_KEY = 'pb-last-project-id'
@@ -52,6 +57,15 @@ export function usePersistence(
   useEffect(() => {
     adapterRef.current = adapter
   }, [adapter])
+
+  const saveCurrentProject = useCallback(async () => {
+    const { project, setHasUnsavedChanges } = useEditorStore.getState()
+    if (!project) return
+
+    await adapterRef.current.saveProject(project)
+    localStorage.setItem(LAST_PROJECT_KEY, project.id)
+    setHasUnsavedChanges(false)
+  }, [])
 
   // ─── 1. Load project on mount ──────────────────────────────────────────────
   useEffect(() => {
@@ -105,28 +119,30 @@ export function usePersistence(
     // would cause the listener to run on every store mutation — timer leak).
     let timer: ReturnType<typeof setTimeout> | undefined
 
+    function scheduleAutoSave() {
+      clearTimeout(timer)
+      if (!loadedRef.current) return
+      if (!useEditorStore.getState().hasUnsavedChanges) return
+      if (!readAutoSavePreference()) return
+
+      timer = setTimeout(() => {
+        void saveCurrentProject().catch((err) => {
+          console.error('[persistence] Auto-save failed:', err)
+        })
+      }, AUTO_SAVE_DELAY_MS)
+    }
+
     const unsub = useEditorStore.subscribe(
       (s) => s.hasUnsavedChanges,
       (dirty) => {
-        if (!loadedRef.current || !dirty) return
-
-        // Reset the debounce timer on every new dirty transition so rapid edits
-        // collapse into a single save.
-        clearTimeout(timer)
-        timer = setTimeout(async () => {
-          // Read the latest project snapshot at save time, not at subscription time.
-          const project = useEditorStore.getState().project
-          if (!project) return
-          try {
-            await adapterRef.current.saveProject(project)
-            localStorage.setItem(LAST_PROJECT_KEY, project.id)
-            useEditorStore.getState().setHasUnsavedChanges(false)
-          } catch (err) {
-            console.error('[persistence] Auto-save failed:', err)
-          }
-        }, AUTO_SAVE_DELAY_MS)
+        if (!dirty) {
+          clearTimeout(timer)
+          return
+        }
+        scheduleAutoSave()
       },
     )
+    const prefsUnsub = subscribeToEditorPrefsChanged(scheduleAutoSave)
 
     // beforeunload flush — prevent data loss on tab close (Phase 5 Gate 3).
     // The 30s debounce means the last unsaved edit would be dropped without this.
@@ -143,10 +159,11 @@ export function usePersistence(
 
     return () => {
       unsub()
+      prefsUnsub()
       clearTimeout(timer)
       window.removeEventListener('beforeunload', flushOnUnload)
     }
-  }, [])
+  }, [saveCurrentProject])
 
   // ─── 3. Cmd/Ctrl+S — immediate save ───────────────────────────────────────
   useEffect(() => {
@@ -154,14 +171,8 @@ export function usePersistence(
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 's') return
       e.preventDefault()
 
-      // Point-in-time snapshot — no React subscription needed
-      const { project, setHasUnsavedChanges } = useEditorStore.getState()
-      if (!project) return
-
       try {
-        await adapterRef.current.saveProject(project)
-        localStorage.setItem(LAST_PROJECT_KEY, project.id)
-        setHasUnsavedChanges(false)
+        await saveCurrentProject()
       } catch (err) {
         console.error('[persistence] Manual save failed:', err)
       }
@@ -169,5 +180,7 @@ export function usePersistence(
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [saveCurrentProject])
+
+  return saveCurrentProject
 }

@@ -164,6 +164,28 @@ describe('executeAgentAction — updateNodeProps', () => {
     const page = useEditorStore.getState().project!.pages[0]
     expect(page.nodes[nodeId!].props.text).toBe('New')
   })
+
+  it('can target a configured breakpoint without changing base props', async () => {
+    const { rootId } = freshStore()
+    const { nodeId } = await executeAgentAction({
+      type: 'insertNode',
+      moduleId: 'base.text',
+      parentId: rootId,
+      props: { text: 'Desktop copy' },
+    })
+
+    const result = await executeAgentAction({
+      type: 'updateNodeProps',
+      nodeId: nodeId!,
+      breakpointId: 'mobile',
+      patch: { text: 'Mobile copy' },
+    })
+
+    expect(result.success).toBe(true)
+    const page = useEditorStore.getState().project!.pages[0]
+    expect(page.nodes[nodeId!].props.text).toBe('Desktop copy')
+    expect(page.nodes[nodeId!].breakpointOverrides.mobile.text).toBe('Mobile copy')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -221,6 +243,24 @@ describe('executeAgentAction — createClass', () => {
     freshStore()
     const result = await executeAgentAction({ type: 'createClass', name: '' })
     expect(result.success).toBe(false)
+  })
+
+  it('creates a class with breakpoint-specific styles', async () => {
+    freshStore()
+    const result = await executeAgentAction({
+      type: 'createClass',
+      name: 'responsive-heading',
+      styles: { fontSize: '64px', lineHeight: '1' },
+      breakpointStyles: {
+        mobile: { fontSize: '40px', lineHeight: '1.05' },
+      },
+    })
+
+    expect(result.success).toBe(true)
+    const cls = useEditorStore.getState().project!.classes[result.nodeId!]
+    expect(cls.styles.fontSize).toBe('64px')
+    expect(cls.breakpointStyles.mobile.fontSize).toBe('40px')
+    expect(cls.breakpointStyles.mobile.lineHeight).toBe('1.05')
   })
 })
 
@@ -312,6 +352,44 @@ describe('executeAgentAction — assignClass name-based resolution', () => {
     const cls = Object.values(classes).find((c) => c.name === 'card')!
     expect(cls.styles.padding).toBe('16px')
     expect(cls.styles.borderRadius).toBe('4px')
+  })
+
+  it('updateClassStyles can target a configured breakpoint without changing base styles', async () => {
+    freshStore()
+    await executeAgentAction({ type: 'createClass', name: 'responsive-card', styles: { display: 'grid', gridTemplateColumns: '1fr 1fr' } })
+
+    const result = await executeAgentAction({
+      type: 'updateClassStyles',
+      classId: 'responsive-card',
+      breakpointId: 'mobile',
+      patch: { gridTemplateColumns: '1fr', gap: '16px' },
+    })
+    expect(result.success).toBe(true)
+
+    const classes = useEditorStore.getState().project!.classes
+    const cls = Object.values(classes).find((c) => c.name === 'responsive-card')!
+    expect(cls.styles.gridTemplateColumns).toBe('1fr 1fr')
+    expect(cls.breakpointStyles.mobile.gridTemplateColumns).toBe('1fr')
+    expect(cls.breakpointStyles.mobile.gap).toBe('16px')
+  })
+
+  it('fails when updateClassStyles targets an unknown breakpoint', async () => {
+    freshStore()
+    await executeAgentAction({ type: 'createClass', name: 'responsive-card', styles: { padding: '24px' } })
+
+    const result = await executeAgentAction({
+      type: 'updateClassStyles',
+      classId: 'responsive-card',
+      breakpointId: 'watch',
+      patch: { padding: '12px' },
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Breakpoint not found')
+
+    const cls = Object.values(useEditorStore.getState().project!.classes).find((c) => c.name === 'responsive-card')!
+    expect(cls.styles.padding).toBe('24px')
+    expect(cls.breakpointStyles.watch).toBeUndefined()
   })
 })
 
@@ -538,7 +616,7 @@ describe('executeAgentActions — batch execution', () => {
     expect(page.nodes[titleId].classIds).toContain(titleClass.id)
   })
 
-  it('does not fail insertion when classIds reference class names that do not exist yet', async () => {
+  it('fails instead of silently creating empty classes for unknown insertNode class names', async () => {
     const { rootId } = freshStore()
     const results = await executeAgentActions([
       {
@@ -557,15 +635,16 @@ describe('executeAgentActions — batch execution', () => {
       },
     ])
 
-    expect(results).toHaveLength(2)
-    expect(results.every((r) => r.success)).toBe(true)
+    expect(results).toHaveLength(1)
+    expect(results[0].success).toBe(false)
+    expect(results[0].error).toContain('Class not found')
 
     const classes = useEditorStore.getState().project!.classes
     const createdClass = Object.values(classes).find((c) => c.name === 'agent-title')
-    expect(createdClass).toBeDefined()
+    expect(createdClass).toBeUndefined()
 
     const page = useEditorStore.getState().project!.pages[0]
-    expect(page.nodes[results[0].nodeId!].classIds).toContain(createdClass!.id)
+    expect(page.nodes[rootId].children).toHaveLength(0)
   })
 
   it('inserts a styled nested tree in one efficient action', async () => {
@@ -596,6 +675,25 @@ describe('executeAgentActions — batch execution', () => {
               lineHeight: '1.05',
               fontWeight: '700',
               color: '#ffffff',
+            },
+            breakpointStyles: {
+              mobile: {
+                fontSize: '40px',
+                lineHeight: '1.08',
+              },
+            },
+          },
+          {
+            name: 'agent-cta',
+            styles: {
+              width: 'fit-content',
+              paddingTop: '12px',
+              paddingRight: '18px',
+              paddingBottom: '12px',
+              paddingLeft: '18px',
+              borderRadius: '8px',
+              backgroundColor: '#ffffff',
+              color: '#111827',
             },
           },
         ],
@@ -639,7 +737,8 @@ describe('executeAgentActions — batch execution', () => {
     expect(title.classIds).toContain(titleClass!.id)
     expect(heroClass?.styles.backgroundColor).toBe('#111827')
     expect(titleClass?.styles.fontSize).toBe('56px')
-    expect(ctaClass).toBeDefined()
+    expect(titleClass?.breakpointStyles.mobile.fontSize).toBe('40px')
+    expect(ctaClass?.styles.backgroundColor).toBe('#ffffff')
   })
 
   it('stops at first failure (fail-fast)', async () => {
@@ -650,6 +749,22 @@ describe('executeAgentActions — batch execution', () => {
     ])
     expect(results).toHaveLength(1)
     expect(results[0].success).toBe(false)
+  })
+
+  it('rolls back earlier mutations when a later action in the batch fails', async () => {
+    const { rootId } = freshStore()
+    const results = await executeAgentActions([
+      { type: 'insertNode', ref: 'hero', moduleId: 'base.container', parentId: rootId },
+      { type: 'insertNode', moduleId: 'missing.module', parentRef: 'hero' },
+    ])
+
+    expect(results).toHaveLength(2)
+    expect(results[0].success).toBe(true)
+    expect(results[1].success).toBe(false)
+
+    const page = useEditorStore.getState().project!.pages[0]
+    expect(page.nodes[rootId].children).toHaveLength(0)
+    expect(Object.values(page.nodes).some((node) => node.moduleId === 'base.container')).toBe(false)
   })
 
   it('returns empty array for empty batch', async () => {

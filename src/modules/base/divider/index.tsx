@@ -33,8 +33,8 @@ export const DividerModule: ModuleDefinition<DividerProps> = {
   classStyleBindings: {
     line: rawBinding('borderTop', { type: 'text', label: 'Line', placeholder: '1px solid #e2e8f0' }, '1px solid #e2e8f0'),
     width: rawBinding('width', { type: 'text', label: 'Width', placeholder: '100%' }, '100%'),
-    marginTop: pxBinding('marginTop', { type: 'slider', label: 'Margin top', min: 0, max: 120, step: 2, unit: 'px' }, 16),
-    marginBottom: pxBinding('marginBottom', { type: 'slider', label: 'Margin bottom', min: 0, max: 120, step: 2, unit: 'px' }, 16),
+    marginTop: pxBinding('marginTop', { type: 'text', label: 'Margin top', placeholder: '16px' }, 16),
+    marginBottom: pxBinding('marginBottom', { type: 'text', label: 'Margin bottom', placeholder: '16px' }, 16),
   },
 
   component: DividerEditor,

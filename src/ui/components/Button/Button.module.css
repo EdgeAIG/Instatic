@@ -6,11 +6,11 @@
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */
 .btn {
-    font-family: Inter;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 8px;
+    border: 0;
+    border-radius: 10px;
     font-family: inherit;
     font-size: 12px;
     font-weight: 700;
@@ -144,12 +144,11 @@
 /* ── Variant: ghost ───────────────────────────────────────────────────────── */
 .variant-ghost {
     background: transparent;
-    border: 0;
     color: var(--editor-text-secondary);
 }
 
 .variant-ghost:hover {
-    background: var(--editor-surface-hover);
+    background: var(--editor-surface-2);
     color: var(--editor-text);
 }
 
@@ -158,33 +157,28 @@
     color: var(--editor-text);
 }
 
-.variant-ghost[aria-pressed="true"],
-.variant-ghost[aria-expanded="true"],
-.variant-ghost[data-active="true"] {
-    background: var(--editor-surface-active);
+/* ── Variant: primary ─────────────────────────────────────────────────────── */
+.variant-primary {
+    background: var(--editor-surface-4);
     color: var(--editor-text);
 }
 
-.variant-ghost[data-tone="danger"] {
-    color: var(--editor-danger-light);
+.variant-primary:hover {
+    background: var(--editor-surface-5);
 }
 
-.variant-ghost[data-tone="danger"]:hover,
-.variant-ghost[data-danger-hover="true"]:hover {
-    background: var(--editor-danger-bg);
-    color: var(--editor-danger-light);
+.variant-primary:active {
+    background: var(--editor-surface-4);
 }
 
 /* ── Variant: secondary ───────────────────────────────────────────────────── */
 .variant-secondary {
-    background: var(--editor-surface);
-    border: 0;
+    background: var(--editor-surface-2);
     color: var(--editor-text-secondary);
 }
 
 .variant-secondary:hover {
-    background: var(--editor-surface-hover);
-    border-color: var(--editor-border-med);
+    background: var(--editor-surface-3);
     color: var(--editor-text);
 }
 
@@ -199,7 +193,6 @@
 
 .variant-secondary[data-tone="danger"] {
     background: var(--editor-danger-bg);
-    border-color: var(--editor-danger-border);
     color: var(--editor-danger);
 }
 
@@ -208,38 +201,9 @@
     color: var(--editor-danger-light);
 }
 
-/* ── Variant: primary ─────────────────────────────────────────────────────── */
-.variant-primary {
-    background: var(--editor-surface-active);
-    border: 1px solid var(--panel-border);
-    color: var(--editor-text);
-}
-
-.variant-primary:hover {
-    background: var(--editor-surface-3);
-    border-color: var(--editor-border-med);
-}
-
-.variant-primary:active {
-    background: var(--editor-surface-4);
-}
-
-/* Accent-fill CTA (Module Picker "+Add") */
-.variant-primary[data-accent="true"] {
-    background: var(--editor-accent);
-    color: var(--editor-bg);
-    border-color: transparent;
-}
-
-.variant-primary[data-accent="true"]:hover {
-    opacity: 0.9;
-    border-color: transparent;
-}
-
 /* ── Variant: destructive ─────────────────────────────────────────────────── */
 .variant-destructive {
     background: var(--editor-danger-bg);
-    border: 1px solid var(--editor-danger-border);
     color: var(--editor-danger);
 }
 

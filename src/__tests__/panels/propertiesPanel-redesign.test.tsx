@@ -8,7 +8,7 @@
  *   PP-2  ClassPicker (pills + input) visible immediately on node selection — no tab click
  *   PP-3  Clicking class pill opens ClassComposer; clicking again closes it
  *   PP-4  Module props in collapsible Section (defaultOpen=true), titled definition.name
- *   PP-5  Advanced Section present, default-collapsed (checkboxes not in DOM until opened)
+ *   PP-5  Advanced Section removed from the Properties panel
  *   PP-6  Both ClassComposer + PropertiesPanel import Section from same path (static gate)
  *   PP-7  Each pill shows cascade position badge (1-based ordinal ¹ ² ³)
  *   PP-8  Reorder buttons (↑/↓) functional — clicking up moves pill; badge updates
@@ -276,36 +276,18 @@ describe('PP-4 — Module Section default open with controls', () => {
 })
 
 // ---------------------------------------------------------------------------
-// PP-5: Advanced Section present, default-collapsed (checkboxes not in DOM)
+// PP-5: Advanced Section removed from the Properties panel
 // ---------------------------------------------------------------------------
 
-describe('PP-5 — Advanced Section default-collapsed', () => {
-  it('Advanced section toggle button is present', () => {
+describe('PP-5 — Advanced Section removed', () => {
+  it('does not render the Advanced section or Hidden/Locked toggles', () => {
     const { nodeId } = loadProjectWithHeading()
     selectNode(nodeId)
     render(<PropertiesPanel />)
-    expect(screen.getByRole('button', { name: /Advanced/i })).toBeDefined()
-  })
-
-  it('Hidden and Locked checkboxes are NOT in DOM when Advanced section is collapsed', () => {
-    const { nodeId } = loadProjectWithHeading()
-    selectNode(nodeId)
-    render(<PropertiesPanel />)
-    // Checkboxes are inside the collapsed section — not rendered
+    expect(screen.queryByRole('button', { name: /Advanced/i })).toBeNull()
     expect(screen.queryByLabelText(/^Hidden$/)).toBeNull()
     expect(screen.queryByLabelText(/^Locked$/)).toBeNull()
-  })
-
-  it('Clicking Advanced section expands it and shows Hidden/Locked checkboxes', () => {
-    const { nodeId } = loadProjectWithHeading()
-    selectNode(nodeId)
-    render(<PropertiesPanel />)
-
-    const advancedBtn = screen.getByRole('button', { name: /Advanced/i })
-    fireEvent.click(advancedBtn)
-
-    expect(screen.getByLabelText('Hidden')).toBeDefined()
-    expect(screen.getByLabelText('Locked')).toBeDefined()
+    expect(screen.queryByText(/^Node ID:/)).toBeNull()
   })
 })
 
@@ -828,9 +810,10 @@ describe('PP-18 — ClassPropertyRow uses same PropertyControl components as mod
     expect(src).toMatch(/import.*TextControl.*from.*PropertyControls/)
   })
 
-  it('ClassPropertyRow.tsx imports SliderControl from PropertyControls', () => {
+  it('ClassPropertyRow.tsx does not import NumberControl or SliderControl from PropertyControls', () => {
     const src = readFileSync(join(PP_DIR, 'ClassPropertyRow.tsx'), 'utf-8')
-    expect(src).toMatch(/import.*SliderControl.*from.*PropertyControls/)
+    expect(src).not.toMatch(/import.*NumberControl.*from.*PropertyControls/)
+    expect(src).not.toMatch(/import.*SliderControl.*from.*PropertyControls/)
   })
 
   it('ClassPropertyRow.tsx imports ColorControl from PropertyControls', () => {
@@ -962,9 +945,27 @@ describe('PP-20b — Module CSS fields render in Module settings and write to no
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
-    expect(screen.getByRole('slider', { name: /^columns$/i })).toBeDefined()
+    expect(screen.getByRole('textbox', { name: /^columns$/i })).toBeDefined()
+    expect(screen.queryByRole('spinbutton', { name: /^columns$/i })).toBeNull()
+    expect(screen.queryByRole('slider', { name: /^columns$/i })).toBeNull()
     expect(screen.getByLabelText(/align items/i)).toBeDefined()
     expect(screen.getByLabelText(/justify items/i)).toBeDefined()
+  })
+
+  it('editing a module CSS length field preserves explicit units', () => {
+    const { nodeId } = loadProjectWithColumns()
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+
+    fireEvent.change(screen.getByRole('textbox', { name: /column gap/i }), {
+      target: { value: '10%' },
+    })
+
+    const state = useEditorStore.getState()
+    const node = state.project!.pages[0].nodes[nodeId]
+    const scopedClassId = node.classIds!.find((id) => state.project!.classes[id].scope?.type === 'node')
+    expect(scopedClassId).toBeDefined()
+    expect(state.project!.classes[scopedClassId!].styles.columnGap).toBe('10%')
   })
 
   it('editing a module CSS field creates a hidden node-scoped class', () => {
@@ -1215,7 +1216,7 @@ describe('PP3-2 — getCSSPropertyDefaultValue values survive parseCSSDeclaratio
 //        (regression lock against the bucket-dispatch failure mode caught in CR #683 MF-B)
 //
 // Each test pins an exact value from Contribution #677 (accepted, Architect msg #2080).
-// When getCSSPropertyDefaultValue used control-type bucket-dispatch (slider → min,
+// When getCSSPropertyDefaultValue used control-type bucket-dispatch,
 // select → first-enum), the following properties returned UX-breaking defaults:
 //   opacity     → 0     (element vanishes on "Add opacity")
 //   zIndex      → -10   (element pushed below the page stack)
@@ -1261,7 +1262,7 @@ describe('PP3-5 — getCSSPropertyDefaultValue per-key reasonableness (MF-B regr
     expect(getCSSPropertyDefaultValue('lineHeight')).toBe('1.5')
   })
 
-  it('letterSpacing → "0px" (NOT "-10px" — slider-min jump)', () => {
+  it('letterSpacing → "0px" (NOT "-10px" — min-bound jump)', () => {
     expect(getCSSPropertyDefaultValue('letterSpacing')).toBe('0px')
   })
 

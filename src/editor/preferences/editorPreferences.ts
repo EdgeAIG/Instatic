@@ -1,6 +1,19 @@
 export const EDITOR_PREFS_KEY = 'pb-editor-prefs'
 export const EDITOR_PREFS_CHANGED_EVENT = 'pb-editor-prefs-changed'
 
+export function readAutoSavePreference(): boolean {
+  try {
+    const raw = globalThis.localStorage?.getItem(EDITOR_PREFS_KEY)
+    if (!raw) return true
+    const parsed = JSON.parse(raw) as { autoSave?: unknown }
+    return typeof parsed.autoSave === 'boolean'
+      ? parsed.autoSave
+      : true
+  } catch {
+    return true
+  }
+}
+
 export function readClassHoverPreviewPreference(): boolean {
   try {
     const raw = globalThis.localStorage?.getItem(EDITOR_PREFS_KEY)

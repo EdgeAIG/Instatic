@@ -160,8 +160,8 @@ function activateCondition(condition: Record<string, unknown>): Record<string, u
  *   - Children contract (only when canHaveChildren is true)
  *
  * @example
- * import { headingModule } from '@modules/base/heading'
- * runModuleConformanceSuite(headingModule)
+ * import { TextModule } from '@modules/base/text'
+ * runModuleConformanceSuite(TextModule)
  */
 export function runModuleConformanceSuite(def: AnyModuleDefinition): void {
   describe(`Module conformance — ${def.id}`, () => {

@@ -292,12 +292,13 @@ function ToolCallBadge({ toolCall }: { toolCall: AgentToolCall }) {
     : isSuccess
     ? styles.toolCallIconSuccess
     : styles.toolCallIconFailed
+  const displayType = formatToolCallType(toolCall.actionType)
   const label = formatActionLabel(toolCall.actionType, toolCall.params)
   const statusLabel = isPending
-    ? `Running ${toolCall.actionType}${label ? ` — ${label}` : ''}`
+    ? `Running ${displayType}${label ? ` — ${label}` : ''}`
     : isSuccess
-    ? `Completed ${toolCall.actionType}${label ? ` — ${label}` : ''}`
-    : `Failed ${toolCall.actionType}${label ? ` — ${label}` : ''}`
+    ? `Completed ${displayType}${label ? ` — ${label}` : ''}`
+    : `Failed ${displayType}${label ? ` — ${label}` : ''}`
 
   return (
     <div
@@ -307,11 +308,15 @@ function ToolCallBadge({ toolCall }: { toolCall: AgentToolCall }) {
     >
       <span className={iconClass} aria-hidden="true"><Icon name={iconName} size={10} /></span>
       <span className={styles.toolCallType} aria-hidden="true">
-        {toolCall.actionType}
+        {displayType}
       </span>
       <span aria-hidden="true">{label}</span>
     </div>
   )
+}
+
+function formatToolCallType(actionType: string): string {
+  return actionType.replace(/^mcp__page_builder__/, '')
 }
 
 function formatActionLabel(actionType: string, params: unknown): string {

@@ -128,7 +128,7 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
     ),
     width: rawBinding('width', { type: 'text', label: 'Width', placeholder: '100%' }, '100%'),
     maxWidth: rawBinding('maxWidth', { type: 'text', label: 'Max width', placeholder: '100%' }, '100%'),
-    borderRadius: pxBinding('borderRadius', { type: 'slider', label: 'Border radius', min: 0, max: 96, step: 1, unit: 'px' }, 0),
+    borderRadius: pxBinding('borderRadius', { type: 'text', label: 'Border radius', placeholder: '0px' }, 0),
     backgroundColor: rawBinding('backgroundColor', { type: 'color', label: 'Background' }, '#000000'),
   },
 

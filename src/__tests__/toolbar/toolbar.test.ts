@@ -459,7 +459,8 @@ describe('Toolbar — structural requirements', () => {
       'utf-8',
     )
     expect(src).toContain("import { Toolbar }")
-    expect(src).toContain('<Toolbar />')
+    expect(src).toContain('const saveProject = usePersistence(projectId)')
+    expect(src).toContain('<Toolbar onSave={saveProject} />')
   })
 
   it('touch targets: all toolbar buttons have a defined height (compact density per Guideline #357)', () => {

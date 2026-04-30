@@ -33,7 +33,7 @@ export const SpacerModule: ModuleDefinition<SpacerProps> = {
   defaults: {},
 
   classStyleBindings: {
-    height: pxBinding('height', { type: 'slider', label: 'Height', min: 4, max: 600, step: 4, unit: 'px' }, 48),
+    height: pxBinding('height', { type: 'text', label: 'Height', placeholder: '48px' }, 48),
   },
 
   component: SpacerEditor,

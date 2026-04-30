@@ -6,8 +6,8 @@
  *   2. Every control wrapper carries data-testid="property-control-{propKey}"
  *   3. Wrapper has minHeight:44 (WCAG 2.5.5 touch-target)
  *   4. Unknown control types return null (no crash)
- *   5. SliderControl uses uncontrolled pattern (defaultValue, not value) — Guideline #220
- *   6. SliderControl exposes aria-valuenow / aria-valuemin / aria-valuemax
+ *   5. Numeric controls render inputs, not range sliders
+ *   6. Numeric inputs expose min / max / step constraints
  *   7. GroupSection aria-expanded toggles on click
  *   8. Property conditions (declarative) — conditional controls hidden when condition fails
  *
@@ -104,14 +104,13 @@ describe('PropertyControlRenderer — type dispatch', () => {
     expect(html).toContain('<textarea')
   })
 
-  it('number → renders <input type="number">', () => {
+  it('number → renders <input type="number"> with constraints', () => {
     const html = renderControl({ type: 'number', label: 'Count', min: 0, max: 100, step: 1 }, 'count', 5)
     expect(html).toContain('type="number"')
-  })
-
-  it('slider → renders <input type="range">', () => {
-    const html = renderControl({ type: 'slider', label: 'Size', min: 0, max: 48, step: 1 }, 'fontSize', 16)
-    expect(html).toContain('type="range"')
+    expect(html).toContain('min="0"')
+    expect(html).toContain('max="100"')
+    expect(html).toContain('step="1"')
+    expect(html).not.toContain('type="range"')
   })
 
   it('color → renders <input type="color"> or color-specific control', () => {
@@ -204,70 +203,56 @@ describe('PropertyControlRenderer — label accessibility', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 4 — SliderControl: uncontrolled pattern (Guideline #220)
+// 4 — Numeric inputs
 // ---------------------------------------------------------------------------
 
-describe('SliderControl — uncontrolled pattern (Guideline #220)', () => {
-  it('uses defaultValue (not value) on range input — uncontrolled', () => {
+describe('PropertyControlRenderer — numeric inputs', () => {
+  it('renders the current value in a number input', () => {
     const html = renderControl(
-      { type: 'slider', label: 'Border Radius', min: 0, max: 48, step: 1 },
+      { type: 'number', label: 'Border Radius', min: 0, max: 48, step: 1 },
       'borderRadius',
       16
     )
-    // Uncontrolled: defaultValue="16", not value="16"
-    // renderToStaticMarkup renders defaultValue as value in HTML
-    expect(html).toContain('type="range"')
-    // The rendered output should contain the current value (16) somehow
+    expect(html).toContain('type="number"')
     expect(html).toContain('16')
   })
 
-  it('exposes aria-valuemin and aria-valuemax on output element', () => {
+  it('exposes min and max on the number input', () => {
     const html = renderControl(
-      { type: 'slider', label: 'Opacity', min: 0, max: 100, step: 1 },
+      { type: 'number', label: 'Opacity', min: 0, max: 100, step: 1 },
       'opacity',
       50
     )
-    expect(html).toContain('aria-valuemin="0"')
-    expect(html).toContain('aria-valuemax="100"')
+    expect(html).toContain('min="0"')
+    expect(html).toContain('max="100"')
   })
 
-  it('exposes aria-valuenow with current value', () => {
+  it('exposes step on the number input', () => {
     const html = renderControl(
-      { type: 'slider', label: 'Size', min: 0, max: 48, step: 1 },
+      { type: 'number', label: 'Size', min: 0, max: 48, step: 0.5 },
       'fontSize',
       24
     )
-    expect(html).toContain('aria-valuenow="24"')
+    expect(html).toContain('step="0.5"')
   })
 
-  it('displays unit in the output element', () => {
+  it('displays unit next to the label', () => {
     const html = renderControl(
-      { type: 'slider', label: 'Padding', min: 0, max: 64, step: 1, unit: 'px' },
+      { type: 'number', label: 'Padding', min: 0, max: 64, step: 1, unit: 'px' },
       'padding',
       8
     )
-    // SliderControl uses a thin space (U+2009) between value and unit for
-    // better typography — verify both the value and unit appear in the output
-    expect(html).toContain('>8')
     expect(html).toContain('px<')
   })
 
-  it('calls onChange only on commit (mouseup), not on every input event', async () => {
-    // This tests the behavioural contract: onChange fires once per gesture end.
-    // We verify the onChange handler binding is on onMouseUp/onTouchEnd/onChange,
-    // NOT on onInput (which would fire on every tick).
+  it('does not import SliderControl in the properties renderer', async () => {
     const { readFileSync } = await import('fs')
     const src = readFileSync(
-      new URL('../../editor/components/PropertyControls/SliderControl.tsx', import.meta.url),
+      new URL('../../editor/components/PropertyControls/PropertyControlRenderer.tsx', import.meta.url),
       'utf-8'
     )
-    expect(src).toContain('onMouseUp={handleCommit}')
-    expect(src).toContain('onTouchEnd={handleCommit}')
-    // onInput should only update the display (no store write)
-    expect(src).toContain('onInput={handleInput}')
-    // The handleInput function should NOT call onChange
-    const handleInputFn = src.match(/const handleInput = \(\) => \{[\s\S]*?\}/)?.[0] ?? ''
-    expect(handleInputFn).not.toContain('onChange')
+    expect(src).not.toContain('SliderControl')
+    expect(src).not.toContain("case 'slider'")
   })
 })
 
@@ -350,7 +335,7 @@ describe('GroupSection — collapse toggle', () => {
           label: 'Basic',
           collapsed: false,
           children: {
-            opacity: { type: 'slider', label: 'Opacity', min: 0, max: 100, step: 1 },
+            opacity: { type: 'number', label: 'Opacity', min: 0, max: 100, step: 1 },
           },
         }}
         value={{}}

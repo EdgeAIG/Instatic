@@ -15,6 +15,7 @@
 
 import { memo, useCallback, useContext, createContext } from 'react'
 import { useEditorStore, selectActiveCanvasPage } from '../../../core/editor-store/store'
+import { resolveProps } from '../../../core/page-tree/selectors'
 import { registry } from '../../../core/module-engine/registry'
 import type { ClassPreviewAssignment } from '../../../core/editor-store/slices/classSlice'
 import { Icon } from '../../../ui/icons/Icon'
@@ -50,6 +51,8 @@ export const CanvasSelectionContext = createContext<CanvasSelectionContextValue>
   onNodeDoubleClick: () => {},
 })
 
+export const CanvasBreakpointContext = createContext<string | undefined>(undefined)
+
 // ---------------------------------------------------------------------------
 // NodeRenderer
 // ---------------------------------------------------------------------------
@@ -82,6 +85,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
   )
 
   const { onNodeClick, onNodeHover, onNodeContextMenu, onNodeDoubleClick } = useContext(CanvasSelectionContext)
+  const breakpointId = useContext(CanvasBreakpointContext)
 
   if (!node) return null
   if (node.hidden) return null
@@ -105,6 +109,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
 
   const ComponentType = definition.component
   const shouldRenderSandbox = Boolean(definition.editorRuntime?.sandbox && !definition.trusted)
+  const effectiveProps = resolveProps(node, breakpointId)
 
   // Build className from classIds — each class gets a mc-{id} selector
   // that ClassStyleInjector injects into document.head
@@ -114,6 +119,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
   return (
     <NodeWrapper
       nodeId={nodeId}
+      moduleId={node.moduleId}
       isSelected={isSelected}
       isHovered={isHovered}
       onNodeClick={onNodeClick}
@@ -127,14 +133,14 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       {shouldRenderSandbox ? (
         <ModuleSandboxFrame
           moduleDefinition={definition}
-          props={node.props}
+          props={effectiveProps}
           nodeId={nodeId}
           isSelected={isSelected}
           mcClassName={mcClassName}
           classIds={effectiveClassIds}
         />
       ) : (
-        <ComponentType props={node.props as never} nodeId={nodeId} isSelected={isSelected} mcClassName={mcClassName}>
+        <ComponentType props={effectiveProps as never} nodeId={nodeId} isSelected={isSelected} mcClassName={mcClassName}>
           {children}
         </ComponentType>
       )}
@@ -176,6 +182,7 @@ export function getCanvasNodeClassName(
 // Exported for testing (keyboard navigation, ARIA attributes)
 export interface NodeWrapperProps {
   nodeId: string
+  moduleId?: string
   isSelected: boolean
   isHovered: boolean
   onNodeClick: (nodeId: string, e: React.MouseEvent) => void
@@ -197,6 +204,7 @@ export interface NodeWrapperProps {
 // keyboard handlers without needing the full Zustand store.
 export const NodeWrapper = memo(function NodeWrapper({
   nodeId,
+  moduleId,
   isSelected,
   isHovered,
   onNodeClick,
@@ -208,6 +216,7 @@ export const NodeWrapper = memo(function NodeWrapper({
   return (
     <div
       data-node-id={nodeId}
+      data-module-id={moduleId}
       className={styles.nodeWrapper}
       // ─── Accessibility (WCAG 2.1 AA, SC 2.1.1) ──────────────────────────
       // Canvas nodes are selectable interactive elements. role="button" is

@@ -5,7 +5,7 @@
  * same section header + toggle + content styling (PP-6 acceptance criterion).
  *
  * Used by:
- *   - PropertiesPanel.tsx (Classes, Module settings, Advanced)
+ *   - PropertiesPanel.tsx (Module settings)
  *   - ClassComposer.tsx (assigned class style categories)
  *
  * The optional `indicator` prop renders a small dot next to the title to

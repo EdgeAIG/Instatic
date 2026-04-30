@@ -7,7 +7,6 @@ import {
 } from '../../core/module-engine/dependencies'
 import type { PageNode } from '../../core/page-tree/types'
 import type { AnyModuleDefinition, IModuleRegistry } from '../../core/module-engine/types'
-import { DemoSceneModule } from '../../modules/base/demoScene'
 
 function makeModule(dependencies: AnyModuleDefinition['dependencies']): AnyModuleDefinition {
   return {
@@ -104,11 +103,4 @@ describe('module dependency metadata', () => {
     })
   })
 
-  it('declares three as a project dependency for the demo Three module', () => {
-    expect(normalizeModuleDependencies(DemoSceneModule.dependencies)).toContainEqual({
-      name: 'three',
-      version: '^0.184.0',
-      dev: false,
-    })
-  })
 })

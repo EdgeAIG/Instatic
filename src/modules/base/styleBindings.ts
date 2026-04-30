@@ -12,6 +12,13 @@ export function toPx(value: unknown): string {
   return `${Number.isFinite(num) ? num : 0}px`
 }
 
+export function toCssLength(value: unknown, fallback: string | number): string {
+  const fallbackValue = typeof fallback === 'number' ? `${fallback}px` : fallback
+  const text = String(value ?? '').trim()
+  if (!text) return fallbackValue
+  return /^-?(?:\d+|\d*\.\d+)$/.test(text) ? `${text}px` : text
+}
+
 export function readNumber(value: unknown, fallback: number): number {
   if (typeof value === 'number') return value
   const parsed = parseFloat(String(value ?? ''))
@@ -37,12 +44,13 @@ export function pxBinding(
   control: PropertyControl,
   defaultValue: number,
 ): ModuleStyleBinding {
+  const defaultCssValue = toCssLength(defaultValue, '0px')
   return {
     properties: [property],
     control,
-    defaultValue,
-    toCSS: (value) => ({ [property]: toPx(value) as never }),
-    fromCSS: (styles) => readNumber(getValue(styles, property), defaultValue),
+    defaultValue: defaultCssValue,
+    toCSS: (value) => ({ [property]: toCssLength(value, defaultCssValue) as never }),
+    fromCSS: (styles) => String(getValue(styles, property) ?? defaultCssValue),
   }
 }
 
@@ -65,12 +73,12 @@ export function unitlessStringBinding(
   control: PropertyControl,
   defaultValue: number,
 ): ModuleStyleBinding {
+  const defaultCssValue = String(defaultValue)
   return {
     properties: [property],
     control,
-    defaultValue,
-    toCSS: (value) => ({ [property]: String(Number(value)) as never }),
-    fromCSS: (styles) => readNumber(getValue(styles, property), defaultValue),
+    defaultValue: defaultCssValue,
+    toCSS: (value) => ({ [property]: String(value ?? defaultCssValue) as never }),
+    fromCSS: (styles) => String(getValue(styles, property) ?? defaultCssValue),
   }
 }
-

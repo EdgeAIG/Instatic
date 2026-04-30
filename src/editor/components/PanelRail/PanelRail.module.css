@@ -22,8 +22,8 @@
 .railButton {
     position: relative;
     --rail-icon-color: var(--editor-text-secondary);
-    --rail-icon-active-bg: var(--editor-surface-active);
-    --rail-icon-hover-bg: var(--editor-surface-hover);
+    --rail-icon-active-bg: var(--editor-surface);
+    --rail-icon-hover-bg: var(--editor-surface-secondary);
     --rail-icon-glow: transparent;
 }
 

@@ -9,7 +9,7 @@
  */
 
 import { z } from 'zod'
-import { useEditorStore } from '../editor-store/store'
+import { useEditorStore, type EditorStore } from '../editor-store/store'
 import { registry } from '../module-engine/registry'
 import { sanitizeRichtext, isRichtextPropKey } from '../sanitize'
 import type {
@@ -35,9 +35,13 @@ const insertNodeSchema = z.object({
   message: 'Either parentId or parentRef is required',
 })
 
+const classStylePatchSchema = z.record(z.string(), z.union([z.string(), z.number()]))
+const classBreakpointStylesSchema = z.record(z.string().min(1), classStylePatchSchema)
+
 const classDefinitionSchema = z.object({
   name: z.string().min(1),
-  styles: z.record(z.string(), z.union([z.string(), z.number()])).optional().default({}),
+  styles: classStylePatchSchema.optional().default({}),
+  breakpointStyles: classBreakpointStylesSchema.optional().default({}),
 })
 
 const insertTreeNodeSchema: z.ZodType<InsertTreeNode> = z.lazy(() => z.object({
@@ -71,6 +75,7 @@ const updateNodePropsSchema = z.object({
   type: z.literal('updateNodeProps'),
   nodeId: z.string().min(1).optional(),
   nodeRef: z.string().min(1).optional(),
+  breakpointId: z.string().min(1).optional(),
   patch: z.record(z.string(), z.unknown()),
 }).refine((action) => Boolean(action.nodeId || action.nodeRef), {
   message: 'Either nodeId or nodeRef is required',
@@ -101,13 +106,15 @@ const renameNodeSchema = z.object({
 const createClassSchema = z.object({
   type: z.literal('createClass'),
   name: z.string().min(1),
-  styles: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
+  styles: classStylePatchSchema.optional(),
+  breakpointStyles: classBreakpointStylesSchema.optional().default({}),
 })
 
 const updateClassStylesSchema = z.object({
   type: z.literal('updateClassStyles'),
   classId: z.string().min(1),
-  patch: z.record(z.string(), z.union([z.string(), z.number()])),
+  breakpointId: z.string().min(1).optional(),
+  patch: classStylePatchSchema,
 })
 
 const assignClassSchema = z.object({
@@ -174,6 +181,57 @@ interface AgentExecutionContext {
   nodeRefs: Map<string, string>
 }
 
+type AgentBatchSnapshot = Pick<
+  EditorStore,
+  | 'project'
+  | 'activePageId'
+  | 'activeDocument'
+  | 'selectedNodeId'
+  | 'hoveredNodeId'
+  | 'activeClassId'
+  | 'hasUnsavedChanges'
+  | '_historyPast'
+  | '_historyFuture'
+  | 'canUndo'
+  | 'canRedo'
+>
+
+const EMPTY_TREE_CHILDREN: InsertTreeNode[] = []
+const EMPTY_TREE_CLASS_IDS: string[] = []
+const EMPTY_PROPS: Record<string, unknown> = {}
+const EMPTY_CLASS_STYLES: Record<string, string | number> = {}
+
+function cloneSerializable<T>(value: T): T {
+  return value === null || value === undefined ? value : structuredClone(value)
+}
+
+function takeBatchSnapshot(): AgentBatchSnapshot {
+  const state = useEditorStore.getState()
+  return {
+    project: cloneSerializable(state.project),
+    activePageId: state.activePageId,
+    activeDocument: cloneSerializable(state.activeDocument),
+    selectedNodeId: state.selectedNodeId,
+    hoveredNodeId: state.hoveredNodeId,
+    activeClassId: state.activeClassId,
+    hasUnsavedChanges: state.hasUnsavedChanges,
+    _historyPast: cloneSerializable(state._historyPast),
+    _historyFuture: cloneSerializable(state._historyFuture),
+    canUndo: state.canUndo,
+    canRedo: state.canRedo,
+  }
+}
+
+function restoreBatchSnapshot(snapshot: AgentBatchSnapshot): void {
+  useEditorStore.setState({
+    ...snapshot,
+    project: cloneSerializable(snapshot.project),
+    activeDocument: cloneSerializable(snapshot.activeDocument),
+    _historyPast: cloneSerializable(snapshot._historyPast),
+    _historyFuture: cloneSerializable(snapshot._historyFuture),
+  })
+}
+
 function resolveParentId(
   action: z.infer<typeof insertNodeSchema>,
   context: AgentExecutionContext | undefined,
@@ -229,30 +287,68 @@ function resolveOrCreateClassId(
   }
 }
 
-function resolveOrCreateClassIds(
+function resolveKnownClassIds(
   store: ReturnType<typeof useEditorStore.getState>,
   classIdsOrNames: string[],
-): string[] | null {
+): { classIds: string[]; missing: null } | { classIds: null; missing: string } {
   const resolved: string[] = []
   for (const classIdOrName of classIdsOrNames) {
-    const classId = resolveOrCreateClassId(store, classIdOrName)
-    if (!classId) return null
+    const classId = resolveClassId(store, classIdOrName)
+    if (!classId) return { classIds: null, missing: classIdOrName }
     if (!resolved.includes(classId)) resolved.push(classId)
   }
-  return resolved
+  return { classIds: resolved, missing: null }
 }
 
 function ensureClassIdWithStyles(
   store: ReturnType<typeof useEditorStore.getState>,
   classIdOrName: string,
   styles: Record<string, string | number> = {},
+  breakpointStyles: Record<string, Record<string, string | number>> = {},
 ): string | null {
+  const breakpointError = validateBreakpointStyles(store, breakpointStyles)
+  if (breakpointError) return null
   const classId = resolveOrCreateClassId(store, classIdOrName, styles)
   if (!classId) return null
   if (Object.keys(styles).length > 0) {
     store.updateClassStyles(classId, styles)
   }
+  applyClassBreakpointStyles(store, classId, breakpointStyles)
   return classId
+}
+
+function validateBreakpointId(
+  store: ReturnType<typeof useEditorStore.getState>,
+  breakpointId: string,
+): string | null {
+  const project = store.project
+  if (!project) return `Breakpoint not found: ${breakpointId}`
+  return project.breakpoints.some((breakpoint) => breakpoint.id === breakpointId)
+    ? null
+    : `Breakpoint not found: ${breakpointId}`
+}
+
+function validateBreakpointStyles(
+  store: ReturnType<typeof useEditorStore.getState>,
+  breakpointStyles: Record<string, Record<string, string | number>>,
+): string | null {
+  for (const breakpointId of Object.keys(breakpointStyles)) {
+    const error = validateBreakpointId(store, breakpointId)
+    if (error) return error
+  }
+  return null
+}
+
+function applyClassBreakpointStyles(
+  store: ReturnType<typeof useEditorStore.getState>,
+  classId: string,
+  breakpointStyles: Record<string, Record<string, string | number>>,
+): void {
+  for (const [breakpointId, styles] of Object.entries(breakpointStyles)) {
+    if (Object.keys(styles).length > 0) {
+      store.setClassBreakpointStyles(classId, breakpointId, styles)
+    }
+  }
 }
 
 function validateRegisteredModule(moduleId: string): string | null {
@@ -265,7 +361,7 @@ function validateRegisteredModule(moduleId: string): string | null {
 function validateTreeModules(node: InsertTreeNode): string | null {
   const moduleError = validateRegisteredModule(node.moduleId)
   if (moduleError) return moduleError
-  for (const child of node.children ?? []) {
+  for (const child of node.children ?? EMPTY_TREE_CHILDREN) {
     const childError = validateTreeModules(child)
     if (childError) return childError
   }
@@ -286,11 +382,9 @@ function ensureTreeClassIds(
   store: ReturnType<typeof useEditorStore.getState>,
   node: InsertTreeNode,
 ): string | null {
-  for (const classIdOrName of node.classIds ?? []) {
-    const classId = ensureClassIdWithStyles(store, classIdOrName)
-    if (!classId) return classIdOrName
-  }
-  for (const child of node.children ?? []) {
+  const resolved = resolveKnownClassIds(store, node.classIds ?? EMPTY_TREE_CLASS_IDS)
+  if (resolved.missing) return resolved.missing
+  for (const child of node.children ?? EMPTY_TREE_CHILDREN) {
     const unresolved = ensureTreeClassIds(store, child)
     if (unresolved) return unresolved
   }
@@ -306,18 +400,19 @@ function insertTreeNode(
 ): string {
   const nodeId = store.insertNode(
     node.moduleId,
-    sanitizeNodeProps(node.props ?? {}),
+    sanitizeNodeProps(node.props ?? EMPTY_PROPS),
     parentId,
     index,
   )
   if (node.ref) context?.nodeRefs.set(node.ref, nodeId)
 
-  const classIds = resolveOrCreateClassIds(store, node.classIds ?? []) ?? []
+  const resolved = resolveKnownClassIds(store, node.classIds ?? EMPTY_TREE_CLASS_IDS)
+  const classIds = resolved.classIds ?? EMPTY_TREE_CLASS_IDS
   for (const classId of classIds) {
     store.addNodeClass(nodeId, classId)
   }
 
-  for (const child of node.children ?? []) {
+  for (const child of node.children ?? EMPTY_TREE_CHILDREN) {
     insertTreeNode(store, child, nodeId, undefined, context)
   }
 
@@ -351,8 +446,12 @@ export async function executeAgentAction(
           const ref = a.parentRef ? `parentRef "${a.parentRef}"` : 'parentId'
           return { success: false, error: `Could not resolve ${ref}` }
         }
-        const resolvedClassIds = resolveOrCreateClassIds(store, a.classIds)
-        if (!resolvedClassIds) {
+        const resolvedClassIds = resolveKnownClassIds(store, a.classIds)
+        if (resolvedClassIds.missing) {
+          return { success: false, error: `Class not found: ${resolvedClassIds.missing}` }
+        }
+        const classIds = resolvedClassIds.classIds
+        if (!classIds) {
           return { success: false, error: 'One or more classes could not be resolved for insertNode' }
         }
         // Sanitize richtext-keyed props before writing to store (Constraint #299)
@@ -364,7 +463,7 @@ export async function executeAgentAction(
           a.index,
         )
         if (a.ref) context?.nodeRefs.set(a.ref, nodeId)
-        for (const classId of resolvedClassIds) {
+        for (const classId of classIds) {
           store.addNodeClass(nodeId, classId)
         }
         return { success: true, nodeId }
@@ -381,10 +480,19 @@ export async function executeAgentAction(
         if (moduleError) return { success: false, error: moduleError }
 
         for (const classDef of a.classes) {
+          const breakpointError = validateBreakpointStyles(
+            useEditorStore.getState(),
+            classDef.breakpointStyles as Record<string, Record<string, string | number>>,
+          )
+          if (breakpointError) return { success: false, error: breakpointError }
+        }
+
+        for (const classDef of a.classes) {
           const classId = ensureClassIdWithStyles(
             useEditorStore.getState(),
             classDef.name,
             classDef.styles as Record<string, string | number>,
+            classDef.breakpointStyles as Record<string, Record<string, string | number>>,
           )
           if (!classId) return { success: false, error: `Class could not be created: ${classDef.name}` }
         }
@@ -423,7 +531,13 @@ export async function executeAgentAction(
             ? sanitizeRichtext(value)
             : value
         }
-        store.updateNodeProps(nodeId, sanitizedPatch)
+        if (a.breakpointId) {
+          const breakpointError = validateBreakpointId(store, a.breakpointId)
+          if (breakpointError) return { success: false, error: breakpointError }
+          store.setBreakpointOverride(nodeId, a.breakpointId, sanitizedPatch)
+        } else {
+          store.updateNodeProps(nodeId, sanitizedPatch)
+        }
         return { success: true }
       }
 
@@ -456,9 +570,19 @@ export async function executeAgentAction(
 
       case 'createClass': {
         const a = createClassSchema.parse(action)
+        const breakpointError = validateBreakpointStyles(
+          store,
+          a.breakpointStyles as Record<string, Record<string, string | number>>,
+        )
+        if (breakpointError) return { success: false, error: breakpointError }
         const cls = store.createClass(
           a.name,
-          (a.styles ?? {}) as Record<string, string | number>,
+          (a.styles ?? EMPTY_CLASS_STYLES) as Record<string, string | number>,
+        )
+        applyClassBreakpointStyles(
+          store,
+          cls.id,
+          a.breakpointStyles as Record<string, Record<string, string | number>>,
         )
         return { success: true, nodeId: cls.id }
       }
@@ -474,10 +598,20 @@ export async function executeAgentAction(
           a.patch as Record<string, string | number>,
         )
         if (!ucsResolvedId) return { success: false, error: `Class not found: ${a.classId}` }
-        store.updateClassStyles(
-          ucsResolvedId,
-          a.patch as Record<string, string | number>,
-        )
+        if (a.breakpointId) {
+          const breakpointError = validateBreakpointId(store, a.breakpointId)
+          if (breakpointError) return { success: false, error: breakpointError }
+          store.setClassBreakpointStyles(
+            ucsResolvedId,
+            a.breakpointId,
+            a.patch as Record<string, string | number>,
+          )
+        } else {
+          store.updateClassStyles(
+            ucsResolvedId,
+            a.patch as Record<string, string | number>,
+          )
+        }
         return { success: true }
       }
 
@@ -543,11 +677,15 @@ export async function executeAgentActions(
   actions: AgentAction[],
 ): Promise<AgentActionResult[]> {
   const results: AgentActionResult[] = []
+  const snapshot = takeBatchSnapshot()
   const context: AgentExecutionContext = { nodeRefs: new Map() }
   for (const action of actions) {
     const result = await executeAgentAction(action, context)
     results.push(result)
-    if (!result.success) break // fail-fast
+    if (!result.success) {
+      restoreBatchSnapshot(snapshot)
+      break
+    }
   }
   return results
 }

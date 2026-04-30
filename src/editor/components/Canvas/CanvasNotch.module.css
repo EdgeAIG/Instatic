@@ -3,73 +3,78 @@
  */
 
 .shell {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  z-index: 24;
-  transform: translateX(-50%);
-  pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 50%;
+    z-index: 24;
+    transform: translateX(-50%);
+    pointer-events: none;
 }
 
 .notch {
-  --notch-bg: var(--editor-bg);
-  --notch-radius: 16px;
-  --notch-corner: 18px;
-  --notch-corner-cut: calc(var(--notch-corner) - 0.5px);
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 42px;
-  padding: 6px 12px 8px;
-  pointer-events: auto;
-  color: var(--editor-text);
-  background: var(--notch-bg);
-  border: 0;
-  border-radius: 0 0 var(--notch-radius) var(--notch-radius);
-  box-shadow:
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-    0 1px 0 var(--editor-border),
-    0 12px 28px rgba(0, 0, 0, 0.34);
+    --notch-bg: var(--editor-bg);
+    --notch-radius: 16px;
+    --notch-corner: 18px;
+    --notch-corner-cut: calc(var(--notch-corner) - 0.5px);
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 42px;
+    padding: 6px 12px 8px;
+    pointer-events: auto;
+    color: var(--editor-text);
+    background: var(--notch-bg);
+    border: 0;
+    border-radius: 0 0 var(--notch-radius) var(--notch-radius);
+    box-shadow:
+        inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+        0 1px 0 var(--editor-border),
+        0 12px 28px rgba(0, 0, 0, 0.34);
 }
 
 .notch > * {
-  position: relative;
-  z-index: 1;
+    position: relative;
+    z-index: 1;
 }
 
 .notch::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: calc(2px - var(--notch-corner));
-  right: calc(2px - var(--notch-corner));
-  z-index: 0;
-  height: var(--notch-corner);
-  transform: rotate(180deg);
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 0 0, transparent var(--notch-corner-cut), var(--notch-bg) var(--notch-corner)) left top / var(--notch-corner) var(--notch-corner) no-repeat,
-    radial-gradient(circle at 100% 0, transparent var(--notch-corner-cut), var(--notch-bg) var(--notch-corner)) right top / var(--notch-corner) var(--notch-corner) no-repeat;
+    content: "";
+    position: absolute;
+    top: 0;
+    left: calc(2px - var(--notch-corner));
+    right: calc(2px - var(--notch-corner));
+    z-index: 0;
+    height: var(--notch-corner);
+    transform: rotate(180deg);
+    pointer-events: none;
+    background:
+        radial-gradient(
+                circle at 0 0,
+                transparent var(--notch-corner-cut),
+                var(--notch-bg) var(--notch-corner)
+            )
+            left top / var(--notch-corner) var(--notch-corner) no-repeat,
+        radial-gradient(
+                circle at 100% 0,
+                transparent var(--notch-corner-cut),
+                var(--notch-bg) var(--notch-corner)
+            )
+            right top / var(--notch-corner) var(--notch-corner) no-repeat;
 }
 
 .quickButton {
-  color: var(--editor-text-secondary);
+    color: var(--editor-text-secondary);
 }
 
 .quickButton:hover {
-  color: var(--editor-text);
+    color: var(--editor-text);
 }
 
 .divider {
-  width: 1px;
-  height: 18px;
-  margin: 0 2px;
-  background: var(--editor-border-med);
-}
-
-.addButton {
-  height: 30px;
-  padding: 0 10px;
+    width: 1px;
+    height: 18px;
+    margin: 0 2px;
+    background: var(--editor-border-med);
 }

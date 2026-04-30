@@ -21,25 +21,10 @@ describe('CanvasNotch', () => {
     expect(src).toContain("moduleId: 'base.container'")
     expect(src).toContain("icon: 'checkbox-sharp'")
     expect(src).toContain("moduleId: 'base.text'")
+    expect(src).toContain("moduleId: 'base.image'")
+    expect(src).toContain("icon: 'image'")
     expect(src).toContain("moduleId: 'base.button'")
     expect(src).toContain('canvas-notch-add-btn')
-  })
-
-  it('uses one shared pseudo-element for inverted notch corners', () => {
-    const css = readFileSync(CANVAS_NOTCH_CSS, 'utf-8')
-
-    expect(css).toContain('.notch::before')
-    expect(css).not.toContain('.notch::after')
-    expect(css).toContain('.notch > *')
-    expect(css).toContain('z-index: 1')
-    expect(css).toContain('z-index: 0')
-    expect(css).toContain('left: calc(2px - var(--notch-corner))')
-    expect(css).toContain('right: calc(2px - var(--notch-corner))')
-    expect(css).toContain('transform: rotate(180deg)')
-    expect(css).toContain('radial-gradient(circle at 0 0')
-    expect(css).toContain('radial-gradient(circle at 100% 0')
-    expect(css).not.toContain('border-bottom-right-radius')
-    expect(css).not.toContain('border-bottom-left-radius')
   })
 
   it('does not draw real side borders through the inverted-corner seam', () => {
@@ -50,16 +35,6 @@ describe('CanvasNotch', () => {
     expect(css).not.toContain('border-top: 0')
     expect(css).toContain('left: calc(2px - var(--notch-corner))')
     expect(css).toContain('right: calc(2px - var(--notch-corner))')
-  })
-
-  it('uses radial gradient corner fills instead of box-shadow illusion seams', () => {
-    const css = readFileSync(CANVAS_NOTCH_CSS, 'utf-8')
-
-    expect(css).toContain('radial-gradient(circle at 0 0')
-    expect(css).toContain('radial-gradient(circle at 100% 0')
-    expect(css).toContain('--notch-corner-cut')
-    expect(css).not.toContain('box-shadow: 9px -9px')
-    expect(css).not.toContain('box-shadow: -9px -9px')
   })
 
   it('moves the Add picker out of the top toolbar', () => {

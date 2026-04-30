@@ -16,8 +16,8 @@
  * - ProjectExplorerPanel — project concepts: pages, components, styles, assets, scripts
  * - CodeEditorPanel (Task #432) — center-stage, code editing
  *
- * J12: usePersistence handles load-from-IndexedDB on mount, 30s auto-save,
- * and Cmd+S immediate save.
+ * J12: usePersistence handles load-from-IndexedDB on mount, preference-gated
+ * 30s auto-save, toolbar Save, and Cmd+S immediate save.
  *
  * Agent Panel: Phase D AI assistant — self-contained floating panel (Guideline #410).
  * Authenticates via ambient Claude Code credentials through the local Bun server.
@@ -41,14 +41,14 @@ export default function EditorLayout() {
   const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
   const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)
 
-  // J12 — wire IndexedDB persistence: load on mount, auto-save, Cmd+S
-  usePersistence(projectId)
+  // J12 — wire IndexedDB persistence: load, auto-save, toolbar Save, Cmd+S
+  const saveProject = usePersistence(projectId)
   useEditorLayoutPersistence()
 
   return (
     <div className={styles.shell}>
       {/* ── Top toolbar (z-60, Guideline #374) ───────────────────────────── */}
-      <Toolbar />
+      <Toolbar onSave={saveProject} />
 
       {/* ── Canvas + floating overlay panels ──────────────────────────────── */}
       {/*

@@ -7,7 +7,6 @@ import { type ModuleDefinition, type ModuleComponentProps } from '../../../core/
 import { registry } from '../../../core/module-engine/registry'
 import styles from './container.module.css'
 import { cn } from '../../../ui/cn'
-import { pxBinding, rawBinding } from '../styleBindings'
 
 export interface ContainerProps extends Record<string, unknown> {
   tag: 'div' | 'section' | 'article' | 'main' | 'header' | 'footer'
@@ -54,103 +53,6 @@ export const ContainerModule: ModuleDefinition<ContainerProps> = {
 
   defaults: {
     tag: 'div',
-  },
-
-  classStyleBindings: {
-    display: rawBinding(
-      'display',
-      {
-        type: 'select',
-        label: 'Display',
-        options: [
-          { label: 'Block', value: 'block' },
-          { label: 'Flex', value: 'flex' },
-          { label: 'Grid', value: 'grid' },
-        ],
-      },
-      'flex',
-    ),
-    flexDirection: rawBinding(
-      'flexDirection',
-      {
-        type: 'select',
-        label: 'Flex direction',
-        options: [
-          { label: 'Row', value: 'row' },
-          { label: 'Column', value: 'column' },
-          { label: 'Row reverse', value: 'row-reverse' },
-          { label: 'Column reverse', value: 'column-reverse' },
-        ],
-      },
-      'column',
-    ),
-    justifyContent: rawBinding(
-      'justifyContent',
-      {
-        type: 'select',
-        label: 'Justify content',
-        options: [
-          { label: 'Start', value: 'flex-start' },
-          { label: 'Center', value: 'center' },
-          { label: 'End', value: 'flex-end' },
-          { label: 'Space between', value: 'space-between' },
-          { label: 'Space around', value: 'space-around' },
-          { label: 'Space evenly', value: 'space-evenly' },
-        ],
-      },
-      'flex-start',
-    ),
-    alignItems: rawBinding(
-      'alignItems',
-      {
-        type: 'select',
-        label: 'Align items',
-        options: [
-          { label: 'Stretch', value: 'stretch' },
-          { label: 'Start', value: 'flex-start' },
-          { label: 'Center', value: 'center' },
-          { label: 'End', value: 'flex-end' },
-          { label: 'Baseline', value: 'baseline' },
-        ],
-      },
-      'stretch',
-    ),
-    flexWrap: rawBinding(
-      'flexWrap',
-      {
-        type: 'select',
-        label: 'Flex wrap',
-        options: [
-          { label: 'No wrap', value: 'nowrap' },
-          { label: 'Wrap', value: 'wrap' },
-          { label: 'Wrap reverse', value: 'wrap-reverse' },
-        ],
-      },
-      'nowrap',
-    ),
-    gap: pxBinding('gap', { type: 'slider', label: 'Gap', min: 0, max: 160, step: 2, unit: 'px' }, 16),
-    paddingTop: pxBinding('paddingTop', { type: 'slider', label: 'Padding top', min: 0, max: 240, step: 2, unit: 'px' }, 16),
-    paddingRight: pxBinding('paddingRight', { type: 'slider', label: 'Padding right', min: 0, max: 240, step: 2, unit: 'px' }, 16),
-    paddingBottom: pxBinding('paddingBottom', { type: 'slider', label: 'Padding bottom', min: 0, max: 240, step: 2, unit: 'px' }, 16),
-    paddingLeft: pxBinding('paddingLeft', { type: 'slider', label: 'Padding left', min: 0, max: 240, step: 2, unit: 'px' }, 16),
-    backgroundColor: rawBinding('backgroundColor', { type: 'color', label: 'Background' }, 'transparent'),
-    maxWidth: rawBinding('maxWidth', { type: 'text', label: 'Max width', placeholder: '100%' }, '100%'),
-    minHeight: pxBinding('minHeight', { type: 'slider', label: 'Min height', min: 0, max: 2000, step: 10, unit: 'px' }, 0),
-    borderRadius: pxBinding('borderRadius', { type: 'slider', label: 'Border radius', min: 0, max: 96, step: 1, unit: 'px' }, 0),
-    overflow: rawBinding(
-      'overflow',
-      {
-        type: 'select',
-        label: 'Overflow',
-        options: [
-          { label: 'Visible', value: 'visible' },
-          { label: 'Hidden', value: 'hidden' },
-          { label: 'Scroll', value: 'scroll' },
-          { label: 'Auto', value: 'auto' },
-        ],
-      },
-      'visible',
-    ),
   },
 
   component: ContainerEditor,

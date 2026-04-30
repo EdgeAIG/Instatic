@@ -64,7 +64,7 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
   const hoverNode = useEditorStore((s) => s.hoverNode)
   const deleteNode = useEditorStore((s) => s.deleteNode)
   const duplicateNode = useEditorStore((s) => s.duplicateNode)
-  const updateNodeProps = useEditorStore((s) => s.updateNodeProps)
+  const renameNode = useEditorStore((s) => s.renameNode)
   const wrapNode = useEditorStore((s) => s.wrapNode)
 
   const { isExpanded, toggleExpanded } = useDomTree()
@@ -150,7 +150,7 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
   const commitRename = () => {
     const trimmed = renameValue.trim()
     if (trimmed && trimmed !== displayName) {
-      updateNodeProps(nodeId, { label: trimmed })
+      renameNode(nodeId, trimmed)
     }
     setIsRenaming(false)
   }

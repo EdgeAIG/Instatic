@@ -11,7 +11,6 @@ import { registry } from '../../../core/module-engine/registry'
 import { jsxStr } from '../../../core/react-publisher/utils'
 import styles from './text.module.css'
 import { cn } from '../../../ui/cn'
-import { pxBinding, rawBinding, unitlessStringBinding } from '../styleBindings'
 
 export type TextTag =
   | 'p'
@@ -96,43 +95,7 @@ export const TextModule: ModuleDefinition<TextProps> = {
     tag: 'p',
   },
 
-  classStyleBindings: {
-    fontFamily: rawBinding('fontFamily', { type: 'text', label: 'Font family', placeholder: 'Inter, sans-serif' }, 'inherit'),
-    fontSize: pxBinding('fontSize', { type: 'slider', label: 'Font size', min: 8, max: 160, step: 1, unit: 'px' }, 16),
-    fontWeight: rawBinding(
-      'fontWeight',
-      {
-        type: 'select',
-        label: 'Font weight',
-        options: [
-          { label: 'Regular', value: '400' },
-          { label: 'Medium', value: '500' },
-          { label: 'Semi bold', value: '600' },
-          { label: 'Bold', value: '700' },
-          { label: 'Black', value: '900' },
-        ],
-      },
-      '400',
-    ),
-    lineHeight: unitlessStringBinding('lineHeight', { type: 'slider', label: 'Line height', min: 0.8, max: 2.4, step: 0.05 }, 1.4),
-    letterSpacing: pxBinding('letterSpacing', { type: 'slider', label: 'Letter spacing', min: -4, max: 12, step: 0.25, unit: 'px' }, 0),
-    color: rawBinding('color', { type: 'color', label: 'Text color' }, 'inherit'),
-    textAlign: rawBinding(
-      'textAlign',
-      {
-        type: 'select',
-        label: 'Text align',
-        options: [
-          { label: 'Left', value: 'left' },
-          { label: 'Center', value: 'center' },
-          { label: 'Right', value: 'right' },
-          { label: 'Justify', value: 'justify' },
-        ],
-      },
-      'left',
-    ),
-    marginBottom: pxBinding('marginBottom', { type: 'slider', label: 'Bottom margin', min: 0, max: 160, step: 2, unit: 'px' }, 0),
-  },
+  classStyleBindings: {},
 
   component: TextEditor,
 

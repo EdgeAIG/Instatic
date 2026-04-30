@@ -11,7 +11,6 @@
  * Redesign (Task #456 / Spec #659): single-scroll layout replaces 3-tab paradigm.
  *   - ClassPicker always-visible under the node header
  *   - Module props in collapsible Section (default open)
- *   - Advanced settings in collapsible Section (default collapsed)
  *
  * Guideline #357 (Compact UI Density):
  * - Property rows: 26px height, label font 11px, value font 12px
@@ -48,7 +47,6 @@ import { PanelHeader } from '../shared/PanelHeader'
 import { useDraggablePanel } from '../../hooks/useDraggablePanel'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
-import { Switch } from '@ui/components/Switch'
 import { Icon } from '../../../ui/icons/Icon'
 import { cn } from '@ui/cn'
 import styles from './PropertiesPanel.module.css'
@@ -318,16 +316,6 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
                 moduleProps={resolvedPropsForBreakpoint ?? selectedNode.props}
               />
             )}
-
-            {/* Advanced section — collapsible, default collapsed (PP-5) */}
-            <Section title="Advanced" defaultOpen={false} icon="sliders-horizontal">
-              <AdvancedContent
-                nodeId={selectedNodeId!}
-                hidden={selectedNode.hidden ?? false}
-                locked={selectedNode.locked ?? false}
-                activeBreakpointId={activeBreakpointId}
-              />
-            </Section>
           </div>
         )}
       </div>
@@ -478,60 +466,4 @@ function findNodeStyleClass(
     }
   }
   return null
-}
-
-// ---------------------------------------------------------------------------
-// AdvancedContent — node visibility/lock flags + node ID
-// ---------------------------------------------------------------------------
-
-interface AdvancedContentProps {
-  nodeId: string
-  hidden: boolean
-  locked: boolean
-  activeBreakpointId: string | undefined
-}
-
-function AdvancedContent({ nodeId, hidden, locked, activeBreakpointId }: AdvancedContentProps) {
-  const updateNodeProps = useEditorStore((s) => s.updateNodeProps)
-
-  const toggle = useCallback(
-    (key: 'hidden' | 'locked', value: boolean) => {
-      updateNodeProps(nodeId, { [key]: value })
-    },
-    [nodeId, updateNodeProps],
-  )
-
-  return (
-    <div className={styles.advancedContent}>
-      <div className={styles.advancedRow}>
-        <label htmlFor="adv-hidden" className={styles.advancedLabel}>Hidden</label>
-        <Switch
-          id="adv-hidden"
-          checked={hidden}
-          onCheckedChange={(checked) => toggle('hidden', checked)}
-          switchSize="sm"
-        />
-      </div>
-      <div className={styles.advancedRow}>
-        <label htmlFor="adv-locked" className={styles.advancedLabel}>Locked</label>
-        <Switch
-          id="adv-locked"
-          checked={locked}
-          onCheckedChange={(checked) => toggle('locked', checked)}
-          switchSize="sm"
-        />
-      </div>
-
-      {activeBreakpointId && activeBreakpointId !== 'desktop' && (
-        <div className={styles.advancedBreakpointNote}>
-          Active breakpoint: <strong>{activeBreakpointId}</strong>.<br />
-          Property overrides for this breakpoint are set in the module section above.
-        </div>
-      )}
-
-      <div className={styles.advancedNodeId}>
-        Node ID: <code>{nodeId}</code>
-      </div>
-    </div>
-  )
 }

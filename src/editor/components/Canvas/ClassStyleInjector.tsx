@@ -24,7 +24,7 @@
 
 import { useEffect } from 'react'
 import { useEditorStore } from '../../../core/editor-store/store'
-import { generateClassCSS } from '../../../core/publisher/classCss'
+import { generateCanvasClassCSS } from './canvasClassCss'
 
 // ---------------------------------------------------------------------------
 // Component
@@ -61,7 +61,7 @@ export function ClassStyleInjector() {
       return
     }
 
-    styleEl.textContent = generateClassCSS(classes, breakpoints)
+    styleEl.textContent = generateCanvasClassCSS(classes, breakpoints)
   }, [classes, breakpoints])
 
   // Cleanup: remove the style element when the component unmounts

@@ -1,114 +1,121 @@
 /* ClassComposer - minimal assigned-style inspector for an active class. */
 
 .composer {
-  display: contents;
+    display: contents;
 }
 
 .styleToolbar {
-  display: grid;
-  gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--panel-border);
-  background: rgba(255, 255, 255, 0.012);
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.012);
 }
 
 .toolbarRow {
-  display: grid;
-  grid-template-columns: minmax(104px, 118px) minmax(0, 1fr);
-  gap: 8px;
+    display: grid;
+    grid-template-columns: minmax(104px, 118px) minmax(0, 1fr);
+    gap: 8px;
 }
 
 .breakpointSelectWrap {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  color: var(--editor-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    color: var(--editor-text-secondary);
 }
 
 .breakpointSelect {
-  width: 100%;
-  min-width: 0;
+    width: 100%;
+    min-width: 0;
 }
 
 @media (max-width: 420px) {
-  .toolbarRow {
-    grid-template-columns: 1fr;
-  }
+    .toolbarRow {
+        grid-template-columns: 1fr;
+    }
 }
 
 .styleSections {
-  display: contents;
+    display: contents;
 }
 
 .styleSectionBody {
-  display: grid;
-  gap: 0;
+    display: grid;
+    gap: 8px;
 }
 
 .moduleStyleRow {
-  position: relative;
-  box-sizing: border-box;
-  --class-remove-label-column: 120px;
-  --class-remove-row-center: 14px;
-  --class-remove-button-size: 22px;
-  --class-remove-fade-width: 64px;
-  --class-remove-row-bg: var(--editor-bg);
+    position: relative;
+    box-sizing: border-box;
+    --class-remove-label-column: 120px;
+    --class-remove-row-center: 14px;
+    --class-remove-button-size: 22px;
+    --class-remove-fade-width: 64px;
+    --class-remove-row-bg: var(--editor-bg);
 }
 
 .moduleStyleRow::after {
-  position: absolute;
-  top: calc(var(--class-remove-row-center) - (var(--class-remove-button-size) / 2));
-  left: calc(var(--class-remove-label-column) - var(--class-remove-fade-width));
-  z-index: 1;
-  width: var(--class-remove-fade-width);
-  height: var(--class-remove-button-size);
-  background: linear-gradient(
-    90deg,
-    rgba(0, 0, 0, 0) 0%,
-    var(--class-remove-row-bg) 48%,
-    var(--class-remove-row-bg) 100%
-  );
-  content: "";
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 100ms ease;
+    position: absolute;
+    top: calc(
+        var(--class-remove-row-center) - (var(--class-remove-button-size) / 2)
+    );
+    left: calc(
+        var(--class-remove-label-column) - var(--class-remove-fade-width)
+    );
+    z-index: 1;
+    width: var(--class-remove-fade-width);
+    height: var(--class-remove-button-size);
+    background: linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0) 0%,
+        var(--class-remove-row-bg) 48%,
+        var(--class-remove-row-bg) 100%
+    );
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms ease;
 }
 
 .moduleStyleRemoveBtn {
-  position: absolute;
-  top: calc(var(--class-remove-row-center) - (var(--class-remove-button-size) / 2));
-  left: calc(var(--class-remove-label-column) - var(--class-remove-button-size) - 4px);
-  z-index: 2;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    opacity 100ms ease,
-    background-color 100ms ease,
-    color 100ms ease;
+    position: absolute;
+    top: calc(
+        var(--class-remove-row-center) - (var(--class-remove-button-size) / 2)
+    );
+    left: calc(
+        var(--class-remove-label-column) - var(--class-remove-button-size) - 4px
+    );
+    z-index: 2;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 100ms ease,
+        background-color 100ms ease,
+        color 100ms ease;
 }
 
 .moduleStyleRemoveBtn.moduleStyleRemoveBtn {
-  width: var(--class-remove-button-size);
-  height: var(--class-remove-button-size);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--editor-text-secondary);
+    width: var(--class-remove-button-size);
+    height: var(--class-remove-button-size);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--editor-text-secondary);
 }
 
 .moduleStyleRemoveBtn.moduleStyleRemoveBtn:hover,
 .moduleStyleRemoveBtn.moduleStyleRemoveBtn:focus-visible {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--editor-text);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--editor-text);
 }
 
 .moduleStyleRow:hover .moduleStyleRemoveBtn,
 .moduleStyleRow:focus-within .moduleStyleRemoveBtn {
-  opacity: 1;
-  pointer-events: auto;
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .moduleStyleRow:hover::after,
 .moduleStyleRow:focus-within::after {
-  opacity: 1;
+    opacity: 1;
 }

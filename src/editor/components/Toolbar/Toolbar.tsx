@@ -3,7 +3,7 @@
  *
  * Layout (left → right):
  *   [Project name] [UndoRedo] [divider]
- *   [ZoomControls] [spacer→] [SaveIndicator] [Preview] [Export] [Settings]
+ *   [ZoomControls] [spacer→] [SaveIndicator/Save] [Preview] [Export] [Settings]
  *
  * Accessibility (WCAG 2.1 AA):
  * - role="banner" for the top-level landmark
@@ -22,7 +22,11 @@ import { SaveIndicator } from './SaveIndicator'
 import { PreviewOverlay } from '../Preview/PreviewOverlay'
 import styles from './Toolbar.module.css'
 
-export function Toolbar() {
+interface ToolbarProps {
+  onSave?: () => void | Promise<void>
+}
+
+export function Toolbar({ onSave }: ToolbarProps) {
   const projectName = useEditorStore((s) => s.project?.name ?? 'Untitled Project')
 
   return (
@@ -55,7 +59,7 @@ export function Toolbar() {
         {/* ── Right section ───────────────────────────────────────────────── */}
         <ZoomControls />
         <Divider />
-        <SaveIndicator />
+        <SaveIndicator onSave={onSave} />
         <Divider />
         <PreviewButton />
         <ExportButton />

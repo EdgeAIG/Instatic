@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect } from 'bun:test'
+import { existsSync } from 'fs'
 import React from 'react'
 import { render as renderReact } from '@testing-library/react'
 import './matchers'  // Register toBeCleanHTML
@@ -36,7 +37,7 @@ import { DividerModule } from '../modules/base/divider/index.tsx'
 import { SpacerModule } from '../modules/base/spacer/index.tsx'
 
 // ---------------------------------------------------------------------------
-// Run the full conformance suite for every canonical base module (10 total)
+// Run the full conformance suite for every canonical base module (9 total)
 // Context #338 — Canonical Base Module List
 // ---------------------------------------------------------------------------
 
@@ -49,6 +50,30 @@ runModuleConformanceSuite(ColumnsModule)
 runModuleConformanceSuite(ListModule)
 runModuleConformanceSuite(DividerModule)
 runModuleConformanceSuite(SpacerModule)
+
+describe('base module registration', () => {
+  it('only imports available production base modules', async () => {
+    const baseIndex = await Bun.file('src/modules/base/index.ts').text()
+
+    expect(baseIndex).not.toContain("import './visualComponentRef'")
+    expect(baseIndex).not.toContain("import './demoCard'")
+    expect(baseIndex).not.toContain("import './demoScene'")
+    expect(baseIndex).not.toContain("import './heading'")
+    expect(baseIndex).not.toContain("import './paragraph'")
+  })
+
+  it('does not keep retired module directories around', () => {
+    for (const retiredPath of [
+      'src/modules/base/visualComponentRef',
+      'src/modules/base/demoCard',
+      'src/modules/base/demoScene',
+      'src/modules/base/heading',
+      'src/modules/base/paragraph',
+    ]) {
+      expect(existsSync(retiredPath)).toBe(false)
+    }
+  })
+})
 
 // ---------------------------------------------------------------------------
 // base.text — unified text module replacement
@@ -63,12 +88,10 @@ describe('base.text — unified text module', () => {
     expect(baseIndex).not.toContain("import './paragraph'")
   })
 
-  it('keeps content/tag module settings and exposes class-backed typography styles', async () => {
+  it('has only content and tag module settings', async () => {
     expect(TextModule.id).toBe('base.text')
     expect(Object.keys(TextModule.schema).sort()).toEqual(['tag', 'text'])
-    expect(Object.keys(TextModule.classStyleBindings ?? {})).toEqual(
-      expect.arrayContaining(['fontSize', 'fontWeight', 'lineHeight', 'color', 'textAlign', 'marginBottom']),
-    )
+    expect(TextModule.classStyleBindings ?? {}).toEqual({})
   })
 
   it('renders the selected semantic tag', async () => {
@@ -140,6 +163,11 @@ describe('base.button — render() specifics', () => {
 describe('base.container — render() specifics', () => {
   it('is a container module (canHaveChildren: true)', () => {
     expect(ContainerModule.canHaveChildren).toBe(true)
+  })
+
+  it('has only the HTML tag module setting', () => {
+    expect(Object.keys(ContainerModule.schema)).toEqual(['tag'])
+    expect(ContainerModule.classStyleBindings ?? {}).toEqual({})
   })
 
   it('renders children HTML inside the container', () => {

@@ -15,19 +15,11 @@ import type { CSSPropertyBag } from '../../../core/page-tree/types'
 // Public types
 // ---------------------------------------------------------------------------
 
-export type CSSControlType = 'slider' | 'color' | 'select' | 'text'
-
-export interface SliderConfig {
-  min: number
-  max: number
-  step: number
-  /** Appended to the numeric value when writing back to the store (e.g. 'px'). */
-  unit: string
-}
+export type CSSControlType = 'color' | 'select' | 'text'
 
 // ---------------------------------------------------------------------------
 // CSSPropertyBag keys whose store type is `number`, not `string`.
-// SliderControl commits a raw number for these; all others get `${num}${unit}`.
+// ClassPropertyRow still renders these as text inputs, then coerces valid values to numbers.
 // ---------------------------------------------------------------------------
 
 export const NUMBER_TYPED_PROPS = new Set<keyof CSSPropertyBag>(['zIndex', 'opacity'])
@@ -72,56 +64,16 @@ export const ENUM_OPTIONS = new Map<keyof CSSPropertyBag, string[]>([
 ])
 
 // ---------------------------------------------------------------------------
-// Numeric (slider) properties → SliderConfig
-// ---------------------------------------------------------------------------
-
-const SLIDER_CONFIGS = new Map<keyof CSSPropertyBag, SliderConfig>([
-  // Size
-  ['width',                   { min: 0,    max: 1200, step: 1,    unit: 'px' }],
-  ['height',                  { min: 0,    max: 800,  step: 1,    unit: 'px' }],
-  ['minWidth',                { min: 0,    max: 1200, step: 1,    unit: 'px' }],
-  ['maxWidth',                { min: 0,    max: 1200, step: 1,    unit: 'px' }],
-  ['minHeight',               { min: 0,    max: 800,  step: 1,    unit: 'px' }],
-  ['maxHeight',               { min: 0,    max: 800,  step: 1,    unit: 'px' }],
-  // Spacing
-  ['paddingTop',              { min: 0,    max: 200,  step: 1,    unit: 'px' }],
-  ['paddingRight',            { min: 0,    max: 200,  step: 1,    unit: 'px' }],
-  ['paddingBottom',           { min: 0,    max: 200,  step: 1,    unit: 'px' }],
-  ['paddingLeft',             { min: 0,    max: 200,  step: 1,    unit: 'px' }],
-  ['marginTop',               { min: -200, max: 200,  step: 1,    unit: 'px' }],
-  ['marginRight',             { min: -200, max: 200,  step: 1,    unit: 'px' }],
-  ['marginBottom',            { min: -200, max: 200,  step: 1,    unit: 'px' }],
-  ['marginLeft',              { min: -200, max: 200,  step: 1,    unit: 'px' }],
-  ['gap',                     { min: 0,    max: 200,  step: 1,    unit: 'px' }],
-  ['rowGap',                  { min: 0,    max: 200,  step: 1,    unit: 'px' }],
-  ['columnGap',               { min: 0,    max: 200,  step: 1,    unit: 'px' }],
-  // Typography
-  ['fontSize',                { min: 8,    max: 96,   step: 1,    unit: 'px' }],
-  ['lineHeight',              { min: 0,    max: 4,    step: 0.1,  unit: '' }],
-  ['letterSpacing',           { min: -10,  max: 40,   step: 0.5,  unit: 'px' }],
-  // Border
-  ['borderRadius',            { min: 0,    max: 100,  step: 1,    unit: 'px' }],
-  ['borderTopLeftRadius',     { min: 0,    max: 100,  step: 1,    unit: 'px' }],
-  ['borderTopRightRadius',    { min: 0,    max: 100,  step: 1,    unit: 'px' }],
-  ['borderBottomLeftRadius',  { min: 0,    max: 100,  step: 1,    unit: 'px' }],
-  ['borderBottomRightRadius', { min: 0,    max: 100,  step: 1,    unit: 'px' }],
-  // Visual
-  ['opacity',                 { min: 0,    max: 1,    step: 0.01, unit: '' }],
-  ['zIndex',                  { min: -10,  max: 1000, step: 1,    unit: '' }],
-])
-
-// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
  * Returns the UI control type for a given CSS property key.
- * Dispatch order: color → select → slider → text (fallback).
+ * Dispatch order: color → select → text (fallback).
  */
 export function getCSSPropertyControlType(prop: keyof CSSPropertyBag): CSSControlType {
   if (COLOR_PROPERTIES.has(prop)) return 'color'
   if (ENUM_OPTIONS.has(prop))     return 'select'
-  if (SLIDER_CONFIGS.has(prop))   return 'slider'
   return 'text'
 }
 
@@ -130,20 +82,15 @@ export function getEnumOptions(prop: keyof CSSPropertyBag): string[] | undefined
   return ENUM_OPTIONS.get(prop)
 }
 
-/** Returns the SliderConfig for a numeric CSS property, or undefined. */
-export function getSliderConfig(prop: keyof CSSPropertyBag): SliderConfig | undefined {
-  return SLIDER_CONFIGS.get(prop)
-}
-
 /**
  * Per-property default values for the add-property search.
  *
  * Implements the per-property lookup table from UX Reviewer Contribution #677 (accepted,
  * Architect msg #2080). Control-type dispatch was NOT used because many CSS properties
  * have non-trivial defaults that the broad bucket approach gets wrong:
- *   - opacity: should be 1 (fully visible), not 0 (invisible) — slider min = 0
- *   - zIndex:  should be 0 (neutral), not -10 — slider min = -10
- *   - width:   should be 'auto' (layout-safe), not '0px' — slider min = 0
+ *   - opacity: should be 1 (fully visible), not 0 (invisible)
+ *   - zIndex:  should be 0 (neutral), not -10
+ *   - width:   should be 'auto' (layout-safe), not '0px'
  *   - maxWidth: should be 'none' (unconstrained), not '0px'
  *   - borderWidth: see border shorthands below — shorthand left empty for manual entry
  *
@@ -266,12 +213,6 @@ export function getCSSPropertyDefaultValue(prop: keyof CSSPropertyBag): string |
   // Fallback: control-type dispatch for future properties not yet in DEFAULT_CSS_VALUES.
   // Add new CSSPropertyBag keys to the table above before shipping to avoid this path.
   const type = getCSSPropertyControlType(prop)
-  if (type === 'slider') {
-    const cfg = SLIDER_CONFIGS.get(prop)
-    if (!cfg) return ''
-    if (NUMBER_TYPED_PROPS.has(prop)) return cfg.min
-    return cfg.unit ? `${cfg.min}${cfg.unit}` : String(cfg.min)
-  }
   if (type === 'select') return ENUM_OPTIONS.get(prop)?.[0] ?? ''
   return ''
 }

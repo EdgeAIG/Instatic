@@ -10,11 +10,12 @@
     --font-sans: "Inter Variable", "Geist Variable", sans-serif;
 
     /* ─── Editor Surface Hierarchy (Vercel/Linear pure-black) ─────────────── */
-    --editor-bg: #000000; /* deepest background (app shell) */
-    --editor-surface: #1b1b1b; /* panel / card background */
-    --editor-surface-2: #282828; /* elevated surface (input bg, secondary btn) */
-    --editor-surface-3: #323232; /* deep surface (toolbar, modal backdrop) */
-    --editor-surface-4: #4a4a4a; /* slightly elevated input / toggle bg */
+    --editor-bg: #000000;
+    --editor-surface: #1b1b1b;
+    --editor-surface-2: #282828;
+    --editor-surface-3: #323232;
+    --editor-surface-4: #4a4a4a;
+    --editor-surface-5: #605f5f;
 
     /* ─── Borders ────────────────────────────────────────────────────────── */
     --editor-border: #1f1f1f;
@@ -47,20 +48,6 @@
     --editor-success-green: #34d399; /* emerald-400 — saved / ok indicator */
     --editor-success-bright: #4ade80; /* green-400 — agent tool success */
 
-    /* ─── Button Interaction Surfaces (Task #462 — Button Design System) ── */
-    --editor-surface-hover: rgba(
-        255,
-        255,
-        255,
-        0.05
-    ); /* ghost/secondary hover bg */
-    --editor-surface-active: rgba(
-        255,
-        255,
-        255,
-        0.08
-    ); /* ghost pressed / primary rest */
-
     /* ─── Border Radius ──────────────────────────────────────────────────── */
     --editor-radius-sm: 3px;
     --editor-radius: 6px;
@@ -84,6 +71,7 @@
     --input-bg: transparent;
     --input-bg-focus: trasparent;
     --input-border: rgba(255, 255, 255, 0.2);
+    --input-border-hover: rgba(255, 255, 255, 0.25);
     --input-border-focus: rgba(255, 255, 255, 0.5); /* achromatic focus ring */
     --input-shadow: none;
     --input-shadow-focus:

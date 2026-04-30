@@ -101,12 +101,12 @@
 
 .moduleContent {
     display: grid;
-    gap: 0;
+    gap: 8px;
 }
 
 .moduleStyleFields {
     display: grid;
-    gap: 0;
+    gap: 8px;
 }
 
 .breakpointHint {
@@ -123,54 +123,4 @@
 .breakpointHint strong {
     color: var(--editor-text);
     font-weight: 650;
-}
-
-.advancedContent {
-    display: grid;
-    gap: 8px;
-}
-
-.advancedRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 34px;
-    padding: 0 10px;
-    border: 1px solid var(--panel-border);
-    border-radius: var(--editor-radius);
-    background: rgba(255, 255, 255, 0.025);
-}
-
-.advancedLabel {
-    color: var(--editor-text-secondary);
-    font-size: 11px;
-    font-weight: 550;
-    user-select: none;
-}
-
-.advancedBreakpointNote {
-    padding: 8px 10px;
-    border: 1px solid var(--panel-border);
-    border-radius: var(--editor-radius);
-    background: rgba(255, 255, 255, 0.035);
-    color: var(--editor-text-secondary);
-    font-size: 11px;
-    line-height: 1.5;
-}
-
-.advancedBreakpointNote strong {
-    color: var(--editor-text);
-}
-
-.advancedNodeId {
-    color: var(--editor-text-muted);
-    font-size: 10px;
-    line-height: 1.5;
-    word-break: break-all;
-}
-
-.advancedNodeId code {
-    color: var(--editor-text-secondary);
-    font-family:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }

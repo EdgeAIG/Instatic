@@ -1,7 +1,6 @@
 export { TextControl } from './TextControl'
 export { TextareaControl } from './TextareaControl'
 export { NumberControl } from './NumberControl'
-export { SliderControl } from './SliderControl'
 export { ColorControl } from './ColorControl'
 export { SelectControl } from './SelectControl'
 export { ToggleControl } from './ToggleControl'

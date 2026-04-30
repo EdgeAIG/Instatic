@@ -370,6 +370,18 @@ describe('usePersistence — subscription selector is primitive, not inline obje
     // Both unsub() and clearTimeout must appear inside the return () => { ... } cleanup
     expect(src).toMatch(/return\s*\(\)\s*=>\s*\{[^}]*unsub\(\)[^}]*clearTimeout/s)
   })
+
+  it('auto-save timer is gated by the stored autoSave preference', () => {
+    const src = readFileSync(persistencePath, 'utf-8')
+    expect(src).toContain('readAutoSavePreference')
+    expect(src).toMatch(/readAutoSavePreference\(\)[\s\S]{0,220}setTimeout/)
+  })
+
+  it('auto-save reacts to editor preference changes', () => {
+    const src = readFileSync(persistencePath, 'utf-8')
+    expect(src).toContain('subscribeToEditorPrefsChanged')
+    expect(src).toMatch(/prefsUnsub\(\)/)
+  })
 })
 
 // ---------------------------------------------------------------------------

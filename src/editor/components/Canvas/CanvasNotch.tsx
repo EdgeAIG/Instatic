@@ -9,6 +9,7 @@ import styles from './CanvasNotch.module.css'
 const QUICK_ACTIONS = [
   { moduleId: 'base.container', label: 'Container', icon: 'checkbox-sharp' },
   { moduleId: 'base.text', label: 'Text', icon: 'type' },
+  { moduleId: 'base.image', label: 'Image', icon: 'image' },
   { moduleId: 'base.button', label: 'Button', icon: 'box' },
 ] as const
 
