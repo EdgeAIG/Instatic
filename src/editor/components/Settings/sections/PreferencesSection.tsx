@@ -1,5 +1,5 @@
 /**
- * PreferencesSection — editor preferences (autosave, snap-to-grid, etc.)
+ * PreferencesSection — local editor preferences.
  */
 import { useState } from 'react'
 import { Switch } from '@ui/components/Switch'
@@ -10,16 +10,21 @@ import {
 import s from '../Settings.module.css'
 
 interface EditorPrefs {
-  snapToGrid: boolean
   autoSave: boolean
-  reducedMotion: boolean
   classHoverPreview: boolean
+}
+
+const defaultPrefs: EditorPrefs = {
+  autoSave: true,
+  classHoverPreview: true,
 }
 
 function loadPrefs(): EditorPrefs {
   try {
     const raw = localStorage.getItem(EDITOR_PREFS_KEY)
-    if (raw) return { ...defaultPrefs, ...JSON.parse(raw) }
+    return raw
+      ? { ...defaultPrefs, ...(JSON.parse(raw) as Partial<EditorPrefs>) }
+      : defaultPrefs
   } catch { /* ignore */ }
   return defaultPrefs
 }
@@ -29,13 +34,6 @@ function savePrefs(prefs: EditorPrefs) {
     localStorage.setItem(EDITOR_PREFS_KEY, JSON.stringify(prefs))
     notifyEditorPrefsChanged()
   } catch { /* ignore */ }
-}
-
-const defaultPrefs: EditorPrefs = {
-  snapToGrid: false,
-  autoSave: true,
-  reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false,
-  classHoverPreview: true,
 }
 
 export function PreferencesSection() {
@@ -61,20 +59,6 @@ export function PreferencesSection() {
           checked={prefs.autoSave}
           id="pref-autosave"
           onChange={(v) => update({ autoSave: v })}
-        />
-        <ToggleRow
-          label="Snap to grid"
-          description="Snap element positions to an 8px grid while dragging."
-          checked={prefs.snapToGrid}
-          id="pref-snap"
-          onChange={(v) => update({ snapToGrid: v })}
-        />
-        <ToggleRow
-          label="Reduce motion"
-          description="Disable panel slide and fade animations (accessibility)."
-          checked={prefs.reducedMotion}
-          id="pref-motion"
-          onChange={(v) => update({ reducedMotion: v })}
         />
         <ToggleRow
           label="Preview classes on hover"

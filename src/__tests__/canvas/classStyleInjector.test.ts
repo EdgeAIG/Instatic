@@ -28,9 +28,9 @@ describe('generateCanvasClassCSS', () => {
       [{ id: 'mobile', width: 375 }],
     )
 
-    expect(css).toContain('.mc-title')
+    expect(css).toContain('.title')
     expect(css).toContain('font-size: 64px')
-    expect(css).toContain('[data-breakpoint-id="mobile"] .mc-title')
+    expect(css).toContain('[data-breakpoint-id="mobile"] .title')
     expect(css).toContain('font-size: 36px')
     expect(css).not.toContain('@media')
   })

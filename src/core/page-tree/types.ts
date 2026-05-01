@@ -141,7 +141,7 @@ export interface CSSPropertyBag {
 
 /**
  * A named, reusable CSS class that can be assigned to any node.
- * Applied in the editor via `.mc-{id}` className; in the publisher via collectClassCSS().
+ * Applied in the editor and publisher using the user-facing class name.
  */
 export interface CSSClass {
   id: string
@@ -162,6 +162,37 @@ export interface CSSClass {
   tags?: string[]
   createdAt: number
   updatedAt: number
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic templates
+// ---------------------------------------------------------------------------
+
+export type TemplateContext = 'entry'
+
+export interface TemplateCondition {
+  id: string
+  field: string
+  operator: 'equals'
+  value: string
+}
+
+export interface PageTemplateConfig {
+  enabled: true
+  context: TemplateContext
+  collectionId: string
+  priority: number
+  conditions: TemplateCondition[]
+}
+
+export type DynamicBindingSource = 'currentEntry'
+export type DynamicBindingFormat = 'plain' | 'html' | 'url' | 'media'
+
+export interface DynamicPropBinding {
+  source: DynamicBindingSource
+  field: string
+  format?: DynamicBindingFormat
+  fallback?: 'static' | 'empty'
 }
 
 /**
@@ -208,11 +239,18 @@ export interface PageNode {
 
   /**
    * Ordered class IDs from the site's class registry.
-   * Applied as className="mc-{id1} mc-{id2}" on the element.
+   * Applied as the referenced user-facing class names on the element.
    * Later classes in the array win in cascade order.
    * Defaults to [] when not present (backwards-compatible).
    */
   classIds?: string[]
+
+  /**
+   * Template-only prop bindings.
+   * Static props remain stored as fallback values; dynamicBindings overlay them
+   * at render time when a page is used as a CMS content template.
+   */
+  dynamicBindings?: Record<string, DynamicPropBinding>
 
   /**
    * VC-tree only: nested child PageNode objects for tree traversal.
@@ -276,6 +314,9 @@ export interface Page {
    * Entry point for all tree traversal and the publisher.
    */
   rootNodeId: string
+
+  /** Optional CMS template configuration. Missing means a normal static page. */
+  template?: PageTemplateConfig
 }
 
 // ---------------------------------------------------------------------------

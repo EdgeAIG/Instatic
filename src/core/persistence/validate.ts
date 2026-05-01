@@ -15,7 +15,17 @@
  * Throws a descriptive SiteValidationError with a `path` field for debugging.
  */
 
-import type { SiteDocument, Page, PageNode, Breakpoint, SiteSettings } from '../page-tree/types'
+import type {
+  SiteDocument,
+  Page,
+  PageNode,
+  Breakpoint,
+  SiteSettings,
+  PageTemplateConfig,
+  DynamicPropBinding,
+  DynamicBindingFormat,
+  TemplateCondition,
+} from '../page-tree/types'
 import type { SiteFile, SiteFileType } from '../files/types'
 import type { VisualComponent, VCParam } from '../visualComponents/types'
 import { isSafePath, normalizePath } from '../files/pathValidation'
@@ -63,6 +73,75 @@ function assertArray(v: unknown, path: string): asserts v is unknown[] {
 // Validators
 // ---------------------------------------------------------------------------
 
+const VALID_DYNAMIC_FORMATS = new Set<DynamicBindingFormat>(['plain', 'html', 'url', 'media'])
+
+function validateDynamicBindings(raw: unknown): Record<string, DynamicPropBinding> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+
+  const bindings: Record<string, DynamicPropBinding> = {}
+  for (const [propKey, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+    const binding = value as Record<string, unknown>
+    if (binding.source !== 'currentEntry') continue
+    if (typeof binding.field !== 'string' || binding.field.trim() === '') continue
+
+    const next: DynamicPropBinding = {
+      source: 'currentEntry',
+      field: binding.field,
+    }
+
+    if (typeof binding.format === 'string' && VALID_DYNAMIC_FORMATS.has(binding.format as DynamicBindingFormat)) {
+      next.format = binding.format as DynamicBindingFormat
+    }
+
+    if (binding.fallback === 'static' || binding.fallback === 'empty') {
+      next.fallback = binding.fallback
+    }
+
+    bindings[propKey] = next
+  }
+
+  return Object.keys(bindings).length > 0 ? bindings : undefined
+}
+
+function validateTemplateCondition(raw: unknown): TemplateCondition | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const condition = raw as Record<string, unknown>
+  if (typeof condition.id !== 'string') return null
+  if (typeof condition.field !== 'string') return null
+  if (condition.operator !== 'equals') return null
+  if (typeof condition.value !== 'string') return null
+
+  return {
+    id: condition.id,
+    field: condition.field,
+    operator: 'equals',
+    value: condition.value,
+  }
+}
+
+function validatePageTemplate(raw: unknown): PageTemplateConfig | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const template = raw as Record<string, unknown>
+  if (template.enabled !== true) return undefined
+  if (template.context !== 'entry') return undefined
+  if (typeof template.collectionId !== 'string' || template.collectionId.trim() === '') return undefined
+
+  const conditions = Array.isArray(template.conditions)
+    ? template.conditions
+        .map((condition) => validateTemplateCondition(condition))
+        .filter((condition): condition is TemplateCondition => condition !== null)
+    : []
+
+  return {
+    enabled: true,
+    context: 'entry',
+    collectionId: template.collectionId,
+    priority: typeof template.priority === 'number' && isFinite(template.priority) ? template.priority : 0,
+    conditions,
+  }
+}
+
 function validatePageNode(raw: unknown, path: string): PageNode {
   assertObject(raw, path)
   assertString(raw.id, `${path}.id`)
@@ -109,6 +188,8 @@ function validatePageNode(raw: unknown, path: string): PageNode {
     )
   }
 
+  const dynamicBindings = validateDynamicBindings(raw.dynamicBindings)
+
   return {
     id: raw.id as string,
     moduleId: raw.moduleId as string,
@@ -122,6 +203,7 @@ function validatePageNode(raw: unknown, path: string): PageNode {
     classIds: Array.isArray(raw.classIds)
       ? (raw.classIds as unknown[]).filter((id) => typeof id === 'string') as string[]
       : [],
+    dynamicBindings,
     childNodes,
     propBindings,
   }
@@ -154,6 +236,7 @@ function validatePage(raw: unknown, path: string): Page {
     slug: raw.slug as string,
     rootNodeId: raw.rootNodeId as string,
     nodes,
+    template: validatePageTemplate(raw.template),
   }
 }
 

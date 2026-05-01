@@ -29,8 +29,6 @@ export type SettingsSection =
   | 'general'
   | 'pages'
   | 'breakpoints'
-  | 'typography'
-  | 'colors'
   | 'preferences'
   | 'shortcuts'
   | 'publishing'

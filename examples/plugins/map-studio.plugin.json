@@ -1,0 +1,41 @@
+{
+  "id": "local.map",
+  "name": "Map Studio",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "Adds a simple map workspace to the admin navigation.",
+  "adminPages": [
+    {
+      "id": "overview",
+      "title": "Map Studio",
+      "navLabel": "Map",
+      "icon": "map",
+      "content": {
+        "kind": "map",
+        "heading": "Store Map",
+        "body": "Track office, venue, or location records from an installed CMS plugin.",
+        "centerLabel": "Prague",
+        "pins": [
+          {
+            "label": "HQ",
+            "detail": "Main office",
+            "x": 42,
+            "y": 55
+          },
+          {
+            "label": "Partner",
+            "detail": "Regional partner",
+            "x": 64,
+            "y": 38
+          },
+          {
+            "label": "Warehouse",
+            "detail": "Fulfillment",
+            "x": 28,
+            "y": 72
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,13 +1,18 @@
-type ContentEntryStatus = 'draft' | 'published' | 'unpublished'
+export type ContentEntryStatus = 'draft' | 'published' | 'unpublished'
 
 export interface ContentCollection {
   id: string
   name: string
   slug: string
+  routeBase: string
   singularLabel: string
   pluralLabel: string
   createdAt: string
   updatedAt: string
+}
+
+export interface UpdateContentCollectionInput {
+  routeBase: string
 }
 
 export interface ContentEntry {
@@ -44,8 +49,9 @@ export interface CreateContentEntryInput {
   seoDescription?: string
 }
 
+export type ContentMediaType = 'image' | 'video'
+
 export type ContentBlock =
   | { id: string; type: 'paragraph'; text: string }
-  | { id: string; type: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; text: string }
-  | { id: string; type: 'image'; src: string; alt: string }
-  | { id: string; type: 'video'; src: string }
+  | { id: string; type: 'heading'; level: 2 | 3 | 4; text: string }
+  | { id: string; type: 'media'; mediaType: ContentMediaType | null; src: string; alt: string }

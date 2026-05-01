@@ -11,7 +11,9 @@
 
 import type { CSSProperties } from 'react'
 import type { Page, Breakpoint } from '../../../core/page-tree/types'
-import { CanvasBreakpointContext, NodeRenderer } from './NodeRenderer'
+import type { TemplateRenderDataContext } from '../../../core/templates/dynamicBindings'
+import { NodeRenderer } from './NodeRenderer'
+import { CanvasBreakpointContext, CanvasTemplateContext } from './CanvasContexts'
 import { PlusBoxIcon } from '@ui/icons/icons/plus-box'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
@@ -22,6 +24,7 @@ interface BreakpointFrameProps {
   breakpoint: Breakpoint
   isActive: boolean
   onActivate: (breakpointId: string) => void
+  templateContext?: TemplateRenderDataContext
 }
 
 export function BreakpointFrame({
@@ -29,6 +32,7 @@ export function BreakpointFrame({
   breakpoint,
   isActive,
   onActivate,
+  templateContext,
 }: BreakpointFrameProps) {
   // --bp-width drives both label width and viewport width via CSS (dynamic value)
   const bpStyle = { '--bp-width': `${breakpoint.width}px` } as CSSProperties
@@ -63,9 +67,11 @@ export function BreakpointFrame({
           <EmptyCanvasState />
         )}
 
-        <CanvasBreakpointContext.Provider value={breakpoint.id}>
-          <NodeRenderer nodeId={page.rootNodeId} />
-        </CanvasBreakpointContext.Provider>
+        <CanvasTemplateContext.Provider value={templateContext}>
+          <CanvasBreakpointContext.Provider value={breakpoint.id}>
+            <NodeRenderer nodeId={page.rootNodeId} />
+          </CanvasBreakpointContext.Provider>
+        </CanvasTemplateContext.Provider>
       </div>
     </div>
   )

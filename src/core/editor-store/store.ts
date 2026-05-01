@@ -78,7 +78,7 @@ export const selectActivePage = (s: EditorStore) =>
 export const selectRightSidebarExpanded = (s: EditorStore) =>
   s.propertiesPanelMode === 'docked' &&
   !s.propertiesPanel.collapsed &&
-  Boolean(s.selectedNodeId)
+  Boolean(s.selectedNodeId || s.selectedSelectorClassId)
 
 // ---------------------------------------------------------------------------
 // selectActiveCanvasPage — VC-aware canvas page selector (Task #438)

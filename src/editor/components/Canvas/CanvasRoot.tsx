@@ -28,9 +28,10 @@ import { registry } from '../../../core/module-engine/registry'
 import { useCanvas } from '../../hooks/useCanvas'
 import { CanvasTransformLayer } from './CanvasTransformLayer'
 import { CanvasNotch } from './CanvasNotch'
-import { CanvasSelectionContext } from './NodeRenderer'
+import { CanvasSelectionContext } from './CanvasContexts'
 import { ClassStyleInjector } from './ClassStyleInjector'
 import { LayerNodeContextMenu } from '../DomPanel/LayerNodeContextMenu'
+import { useTemplatePreviewContext } from '../../hooks/useTemplatePreviewContext'
 import styles from './CanvasRoot.module.css'
 
 /**
@@ -66,6 +67,7 @@ export function CanvasRoot() {
   const setFocusedPanel = useEditorStore((s) => s.setFocusedPanel)
   const setActiveDocument = useEditorStore((s) => s.setActiveDocument)
   const activeDocument = useEditorStore((s) => s.activeDocument)
+  const templatePreviewContext = useTemplatePreviewContext(canvasPage)
 
   // Canvas gesture hook (pan/zoom)
   const { bind, handleKeyDown: canvasKeyDown } = useCanvas({
@@ -238,6 +240,7 @@ export function CanvasRoot() {
           breakpoints={breakpoints}
           activeBreakpointId={activeBreakpointId}
           onBreakpointActivate={setActiveBreakpoint}
+          templateContext={templatePreviewContext}
         />
 
         {contextMenu && createPortal(

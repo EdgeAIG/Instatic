@@ -27,7 +27,6 @@ interface PageTemplateConfig {
   enabled: true
   context: 'entry'
   collectionId: string
-  previewEntryId?: string
   priority: number
   conditions: TemplateCondition[]
 }

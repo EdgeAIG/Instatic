@@ -23,8 +23,25 @@
   overflow: hidden;
 }
 
+.canvasContent {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 .canvasStageRightSidebarOpen {
   border-top-right-radius: 12px;
+}
+
+:global(::view-transition-old(admin-left-sidebar-panel)),
+:global(::view-transition-new(admin-left-sidebar-panel)),
+:global(::view-transition-old(admin-right-sidebar-panel)),
+:global(::view-transition-new(admin-right-sidebar-panel)),
+:global(::view-transition-old(admin-toolbar-controls)),
+:global(::view-transition-new(admin-toolbar-controls)) {
+  animation-duration: 160ms;
+  animation-timing-function: ease;
 }
 
 .bootstrapError {
@@ -50,4 +67,15 @@
   color: var(--editor-text-muted);
   font-size: 13px;
   line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(::view-transition-old(admin-left-sidebar-panel)),
+  :global(::view-transition-new(admin-left-sidebar-panel)),
+  :global(::view-transition-old(admin-right-sidebar-panel)),
+  :global(::view-transition-new(admin-right-sidebar-panel)),
+  :global(::view-transition-old(admin-toolbar-controls)),
+  :global(::view-transition-new(admin-toolbar-controls)) {
+    animation-duration: 0.01ms;
+  }
 }

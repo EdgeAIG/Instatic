@@ -84,6 +84,7 @@ export const CMS_MIGRATIONS: Migration[] = [
         id text primary key,
         name text not null,
         slug text not null,
+        route_base text not null default '',
         singular_label text not null,
         plural_label text not null,
         created_at timestamptz not null default now(),
@@ -95,11 +96,12 @@ export const CMS_MIGRATIONS: Migration[] = [
         on content_collections (slug)
         where deleted_at is null;
 
-      insert into content_collections (id, name, slug, singular_label, plural_label)
-      values ('posts', 'Posts', 'posts', 'Post', 'Posts')
+      insert into content_collections (id, name, slug, route_base, singular_label, plural_label)
+      values ('posts', 'Posts', 'posts', '/posts', 'Post', 'Posts')
       on conflict (id) do update
         set name = excluded.name,
             slug = excluded.slug,
+            route_base = excluded.route_base,
             singular_label = excluded.singular_label,
             plural_label = excluded.plural_label,
             updated_at = now(),
@@ -147,6 +149,102 @@ export const CMS_MIGRATIONS: Migration[] = [
 
       create index if not exists content_entry_versions_entry_latest_idx
         on content_entry_versions (entry_id, version_number desc);
+    `,
+  },
+  {
+    id: '004_plugins_mvp',
+    sql: `
+      create table if not exists installed_plugins (
+        id text primary key,
+        name text not null,
+        version text not null,
+        enabled boolean not null default true,
+        granted_permissions_json jsonb not null default '[]'::jsonb,
+        manifest_json jsonb not null,
+        installed_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      );
+
+      create index if not exists installed_plugins_enabled_idx
+        on installed_plugins (enabled, installed_at desc);
+    `,
+  },
+  {
+    id: '005_plugin_records',
+    sql: `
+      create table if not exists plugin_records (
+        id text primary key,
+        plugin_id text not null references installed_plugins(id) on delete cascade,
+        resource_id text not null,
+        data_json jsonb not null,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      );
+
+      create index if not exists plugin_records_resource_idx
+        on plugin_records (plugin_id, resource_id, created_at desc);
+    `,
+  },
+  {
+    id: '006_plugin_permission_grants',
+    sql: `
+      alter table installed_plugins
+        add column if not exists granted_permissions_json jsonb not null default '[]'::jsonb;
+    `,
+  },
+  {
+    id: '007_plugin_lifecycle_status',
+    sql: `
+      alter table installed_plugins
+        add column if not exists lifecycle_status text not null default 'installed',
+        add column if not exists last_error text;
+    `,
+  },
+  {
+    id: '008_content_collection_route_base',
+    sql: `
+      alter table content_collections
+        add column if not exists route_base text not null default '';
+
+      update content_collections
+      set route_base = '/' || slug,
+          updated_at = now()
+      where coalesce(route_base, '') = '';
+    `,
+  },
+  {
+    id: '009_content_entry_active_version_and_redirects',
+    sql: `
+      alter table content_entries
+        add column if not exists active_version_id text references content_entry_versions(id) on delete set null;
+
+      update content_entries
+      set active_version_id = latest_versions.id,
+          updated_at = now()
+      from (
+        select distinct on (entry_id) id, entry_id
+        from content_entry_versions
+        order by entry_id, version_number desc
+      ) latest_versions
+      where content_entries.id = latest_versions.entry_id
+        and content_entries.active_version_id is null
+        and content_entries.status = 'published'
+        and content_entries.deleted_at is null;
+
+      create table if not exists content_entry_redirects (
+        id text primary key,
+        collection_id text not null references content_collections(id) on delete cascade,
+        from_route_base text not null,
+        from_slug text not null,
+        target_entry_id text not null references content_entries(id) on delete cascade,
+        created_at timestamptz not null default now()
+      );
+
+      create unique index if not exists content_entry_redirects_source_idx
+        on content_entry_redirects (from_route_base, from_slug);
+
+      create index if not exists content_entry_redirects_target_idx
+        on content_entry_redirects (target_entry_id, created_at desc);
     `,
   },
 ]

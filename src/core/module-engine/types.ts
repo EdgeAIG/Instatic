@@ -137,7 +137,7 @@ export interface ModuleComponentProps<
   children?: ReactNode
   /**
    * Space-separated CSS class string derived from node.classIds
-   * (e.g. "mc-abc mc-xyz"). Module editor components must apply this
+   * (e.g. "hero_title cta_button"). Module editor components must apply this
    * directly to their root JSX element so CSS class rules target the
    * module element instead of the NodeWrapper wrapper div.
    * Task #401 Bug 1 fix.

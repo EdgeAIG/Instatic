@@ -22,22 +22,21 @@
  *
  *   Bug C — Zero end-to-end test coverage for class CSS in published HTML
  *     `render.test.ts` has no test that verifies `publishPage()` embeds
- *     `.mc-{classId} { … }` in the `<style>` block, nor that the root element
- *     of a published node carries `class="mc-{classId}"`.  The publisher can
+ *     `.{className} { … }` in the `<style>` block, nor that the root element
+ *     of a published node carries `class="{className}"`.  The publisher can
  *     silently lose class CSS with no failing signal.
  *
  * ── Gate plan ────────────────────────────────────────────────────────────────
  *   Gate 1 (Bug A)    — makePage preserves classIds from NodeSpec
  *   Gate 2 (Bug B)    — makeSite includes classes default
  *   Gate 3 (Bug B2)   — collectClassCSS does NOT crash when site.classes is missing
- *   Gate 4 (Bug C)    — publishPage embeds .mc-{id} CSS rule in <style> block
- *   Gate 5 (Bug C)    — publishPage injects class="mc-{id}" on the rendered element
+ *   Gate 4 (Bug C)    — publishPage embeds .{className} CSS rule in <style> block
+ *   Gate 5 (Bug C)    — publishPage injects class="{className}" on the rendered element
  *   Gate 6 (Combined) — full path via makePage helper: classIds survive to HTML output
  *   Gate 7 (Combined) — multiple classIds: all CSS rules present, all on element
  *   Gate 8 (Combined) — breakpoint override emits @media block in published HTML
  *
- * Gates 1, 2, 3, 6 are pre-failing today.
- * Gates 4, 5, 7, 8 will be green once the helper fixes land (publisher code is correct).
+ * These gates now act as regression coverage for the publisher class CSS path.
  *
  * @see src/__tests__/publisher/helpers.ts        — makePage / makeSite (needs fix)
  * @see src/core/publisher/render.ts              — publishPage, renderNode
@@ -137,17 +136,13 @@ function directSite(page: Page, classes: SiteDocument['classes'] = {}): SiteDocu
 // ---------------------------------------------------------------------------
 // Gate 1 — Bug A: makePage helper must pass classIds to nodes
 // ─────────────────────────────────────────────────────────────────────────────
-// CURRENTLY FAILING:
-//   makePage() constructs PageNode objects without copying spec.classIds.
-//   Any test that relies on nodes having classIds will silently get undefined
-//   instead, bypassing the entire class CSS pipeline.
-//
-// FIX TARGET: src/__tests__/publisher/helpers.ts — add `classIds: spec.classIds ?? []`
-//   to the PageNode construction in makePage().
+// Regression:
+//   makePage() must construct PageNode objects with classIds preserved from
+//   the spec so publisher tests exercise the class CSS pipeline.
 // ---------------------------------------------------------------------------
 
 describe('Gate 1 — makePage helper passes classIds to generated nodes', () => {
-  it('[FAILING-Gate1a] makePage assigns a non-empty classIds array to the node', () => {
+  it('Gate1a: makePage assigns a non-empty classIds array to the node', () => {
     const classId = 'hero-abc'
     const page = makePage(
       {
@@ -156,17 +151,15 @@ describe('Gate 1 — makePage helper passes classIds to generated nodes', () => 
       },
       'root',
     )
-    // Bug A: currently undefined because makePage ignores classIds from NodeSpec
     expect(page.nodes['btn'].classIds).toEqual([classId])
   })
 
-  it('[FAILING-Gate1b] makePage passes empty classIds array when none specified', () => {
+  it('Gate1b: makePage passes empty classIds array when none specified', () => {
     const page = makePage({ root: { moduleId: 'base.root' } }, 'root')
-    // Should be [] (explicit empty) rather than undefined, for type-safe downstream use
     expect(page.nodes['root'].classIds).toEqual([])
   })
 
-  it('[FAILING-Gate1c] makePage passes multiple classIds correctly', () => {
+  it('Gate1c: makePage passes multiple classIds correctly', () => {
     const ids = ['cls-1', 'cls-2', 'cls-3']
     const page = makePage(
       { root: { moduleId: 'base.root', classIds: ids } },
@@ -179,29 +172,20 @@ describe('Gate 1 — makePage helper passes classIds to generated nodes', () => 
 // ---------------------------------------------------------------------------
 // Gate 2 — Bug B: makeSite helper must include classes default
 // ─────────────────────────────────────────────────────────────────────────────
-// CURRENTLY FAILING:
-//   makeSite() returns `{ pages, breakpoints, settings, ... }` with no
-//   `classes` key.
-//
-//   Missing `classes`:
-//     collectClassCSS(site) does `site.classes[id]` — when site.classes
-//     is undefined and any node has a classId, this throws a TypeError, masking
-//     the real path under a crash.
-//
-// FIX TARGET: src/__tests__/publisher/helpers.ts — add this field to the
-//   default object inside makeSite().
+// Regression:
+//   makeSite() must provide a classes object by default so class CSS tests
+//   don't accidentally construct invalid fixture documents.
 // ---------------------------------------------------------------------------
 
 describe('Gate 2 — makeSite helper provides classes default', () => {
-  it('[FAILING-Gate2a] makeSite() result has classes defined (not undefined)', () => {
+  it('Gate2a: makeSite() result has classes defined (not undefined)', () => {
     const site = makeSite()
-    // Bug B: currently undefined — missing default
     expect(site.classes).toBeDefined()
     expect(typeof site.classes).toBe('object')
     expect(Array.isArray(site.classes)).toBe(false)
   })
 
-  it('[FAILING-Gate2c] makeSite() classes default is an empty object', () => {
+  it('Gate2c: makeSite() classes default is an empty object', () => {
     const site = makeSite()
     expect(Object.keys(site.classes)).toHaveLength(0)
   })
@@ -210,18 +194,14 @@ describe('Gate 2 — makeSite helper provides classes default', () => {
 // ---------------------------------------------------------------------------
 // Gate 3 — Bug B2: collectClassCSS must not crash when site.classes is missing
 // ─────────────────────────────────────────────────────────────────────────────
-// CURRENTLY FAILING:
-//   If any page node has classIds AND site.classes is undefined (the current
-//   state of makeSite()), collectClassCSS does site.classes[id] → TypeError.
-//   This is a defensive coding gap: the function should degrade gracefully.
-//
-// FIX TARGET: src/core/publisher/cssCollector.ts — guard `site.classes` before
-//   accessing it: `if (!site.classes) return ''` near the top of collectClassCSS.
+// Regression:
+//   collectClassCSS should degrade gracefully if a partial/corrupt snapshot has
+//   nodes with classIds but no classes registry.
 // ---------------------------------------------------------------------------
 
 describe('Gate 3 — collectClassCSS is defensive against missing site.classes', () => {
-  it('[FAILING-Gate3] does not throw when site.classes is undefined but nodes have classIds', () => {
-    // Construct a site where classes is explicitly missing (as makeSite() creates it)
+  it('Gate3: does not throw when site.classes is undefined but nodes have classIds', () => {
+    // Construct a site where classes is explicitly missing.
     const page: Page = {
       id: 'p1', slug: 'index', title: 'Home', rootNodeId: 'root',
       nodes: {
@@ -252,21 +232,19 @@ describe('Gate 3 — collectClassCSS is defensive against missing site.classes',
 // These tests use directPage() / directSite() to bypass the broken makeSite
 // and makePage helpers — they test the PUBLISHER code itself.
 //
-// Expected: CURRENTLY PASSING (publisher code is correct; these are regression guards).
-//
 // If these tests start failing after a refactor, the publisher pipeline is broken.
 // ---------------------------------------------------------------------------
 
 describe('Gate 4 — publishPage embeds class CSS in <style> block (direct construction)', () => {
   const classId = 'hero-xyz'
 
-  it('Gate4a: <style> block contains .mc-{classId} CSS rule', () => {
+  it('Gate4a: <style> block contains the user class name CSS rule', () => {
     const page = directPage([classId])
     const site = directSite(page, {
       [classId]: makeClass(classId, { backgroundColor: '#ff0000' }),
     })
     const { html } = publishPage(page, site, reg)
-    expect(html).toContain(`.mc-${classId}`)
+    expect(html).toContain(`.${classId}`)
   })
 
   it('Gate4b: <style> block contains the correct CSS property', () => {
@@ -287,7 +265,7 @@ describe('Gate 4 — publishPage embeds class CSS in <style> block (direct const
     const styleBlockMatch = html.match(/<style>([\s\S]*?)<\/style>/)
     expect(styleBlockMatch).not.toBeNull()
     const styleContent = styleBlockMatch![1]
-    expect(styleContent).toContain(`.mc-${classId}`)
+    expect(styleContent).toContain(`.${classId}`)
   })
 
   it('Gate4d: unused classes are NOT emitted in the style block (tree-shaking)', () => {
@@ -299,34 +277,34 @@ describe('Gate 4 — publishPage embeds class CSS in <style> block (direct const
       [unusedId]: makeClass(unusedId, { color: 'red' }),
     })
     const { html } = publishPage(page, site, reg)
-    expect(html).toContain(`.mc-${usedId}`)
-    expect(html).not.toContain(`.mc-${unusedId}`)
+    expect(html).toContain(`.${usedId}`)
+    expect(html).not.toContain(`.${unusedId}`)
   })
 })
 
-describe('Gate 5 — publishPage injects mc-{id} class attribute on rendered element', () => {
+describe('Gate 5 — publishPage injects user class name attribute on rendered element', () => {
   const classId = 'btn-style'
 
-  it('Gate5a: rendered HTML element carries class="mc-{classId}"', () => {
+  it('Gate5a: rendered HTML element carries class="{className}"', () => {
     const page = directPage([classId])
     const site = directSite(page, {
       [classId]: makeClass(classId, { color: 'blue' }),
     })
     const { html } = publishPage(page, site, reg)
-    expect(html).toContain(`mc-${classId}`)
+    expect(html).toContain(classId)
   })
 
-  it('Gate5b: mc-{classId} appears on the <button> element, not a wrapper', () => {
+  it('Gate5b: user class name appears on the <button> element, not a wrapper', () => {
     const page = directPage([classId])
     const site = directSite(page, {
       [classId]: makeClass(classId, { color: 'blue' }),
     })
     const { html } = publishPage(page, site, reg)
-    // The button module renders <button class="pb-btn">; mc class should be prepended
-    expect(html).toMatch(new RegExp(`<button[^>]*class="mc-${classId}`))
+    // The button module renders <button class="pb-btn">; user class should be prepended
+    expect(html).toMatch(new RegExp(`<button[^>]*class="${classId}`))
   })
 
-  it('Gate5c: node with NO classIds produces no mc- class on element', () => {
+  it('Gate5c: node with NO classIds produces no generated class prefix on element', () => {
     const page = directPage([]) // no classIds
     const site = directSite(page)
     const { html } = publishPage(page, site, reg)
@@ -337,9 +315,6 @@ describe('Gate 5 — publishPage injects mc-{id} class attribute on rendered ele
 // ---------------------------------------------------------------------------
 // Gate 6 — Combined: full path using makePage helper must preserve classIds
 // ─────────────────────────────────────────────────────────────────────────────
-// CURRENTLY FAILING: depends on Gate 1 (makePage ignores classIds).
-// Once Gate 1 is fixed, this test should pass automatically.
-//
 // This is the critical integration test: the complete happy-path
 // "create a node via makePage with classIds → publishPage includes class CSS"
 // must work correctly for the preview to show class styles.
@@ -348,7 +323,7 @@ describe('Gate 5 — publishPage injects mc-{id} class attribute on rendered ele
 describe('Gate 6 — publishPage full path via makePage helper', () => {
   const classId = 'hero-full'
 
-  it('[FAILING-Gate6a] publishPage includes class CSS when node has classIds set via makePage', () => {
+  it('Gate6a: publishPage includes class CSS when node has classIds set via makePage', () => {
     const page = makePage(
       {
         root: { moduleId: 'base.root', children: ['btn'] },
@@ -361,11 +336,11 @@ describe('Gate 6 — publishPage full path via makePage helper', () => {
       classes: { [classId]: makeClass(classId, { backgroundColor: 'blue' }) },
     })
     const { html } = publishPage(page, site, reg)
-    expect(html).toContain(`.mc-${classId}`)
+    expect(html).toContain(`.${classId}`)
     expect(html).toContain('background-color: blue')
   })
 
-  it('[FAILING-Gate6b] HTML element has mc-{classId} when classIds set via makePage', () => {
+  it('Gate6b: HTML element has user class name when classIds set via makePage', () => {
     const page = makePage(
       {
         root: { moduleId: 'base.root', children: ['btn'] },
@@ -378,14 +353,14 @@ describe('Gate 6 — publishPage full path via makePage helper', () => {
       classes: { [classId]: makeClass(classId, { color: 'white' }) },
     })
     const { html } = publishPage(page, site, reg)
-    expect(html).toContain(`mc-${classId}`)
+    expect(html).toContain(classId)
   })
 })
 
 // ---------------------------------------------------------------------------
 // Gate 7 — Multiple classIds: all CSS rules + all class names on element
 // ─────────────────────────────────────────────────────────────────────────────
-// Expected: CURRENTLY PASSING (regression guard for multi-class support).
+// Regression guard for multi-class support.
 // ---------------------------------------------------------------------------
 
 describe('Gate 7 — multiple classIds produce all CSS rules and class names', () => {
@@ -399,7 +374,7 @@ describe('Gate 7 — multiple classIds produce all CSS rules and class names', (
     })
     const { html } = publishPage(page, site, reg)
     for (const id of ids) {
-      expect(html).toContain(`.mc-${id}`)
+      expect(html).toContain(`.${id}`)
     }
   })
 
@@ -413,7 +388,7 @@ describe('Gate 7 — multiple classIds produce all CSS rules and class names', (
     })
     const { html } = publishPage(page, site, reg)
     for (const id of ids) {
-      expect(html).toContain(`mc-${id}`)
+      expect(html).toContain(id)
     }
   })
 
@@ -426,10 +401,10 @@ describe('Gate 7 — multiple classIds produce all CSS rules and class names', (
       third: makeClass('third', { color: 'green' }),
     })
     const { html } = publishPage(page, site, reg)
-    const firstPos = html.indexOf('mc-first')
-    const secondPos = html.indexOf('mc-second')
-    const thirdPos = html.indexOf('mc-third')
-    // class="mc-first mc-second mc-third" — order must match node.classIds order
+    const firstPos = html.indexOf('first')
+    const secondPos = html.indexOf('second')
+    const thirdPos = html.indexOf('third')
+    // class="first second third" — order must match node.classIds order
     expect(firstPos).toBeLessThan(secondPos)
     expect(secondPos).toBeLessThan(thirdPos)
   })
@@ -438,7 +413,7 @@ describe('Gate 7 — multiple classIds produce all CSS rules and class names', (
 // ---------------------------------------------------------------------------
 // Gate 8 — Breakpoint override in class emits @media block in published HTML
 // ─────────────────────────────────────────────────────────────────────────────
-// Expected: CURRENTLY PASSING (regression guard for responsive class CSS).
+// Regression guard for responsive class CSS.
 // ---------------------------------------------------------------------------
 
 describe('Gate 8 — class breakpoint overrides emit @media blocks in published HTML', () => {
@@ -464,10 +439,10 @@ describe('Gate 8 — class breakpoint overrides emit @media blocks in published 
       createdAt: 0, updatedAt: 0,
     }
     const { html } = publishPage(page, site, reg)
-    // Should contain @media (max-width: 375px) { .mc-{classId} { ... } }
+    // Should contain @media (max-width: 375px) { .{className} { ... } }
     expect(html).toContain('@media')
     expect(html).toContain('375px')
-    expect(html).toContain(`.mc-${classId}`)
+    expect(html).toContain(`.${classId}`)
   })
 
   it('Gate8b: base class CSS rule is also present alongside the @media block', () => {
@@ -499,18 +474,9 @@ describe('Gate 8 — class breakpoint overrides emit @media blocks in published 
 })
 
 // ---------------------------------------------------------------------------
-// Summary — what must be fixed to turn all red → green
+// Summary — regression coverage
 // ---------------------------------------------------------------------------
 //
-//   1. src/__tests__/publisher/helpers.ts (makePage):
-//      Add `classIds: spec.classIds ?? []` to the PageNode construction block.
-//
-//   2. src/__tests__/publisher/helpers.ts (makeSite):
-//      Add `classes: {}` to the default return object.
-//
-//   3. src/core/publisher/cssCollector.ts (collectClassCSS):
-//      Add a guard at the top: `if (!site.classes) return ''`
-//      to prevent crashes when old/partial site snapshots are processed.
-//
-// Gates 4, 5, 7, 8 are regression guards — they confirm the publisher pipeline
-// is already correct. They must not be broken by the helper fixes.
+// These tests protect the full route from test fixtures through published HTML:
+// classIds survive fixture construction, used classes emit CSS by user-facing
+// name, and published elements receive the same user-facing class names.

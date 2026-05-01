@@ -15,8 +15,9 @@ import { useEditorStore } from '../../../core/editor-store/store'
 
 export function usePropertiesPanelAutoOpen() {
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
+  const selectedSelectorClassId = useEditorStore((s) => s.selectedSelectorClassId)
   const setPropertiesPanel = useEditorStore((s) => s.setPropertiesPanel)
   useEffect(() => {
-    setPropertiesPanel({ collapsed: !selectedNodeId })
-  }, [selectedNodeId, setPropertiesPanel])
+    setPropertiesPanel({ collapsed: !selectedNodeId && !selectedSelectorClassId })
+  }, [selectedNodeId, selectedSelectorClassId, setPropertiesPanel])
 }

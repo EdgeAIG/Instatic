@@ -20,6 +20,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useEditorStore, selectActivePage } from '../../../core/editor-store/store'
 import { publishPage } from '../../../core/publisher/render'
 import { registry } from '../../../core/module-engine/registry'
+import { useTemplatePreviewContext } from '../../hooks/useTemplatePreviewContext'
 import { EyeIcon } from '@ui/icons/icons/eye'
 import { CloseIcon } from '@ui/icons/icons/close'
 import { Button } from '@ui/components/Button'
@@ -30,6 +31,7 @@ export function PreviewOverlay() {
   const closePreview = useEditorStore((s) => s.closePreview)
   const site = useEditorStore((s) => s.site)
   const activePage = useEditorStore(selectActivePage)
+  const templatePreviewContext = useTemplatePreviewContext(activePage)
 
   const closeBtnRef = useRef<HTMLButtonElement>(null)
   const triggerRef = useRef<HTMLElement | null>(null)
@@ -60,7 +62,7 @@ export function PreviewOverlay() {
 
   if (!open || !site || !activePage) return null
 
-  const { html } = publishPage(activePage, site, registry)
+  const { html } = publishPage(activePage, site, registry, undefined, templatePreviewContext)
 
   return (
     <>

@@ -13,8 +13,8 @@ The editor already has a class system:
 - `SiteDocument.classes` is the global class registry.
 - `PageNode.classIds` stores ordered class references on nodes.
 - Class order matters because later class IDs win in cascade order.
-- Canvas rendering converts class IDs to `.mc-{id}` class names and forwards them to module root elements.
-- `ClassStyleInjector` injects generated class CSS into the editor document.
+- Canvas rendering resolves class IDs to the stored user-facing class names and forwards them to module root elements.
+- `ClassStyleInjector` injects class-name CSS into the editor document.
 - Public rendering tree-shakes class CSS to only classes referenced by page nodes.
 - `ClassPicker` assigns classes to the selected node in the Properties panel.
 - `ClassComposer` edits the active assigned class.
@@ -40,12 +40,11 @@ Out of scope:
 - Showing raw CSS text editing.
 - Showing or editing internal node-scoped module style layers.
 - Building a full usage browser that jumps between every node using a selector.
-- Supporting arbitrary CSS selectors beyond the existing `.mc-{id}` generated class selector.
-- Changing published class naming from `.mc-{id}` to user class names.
+- Supporting arbitrary CSS selectors beyond named reusable classes.
 
 ## Product Model
 
-Selectors are reusable user classes stored in `site.classes` where `isUserVisibleClass(cls)` returns true. The user-facing class name is editable and unique within the site. The generated CSS selector remains `.mc-{classId}`.
+Selectors are reusable user classes stored in `site.classes` where `isUserVisibleClass(cls)` returns true. The user-facing class name is editable, unique within the site, and emitted as the actual DOM/CSS class name.
 
 The panel must not expose classes with:
 
@@ -91,7 +90,7 @@ The Selectors panel has one scrollable surface:
 4. Selected class detail
    - Opens in the same panel after selecting a class row.
    - Shows class name header with rename affordance.
-   - Shows generated selector `.mc-{id}` as read-only metadata.
+   - Shows the class-name selector as read-only metadata.
    - Shows usage and style metadata.
    - Reuses `ClassComposer` for base and breakpoint style editing.
    - Does not render `ClassPicker`.
@@ -143,8 +142,8 @@ Each selector row context menu includes:
   - Calls `removeNodeClass(selectedNodeId, classId)`.
 
 - `Copy selector`
-  - Copies `.mc-{classId}` to the clipboard.
-  - Uses the generated selector because that is what the renderer and publisher emit.
+  - Copies the user-facing class-name selector to the clipboard.
+  - Uses the same selector that the renderer and publisher emit.
 
 - `Delete`
   - Opens a confirmation dialog.
@@ -203,7 +202,7 @@ Delete is destructive because it removes the class from all nodes. It requires c
 The confirmation dialog should show:
 
 - class name
-- generated selector `.mc-{id}`
+- class-name selector
 - usage count
 - clear confirmation action
 
@@ -358,7 +357,7 @@ Panel tests:
 - Duplicate copies styles but not assignments.
 - Apply/remove selected element menu items enable and disable correctly.
 - Delete confirmation shows usage count and removes the class after confirmation.
-- Copy selector writes `.mc-{id}`.
+- Copy selector writes the class-name selector.
 
 Architecture/static tests:
 

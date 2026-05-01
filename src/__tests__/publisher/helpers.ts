@@ -85,6 +85,9 @@ export function makePage(
       label: spec.label,
       locked: spec.locked ?? false,
       hidden: spec.hidden ?? false,
+      dynamicBindings: spec.dynamicBindings,
+      propBindings: spec.propBindings,
+      childNodes: spec.childNodes,
     }
   }
   return {

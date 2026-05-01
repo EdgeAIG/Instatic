@@ -150,3 +150,18 @@ export async function getPublishedPageBySlug(
   )
   return result.rows[0]?.snapshot_json ?? null
 }
+
+export async function getLatestPublishedSiteSnapshot(
+  db: DbClient,
+): Promise<PublishedPageSnapshot | null> {
+  const result = await db.query<{ snapshot_json: PublishedPageSnapshot }>(
+    `select page_versions.snapshot_json
+     from pages
+     join page_versions on page_versions.id = pages.active_version_id
+     where pages.status = 'published'
+       and pages.active_version_id is not null
+     order by pages.sort_order asc, pages.created_at asc
+     limit 1`,
+  )
+  return result.rows[0]?.snapshot_json ?? null
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import type { DbClient, DbResult } from '../../../server/cms/db'
 import { CMS_MIGRATIONS } from '../../../server/cms/migrations'
 import {
+  getContentEntryRedirectByRoute,
   createContentEntry,
   getPublishedContentEntryByRoute,
   listContentCollections,
@@ -44,7 +45,9 @@ describe('content CMS migrations', () => {
     expect(sql).toContain('create table if not exists content_collections')
     expect(sql).toContain('create table if not exists content_entries')
     expect(sql).toContain('create table if not exists content_entry_versions')
-    expect(sql).toContain("values ('posts', 'Posts', 'posts', 'Post', 'Posts')")
+    expect(sql).toContain('active_version_id')
+    expect(sql).toContain('create table if not exists content_entry_redirects')
+    expect(sql).toContain("values ('posts', 'Posts', 'posts', '/posts', 'Post', 'Posts')")
   })
 })
 
@@ -52,12 +55,13 @@ describe('content CMS repository', () => {
   it('lists default collections with frontend field names', async () => {
     const db = new ContentFakeDb([
       (sql) => {
-        if (!sql.startsWith('select id, name, slug, singular_label')) return undefined
+        if (!sql.startsWith('select id, name, slug, route_base')) return undefined
         return {
           rows: [{
             id: 'posts',
             name: 'Posts',
             slug: 'posts',
+            route_base: '/posts',
             singular_label: 'Post',
             plural_label: 'Posts',
             created_at: rowDate('2026-05-01T10:00:00Z'),
@@ -72,6 +76,7 @@ describe('content CMS repository', () => {
       id: 'posts',
       name: 'Posts',
       slug: 'posts',
+      routeBase: '/posts',
       singularLabel: 'Post',
       pluralLabel: 'Posts',
       createdAt: '2026-05-01T10:00:00.000Z',
@@ -165,6 +170,9 @@ describe('content CMS repository', () => {
           }
         }
         if (sql === 'begin' || sql === 'commit') return { rows: [], rowCount: 0 }
+        if (sql.startsWith('select content_entry_versions.slug as previous_slug')) {
+          return { rows: [], rowCount: 0 }
+        }
         if (sql.startsWith('select coalesce(max(version_number), 0)::int + 1')) {
           return { rows: [{ next_version: 1 }], rowCount: 1 }
         }
@@ -224,19 +232,110 @@ describe('content CMS repository', () => {
     expect(result.version.versionNumber).toBe(1)
     expect(result.entry.status).toBe('published')
     expect(calls).toContain('insert into content_entry_versions (id, entry_id, version_number, title, slug, body_markdown, featured_media_id, seo_title, seo_description) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)')
+    expect(calls.some((sql) => sql.includes('active_version_id = $2'))).toBe(true)
   })
 
-  it('resolves the latest published version by collection and entry slug', async () => {
+  it('records a redirect from the previous published slug when publishing a changed slug', async () => {
+    const calls: string[] = []
+    const db = new ContentFakeDb([
+      (sql, params) => {
+        calls.push(sql)
+        if (sql === 'begin' || sql === 'commit') return { rows: [], rowCount: 0 }
+        if (sql.startsWith('select id, collection_id, title, slug')) {
+          return {
+            rows: [{
+              id: 'entry_1',
+              collection_id: 'posts',
+              title: 'Post',
+              slug: 'post',
+              status: 'published',
+              body_markdown: '# Post',
+              featured_media_id: null,
+              seo_title: '',
+              seo_description: '',
+              created_at: rowDate('2026-05-01T10:00:00Z'),
+              updated_at: rowDate('2026-05-01T10:03:00Z'),
+              published_at: rowDate('2026-05-01T10:02:00Z'),
+              deleted_at: null,
+            }],
+            rowCount: 1,
+          }
+        }
+        if (sql.startsWith('select content_entry_versions.slug as previous_slug')) {
+          return {
+            rows: [{
+              previous_slug: 'untitled',
+              previous_route_base: '/posts',
+            }],
+            rowCount: 1,
+          }
+        }
+        if (sql.startsWith('select coalesce(max(version_number), 0)::int + 1')) {
+          return { rows: [{ next_version: 2 }], rowCount: 1 }
+        }
+        if (sql.startsWith('insert into content_entry_versions')) {
+          expect(params.slice(1)).toEqual([
+            'entry_1',
+            2,
+            'Post',
+            'post',
+            '# Post',
+            null,
+            '',
+            '',
+          ])
+          return { rows: [], rowCount: 1 }
+        }
+        if (sql.startsWith('update content_entries set status =')) {
+          expect(params[0]).toBe('entry_1')
+          expect(typeof params[1]).toBe('string')
+          return {
+            rows: [{
+              id: 'entry_1',
+              collection_id: 'posts',
+              title: 'Post',
+              slug: 'post',
+              status: 'published',
+              body_markdown: '# Post',
+              featured_media_id: null,
+              seo_title: '',
+              seo_description: '',
+              created_at: rowDate('2026-05-01T10:00:00Z'),
+              updated_at: rowDate('2026-05-01T10:04:00Z'),
+              published_at: rowDate('2026-05-01T10:04:00Z'),
+              deleted_at: null,
+            }],
+            rowCount: 1,
+          }
+        }
+        if (sql.startsWith('insert into content_entry_redirects')) {
+          expect(params.slice(1)).toEqual(['posts', '/posts', 'untitled', 'entry_1'])
+          return { rows: [], rowCount: 1 }
+        }
+        return undefined
+      },
+    ])
+
+    const result = await publishContentEntry(db, 'entry_1', 'admin_1')
+
+    expect(result.version.versionNumber).toBe(2)
+    expect(result.entry.slug).toBe('post')
+    expect(calls.some((sql) => sql.startsWith('insert into content_entry_redirects'))).toBe(true)
+  })
+
+  it('resolves the active published version by collection route and entry slug', async () => {
     const db = new ContentFakeDb([
       (sql, params) => {
         if (!sql.startsWith('select content_entry_versions.id')) return undefined
-        expect(params).toEqual(['posts', 'hello'])
+        expect(sql).toContain('content_entry_versions.id = content_entries.active_version_id')
+        expect(params).toEqual(['/posts', 'hello'])
         return {
           rows: [{
             id: 'version_1',
             entry_id: 'entry_1',
             collection_id: 'posts',
             collection_slug: 'posts',
+            collection_route_base: '/posts',
             version_number: 2,
             title: 'Published Hello',
             slug: 'hello',
@@ -255,8 +354,48 @@ describe('content CMS repository', () => {
     await expect(getPublishedContentEntryByRoute(db, 'posts', 'hello')).resolves.toMatchObject({
       id: 'version_1',
       collectionSlug: 'posts',
+      collectionRouteBase: '/posts',
       title: 'Published Hello',
       bodyMarkdown: 'Published body',
+    })
+  })
+
+  it('does not resolve old published slugs after a newer version becomes active', async () => {
+    const db = new ContentFakeDb([
+      (sql, params) => {
+        if (!sql.startsWith('select content_entry_versions.id')) return undefined
+        expect(sql).toContain('content_entry_versions.id = content_entries.active_version_id')
+        expect(params).toEqual(['/posts', 'untitled'])
+        return { rows: [], rowCount: 0 }
+      },
+    ])
+
+    await expect(getPublishedContentEntryByRoute(db, '/posts', 'untitled')).resolves.toBeNull()
+  })
+
+  it('resolves old published slugs as redirects to the active published slug', async () => {
+    const db = new ContentFakeDb([
+      (sql, params) => {
+        if (!sql.startsWith('select content_entry_redirects.id')) return undefined
+        expect(sql).toContain('content_entry_versions.id = target_entries.active_version_id')
+        expect(params).toEqual(['/posts', 'untitled'])
+        return {
+          rows: [{
+            id: 'redirect_1',
+            from_route_base: '/posts',
+            from_slug: 'untitled',
+            target_route_base: '/posts',
+            target_slug: 'post',
+          }],
+          rowCount: 1,
+        }
+      },
+    ])
+
+    await expect(getContentEntryRedirectByRoute(db, '/posts', 'untitled')).resolves.toEqual({
+      id: 'redirect_1',
+      fromPath: '/posts/untitled',
+      targetPath: '/posts/post',
     })
   })
 })
@@ -290,7 +429,7 @@ describe('content CMS rendering', () => {
 })
 
 describe('content CMS public routes', () => {
-  it('serves published content after page routes miss', async () => {
+  it('returns 404 for content routes without a published page template', async () => {
     const db = new ContentFakeDb([
       (sql) => {
         if (sql.startsWith('select page_versions.snapshot_json')) {
@@ -303,6 +442,7 @@ describe('content CMS public routes', () => {
               entry_id: 'entry_1',
               collection_id: 'posts',
               collection_slug: 'posts',
+              collection_route_base: '/posts',
               version_number: 1,
               title: 'Published post',
               slug: 'published-post',
@@ -317,14 +457,15 @@ describe('content CMS public routes', () => {
             rowCount: 1,
           }
         }
+        if (sql.startsWith('select content_entry_redirects.id')) {
+          return { rows: [], rowCount: 0 }
+        }
         return undefined
       },
     ])
 
     const res = await handleServerRequest(new Request('http://localhost/posts/published-post'), { db })
 
-    expect(res.status).toBe(200)
-    expect(res.headers.get('content-type')).toContain('text/html')
-    expect(await res.text()).toContain('<h1>Published post</h1>')
+    expect(res.status).toBe(404)
   })
 })

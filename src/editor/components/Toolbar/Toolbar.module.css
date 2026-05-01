@@ -53,8 +53,20 @@
     font-weight: 700;
 }
 
+.workspaceToolbarItems {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    gap: 2px;
+    opacity: 1;
+    animation: pbWorkspaceFadeIn 180ms ease both;
+    view-transition-name: admin-toolbar-controls;
+}
+
 .spacer {
     flex: 1;
+    min-width: 8px;
 }
 
 .divider {
@@ -63,6 +75,68 @@
     flex-shrink: 0;
     margin: 0 2px;
     background: var(--editor-border);
+}
+
+.pluginButtonWrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+}
+
+.pluginButton {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--editor-border);
+    border-radius: 8px;
+    background: var(--editor-surface-2);
+    color: var(--editor-text);
+    font-size: 11px;
+    font-weight: 750;
+    font-family: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.pluginButton:hover {
+    background: var(--editor-surface-3);
+}
+
+.pluginButton[data-state="success"] {
+    border-color: rgba(52, 211, 153, 0.35);
+}
+
+.pluginButton[data-state="error"] {
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.pluginButton:disabled {
+    cursor: wait;
+    opacity: 0.75;
+}
+
+.pluginToast {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 201;
+    max-width: min(320px, calc(100vw - 24px));
+    padding: 6px 10px;
+    border: 1px solid rgba(52, 211, 153, 0.35);
+    border-radius: 6px;
+    background: var(--editor-surface);
+    color: var(--editor-success-green);
+    font-size: 11px;
+    line-height: 1.35;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.pluginToastError {
+    border-color: rgba(239, 68, 68, 0.4);
+    color: var(--editor-danger-lighter);
 }
 
 /* ── ZoomControls ─────────────────────────────────────────────────────────── */
@@ -177,11 +251,26 @@
     }
 }
 
+@keyframes pbWorkspaceFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
 .spinIcon {
     animation: pbSpin 0.8s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .workspaceToolbarItems {
+        animation: none;
+        transition: none;
+    }
+
     .spinIcon {
         animation: none;
     }

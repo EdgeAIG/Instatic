@@ -10,8 +10,8 @@ describe('content Markdown model', () => {
     expect(serializeMarkdownBlocks([
       { id: 'b1', type: 'heading', level: 2, text: 'Intro' },
       { id: 'b2', type: 'paragraph', text: 'A paragraph.' },
-      { id: 'b3', type: 'image', src: '/uploads/hero.png', alt: 'Hero' },
-      { id: 'b4', type: 'video', src: '/uploads/movie.mp4' },
+      { id: 'b3', type: 'media', mediaType: 'image', src: '/uploads/hero.png', alt: 'Hero' },
+      { id: 'b4', type: 'media', mediaType: 'video', src: '/uploads/movie.mp4', alt: '' },
     ])).toBe([
       '## Intro',
       '',
@@ -25,7 +25,7 @@ describe('content Markdown model', () => {
 
   it('parses saved Markdown back into rich blocks', () => {
     expect(parseMarkdownBlocks([
-      '# Title',
+      '## Title',
       '',
       'Body text.',
       '',
@@ -33,10 +33,10 @@ describe('content Markdown model', () => {
       '',
       '@[video](/uploads/clip.mp4)',
     ].join('\n'))).toMatchObject([
-      { type: 'heading', level: 1, text: 'Title' },
+      { type: 'heading', level: 2, text: 'Title' },
       { type: 'paragraph', text: 'Body text.' },
-      { type: 'image', src: '/uploads/asset.png', alt: 'Alt' },
-      { type: 'video', src: '/uploads/clip.mp4' },
+      { type: 'media', mediaType: 'image', src: '/uploads/asset.png', alt: 'Alt' },
+      { type: 'media', mediaType: 'video', src: '/uploads/clip.mp4' },
     ])
   })
 
@@ -49,6 +49,28 @@ describe('content Markdown model', () => {
       type: 'heading',
       level: 2,
       text: 'Heading',
+    })
+  })
+
+  it('normalizes body headings to h2 through h4 because the post title owns h1', () => {
+    expect(autoformatMarkdownShortcut({
+      id: 'b1',
+      type: 'paragraph',
+      text: '# Top body heading',
+    })).toMatchObject({
+      type: 'heading',
+      level: 2,
+      text: 'Top body heading',
+    })
+
+    expect(autoformatMarkdownShortcut({
+      id: 'b2',
+      type: 'paragraph',
+      text: '###### Deep body heading',
+    })).toMatchObject({
+      type: 'heading',
+      level: 4,
+      text: 'Deep body heading',
     })
   })
 

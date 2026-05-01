@@ -34,13 +34,23 @@ import { usePersistence } from '@editor/hooks/usePersistence'
 import { useEditorLayoutPersistence } from '@editor/hooks/useEditorLayoutPersistence'
 import { selectRightSidebarExpanded, useEditorStore } from '@core/editor-store/store'
 import { cmsAdapter } from '@core/persistence'
+import { listCmsPlugins } from '@core/persistence/cmsPlugins'
+import type { PluginAdminPageRoute } from '@core/plugin-sdk'
 import { cn } from '@ui/cn'
+import { useInstalledEditorPlugins } from '../plugins/useInstalledEditorPlugins'
+import { CMS_PLUGINS_CHANGED_EVENT } from '../plugins/pluginEvents'
 import { AppLoadingScreen } from './AppLoadingScreen'
 import styles from './EditorLayout.module.css'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
+import { Link, useInRouterContext, useLocation, useNavigate } from 'react-router-dom'
+import toolbarStyles from '@editor/components/Toolbar/Toolbar.module.css'
+
+export type AdminWorkspace = 'site' | 'content' | 'plugins' | 'pluginPage'
 
 interface EditorLayoutProps {
-  workspace?: 'site' | 'content'
+  workspace?: AdminWorkspace
+  contentSidebar?: ReactNode
   contentLeftPanel?: ReactNode
   contentCanvas?: ReactNode
   contentRightPanel?: ReactNode
@@ -49,6 +59,7 @@ interface EditorLayoutProps {
 
 export default function EditorLayout({
   workspace = 'site',
+  contentSidebar,
   contentLeftPanel,
   contentCanvas,
   contentRightPanel,
@@ -58,11 +69,12 @@ export default function EditorLayout({
   const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
   const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)
   const contentRightSidebarExpanded = workspace === 'content' && Boolean(contentRightPanel)
-  const hasRightSidebar = contentRightSidebarExpanded || rightSidebarExpanded
+  const hasRightSidebar = contentRightSidebarExpanded || (workspace === 'site' && rightSidebarExpanded)
 
   // J12 — wire persistence: load, auto-save, toolbar Save, Cmd+S.
   const persistence = usePersistence('default', cmsAdapter, { markNewSiteUnsaved: true })
   useEditorLayoutPersistence()
+  useInstalledEditorPlugins()
 
   if (!site) {
     if (persistence.saveStatus.state === 'error') {
@@ -85,6 +97,11 @@ export default function EditorLayout({
         saveStatus={persistence.saveStatus}
         publishEnabled={workspace === 'site'}
         section={workspace}
+        adminNavigationSlot={(
+          <AdminSectionNavigation
+            section={workspace}
+          />
+        )}
         rightSlot={toolbarRightSlot}
       />
 
@@ -95,23 +112,32 @@ export default function EditorLayout({
         flex is kept so CanvasRoot's flex:1 fills the full width.
       */}
       <div className={styles.editorBody}>
-        <LeftSidebar workspace={workspace} contentPanel={contentLeftPanel} />
+        {workspace === 'site' ? (
+          <LeftSidebar workspace={workspace} contentPanel={contentLeftPanel} />
+        ) : (
+          contentSidebar ?? null
+        )}
         <div
           className={cn(styles.canvasStage, hasRightSidebar && styles.canvasStageRightSidebarOpen)}
           data-right-sidebar-expanded={hasRightSidebar ? 'true' : 'false'}
         >
-          {workspace === 'content' ? (
-            contentCanvas
-          ) : (
-            <>
-              {/* Canvas — fills the remaining space between sidebars */}
-              <CanvasRoot />
-              {/* Properties can be unpinned into the floating draggable overlay. */}
-              {propertiesPanelMode === 'floating' && <PropertiesPanel variant="floating" />}
-            </>
-          )}
+          <div className={styles.canvasContent} key={workspace}>
+            {workspace === 'site' ? (
+              <>
+                {/* Canvas — fills the remaining space between sidebars */}
+                <CanvasRoot />
+                {/* Properties can be unpinned into the floating draggable overlay. */}
+                {propertiesPanelMode === 'floating' && <PropertiesPanel variant="floating" />}
+              </>
+            ) : (
+              contentCanvas
+            )}
+          </div>
         </div>
-        <RightSidebar contentPanel={workspace === 'content' ? contentRightPanel : undefined} />
+        <RightSidebar
+          contentPanel={workspace === 'content' ? contentRightPanel : undefined}
+          suppressDefaultPanel={workspace !== 'site'}
+        />
       </div>
 
       {/* Code editor/media preview: viewport overlay, not constrained by the canvas stage. */}
@@ -120,5 +146,154 @@ export default function EditorLayout({
       {/* J10 — Settings Modal (portal-rendered, listens to store.settingsModalOpen) */}
       <SettingsModal />
     </div>
+  )
+}
+
+interface AdminSectionNavigationProps {
+  section: AdminWorkspace
+  onWorkspaceNavigateStart?: () => void
+}
+
+export function AdminSectionNavigation({
+  section,
+  onWorkspaceNavigateStart,
+}: AdminSectionNavigationProps) {
+  const [pluginPages, setPluginPages] = useState<PluginAdminPageRoute[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadPluginPages() {
+      try {
+        const payload = await listCmsPlugins()
+        if (!cancelled) {
+          setPluginPages((current) => {
+            const next = payload.adminPages
+            const unchanged =
+              current.length === next.length &&
+              current.every((page, index) => page.route === next[index]?.route)
+            return unchanged ? current : next
+          })
+        }
+      } catch {
+        // Navigation remains usable when plugins cannot be loaded.
+      }
+    }
+
+    function refreshPluginPages() {
+      void loadPluginPages()
+    }
+
+    refreshPluginPages()
+    window.addEventListener(CMS_PLUGINS_CHANGED_EVENT, refreshPluginPages)
+    return () => {
+      cancelled = true
+      window.removeEventListener(CMS_PLUGINS_CHANGED_EVENT, refreshPluginPages)
+    }
+  }, [])
+
+  return (
+    <>
+      {section === 'site' ? (
+        <span className={toolbarStyles.activeSection}>Site</span>
+      ) : (
+        <AdminRouteLink to="/admin/site" onNavigateStart={onWorkspaceNavigateStart}>Site</AdminRouteLink>
+      )}
+      {section === 'content' ? (
+        <span className={toolbarStyles.activeSection}>Content</span>
+      ) : (
+        <AdminRouteLink to="/admin/content" onNavigateStart={onWorkspaceNavigateStart}>Content</AdminRouteLink>
+      )}
+      {section === 'plugins' ? (
+        <span className={toolbarStyles.activeSection}>Plugins</span>
+      ) : (
+        <AdminRouteLink to="/admin/plugins" onNavigateStart={onWorkspaceNavigateStart}>Plugins</AdminRouteLink>
+      )}
+      {pluginPages.map((page) => (
+        <AdminRouteLink
+          key={`${page.pluginId}:${page.id}`}
+          to={page.route}
+          onNavigateStart={onWorkspaceNavigateStart}
+        >
+          {page.navLabel ?? page.title}
+        </AdminRouteLink>
+      ))}
+    </>
+  )
+}
+
+function AdminRouteLink({
+  to,
+  children,
+  onNavigateStart,
+}: {
+  to: string
+  children: ReactNode
+  onNavigateStart?: () => void
+}) {
+  const inRouter = useInRouterContext()
+
+  if (inRouter) {
+    return (
+      <RouterAdminRouteLink to={to} onNavigateStart={onNavigateStart}>
+        {children}
+      </RouterAdminRouteLink>
+    )
+  }
+
+  return (
+    <a className={toolbarStyles.adminLink} href={to}>
+      {children}
+    </a>
+  )
+}
+
+function RouterAdminRouteLink({
+  to,
+  children,
+  onNavigateStart,
+}: {
+  to: string
+  children: ReactNode
+  onNavigateStart?: () => void
+}) {
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.currentTarget.target
+    ) {
+      return
+    }
+
+    if (location.pathname === to) return
+
+    event.preventDefault()
+    onNavigateStart?.()
+
+    const startViewTransition = document.startViewTransition
+    if (typeof startViewTransition !== 'function') {
+      void navigate(to)
+      return
+    }
+
+    startViewTransition.call(document, () => {
+      flushSync(() => {
+        void navigate(to)
+      })
+    })
+  }
+
+  return (
+    <Link className={toolbarStyles.adminLink} to={to} onClick={handleClick}>
+      {children}
+    </Link>
   )
 }

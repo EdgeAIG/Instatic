@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { EditorStore } from '../store'
 
 export type FocusedPanel = 'canvas' | 'domTree' | 'properties' | null
-export type LeftSidebarPanelId = 'site' | 'media' | 'dependencies' | 'layers' | 'agent'
+export type LeftSidebarPanelId = 'site' | 'selectors' | 'media' | 'dependencies' | 'layers' | 'agent'
 export type PropertiesPanelMode = 'docked' | 'floating'
 
 export const SIDEBAR_MIN_WIDTH = 260
@@ -58,6 +58,7 @@ export interface UiSlice {
 
   // Site explorer — user-facing site concepts, not generated source files
   siteExplorerPanelOpen: boolean
+  selectorsPanelOpen: boolean
   mediaExplorerPanelOpen: boolean
   dependenciesPanelOpen: boolean
 
@@ -90,6 +91,7 @@ export interface UiSlice {
   closeInsertPicker: () => void
 
   setSiteExplorerPanelOpen: (open: boolean) => void
+  setSelectorsPanelOpen: (open: boolean) => void
   setMediaExplorerPanelOpen: (open: boolean) => void
   setDependenciesPanelOpen: (open: boolean) => void
   setLeftSidebarPanel: (panel: LeftSidebarPanelId | null) => void
@@ -111,6 +113,10 @@ export interface UiSlice {
    */
   activeDocument: ActiveDocument | null
   setActiveDocument: (doc: ActiveDocument | null) => void
+
+  /** Class selected in the global Selectors panel. */
+  selectedSelectorClassId: string | null
+  setSelectedSelectorClassId: (classId: string | null) => void
 
   /**
    * Atomically open a page in the canvas and clear any active VC document.
@@ -143,6 +149,7 @@ export function clampSidebarWidth(width: number) {
 
 function getActiveLeftSidebarPanel(state: EditorStore): LeftSidebarPanelId | null {
   if (state.siteExplorerPanelOpen) return 'site'
+  if (state.selectorsPanelOpen) return 'selectors'
   if (state.mediaExplorerPanelOpen) return 'media'
   if (state.dependenciesPanelOpen) return 'dependencies'
   if (!state.domTreePanel.collapsed) return 'layers'
@@ -163,12 +170,14 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
   insertPickerOpen: false,
   insertPickerParentId: null,
   siteExplorerPanelOpen: false,
+  selectorsPanelOpen: false,
   mediaExplorerPanelOpen: false,
   dependenciesPanelOpen: false,
   codeEditorPanelOpen: false,
   activeEditorFileId: null,
   activeMediaAssetPreview: null,
   activeDocument: null,
+  selectedSelectorClassId: null,
 
   setDomTreePanel: (partial) => {
     // Guard: skip the set() call entirely when every supplied field already
@@ -252,6 +261,8 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
 
   setSiteExplorerPanelOpen: (open) => set({ siteExplorerPanelOpen: open }),
 
+  setSelectorsPanelOpen: (open) => set({ selectorsPanelOpen: open }),
+
   setMediaExplorerPanelOpen: (open) => set({ mediaExplorerPanelOpen: open }),
 
   setDependenciesPanelOpen: (open) => set({ dependenciesPanelOpen: open }),
@@ -259,6 +270,7 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
   setLeftSidebarPanel: (panel) =>
     set((state) => ({
       siteExplorerPanelOpen: panel === 'site',
+      selectorsPanelOpen: panel === 'selectors',
       mediaExplorerPanelOpen: panel === 'media',
       dependenciesPanelOpen: panel === 'dependencies',
       domTreePanel: {
@@ -287,6 +299,11 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
     set({ activeEditorFileId: null, activeMediaAssetPreview: null, codeEditorPanelOpen: false }),
 
   setActiveDocument: (doc) => set({ activeDocument: doc }),
+
+  setSelectedSelectorClassId: (classId) => {
+    if (Object.is(get().selectedSelectorClassId, classId)) return
+    set({ selectedSelectorClassId: classId })
+  },
 
   openPageInCanvas: (pageId) =>
     // Atomic: clear VC mode + switch to the target page in one store write.

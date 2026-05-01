@@ -31,6 +31,7 @@ import {
 import { usePropertiesPanelAutoOpen } from './usePropertiesPanelAutoOpen'
 import { registry } from '../../../core/module-engine/registry'
 import { evaluateCondition, resolveProps } from '../../../core/page-tree/selectors'
+import { cssClassSelector } from '../../../core/page-tree/classNames'
 import { PropertyControlRenderer } from '../PropertyControls/PropertyControlRenderer'
 import type { AnyModuleDefinition, PropertyControl } from '../../../core/module-engine/types'
 import type { CSSClass, PageNode, SiteDocument } from '../../../core/page-tree/types'
@@ -74,14 +75,19 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
   const selectedNode = useEditorStore(selectSelectedNode)
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
   const updateNodeProps = useEditorStore((s) => s.updateNodeProps)
+  const setNodeDynamicBinding = useEditorStore((s) => s.setNodeDynamicBinding)
+  const clearNodeDynamicBinding = useEditorStore((s) => s.clearNodeDynamicBinding)
   const setBreakpointOverride = useEditorStore((s) => s.setBreakpointOverride)
   const ensureNodeStyleClass = useEditorStore((s) => s.ensureNodeStyleClass)
   const updateClassStyles = useEditorStore((s) => s.updateClassStyles)
   const setClassBreakpointStyles = useEditorStore((s) => s.setClassBreakpointStyles)
+  const renameClass = useEditorStore((s) => s.renameClass)
   const activeBreakpointId = useEditorStore((s) => s.activeBreakpointId)
   const renameNode = useEditorStore((s) => s.renameNode)
   const site = useEditorStore((s) => s.site)
+  const activePageId = useEditorStore((s) => s.activePageId)
   const activeClassId = useEditorStore((s) => s.activeClassId)
+  const selectedSelectorClassId = useEditorStore((s) => s.selectedSelectorClassId)
 
   const panelState = useEditorStore((s) => s.propertiesPanel)
   const setPropertiesPanelMode = useEditorStore((s) => s.setPropertiesPanelMode)
@@ -126,10 +132,14 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
       : new Set<string>()
 
   const isNonDesktopBp = Boolean(activeBreakpointId && activeBreakpointId !== 'desktop')
+  const selectedSelectorClass = selectedSelectorClassId ? site?.classes[selectedSelectorClassId] ?? null : null
   const activeClass =
+    !selectedSelectorClass &&
     activeClassId && selectedNode?.classIds?.includes(activeClassId)
       ? site?.classes[activeClassId]
       : null
+  const activePage = site?.pages.find((page) => page.id === activePageId) ?? null
+  const dynamicBindingsEnabled = activePage?.template?.context === 'entry'
 
   // ─── Prop change handler ───────────────────────────────────────────────────
   const handleChange = useCallback(
@@ -177,8 +187,8 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
   const collapsed = panelState.collapsed
   const width = Math.max(panelState.width || DEFAULT_WIDTH, MIN_WIDTH)
 
-  // Fully hidden when collapsed or when there is no selected layer to inspect.
-  if (collapsed || !selectedNodeId) return null
+  // Fully hidden when collapsed or when there is no selected layer/selector to inspect.
+  if (collapsed || (!selectedNodeId && !selectedSelectorClass)) return null
 
   const modeButtonLabel = variant === 'docked'
     ? 'Unpin Properties panel'
@@ -217,7 +227,12 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
       <PanelHeader
         panelId="properties"
         title="Properties"
-        titleContent={selectedNode && definition ? (
+        titleContent={selectedSelectorClass ? (
+          <SelectorHeader
+            cls={selectedSelectorClass}
+            onRename={(name) => renameClass(selectedSelectorClass.id, name)}
+          />
+        ) : selectedNode && definition ? (
           <NodeHeader
             key={selectedNodeId}
             nodeId={selectedNodeId!}
@@ -250,7 +265,9 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
         aria-label="Properties editor"
         className={styles.propertiesPanel}
       >
-        {!selectedNode || !definition ? (
+        {selectedSelectorClass ? (
+          <SelectorInspector cls={selectedSelectorClass} />
+        ) : !selectedNode || !definition ? (
           <div className={styles.emptyState}>
             Select an element on the canvas to view its properties.
           </div>
@@ -296,6 +313,17 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
                       value={resolvedPropsForBreakpoint![key]}
                       onChange={handleChange}
                       isOverride={overrideKeys.has(key)}
+                      dynamicBinding={dynamicBindingsEnabled && selectedNodeId ? {
+                        binding: selectedNode.dynamicBindings?.[key],
+                        onSet: (binding) => {
+                          setNodeDynamicBinding(selectedNodeId, key, binding)
+                          setStatusMessage(`${key} bound`)
+                        },
+                        onClear: () => {
+                          clearNodeDynamicBinding(selectedNodeId, key)
+                          setStatusMessage(`${key} binding removed`)
+                        },
+                      } : undefined}
                     />
                   )
                 })}
@@ -317,6 +345,7 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
                 cls={activeClass}
                 moduleDefinition={definition}
                 moduleProps={resolvedPropsForBreakpoint ?? selectedNode.props}
+                preferredBreakpointId={isNonDesktopBp ? activeBreakpointId : undefined}
               />
             )}
           </div>
@@ -407,6 +436,101 @@ function NodeHeader({ nodeId, label, moduleName, onRename }: NodeHeaderProps) {
       >
         <EditIcon size={12} aria-hidden="true" />
       </Button>
+    </div>
+  )
+}
+
+interface SelectorHeaderProps {
+  cls: CSSClass
+  onRename: (name: string) => void
+}
+
+function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.value = cls.name
+    }
+  }, [cls.id, cls.name, isEditing])
+
+  useEffect(() => {
+    if (!isEditing) return
+    requestAnimationFrame(() => inputRef.current?.select())
+  }, [isEditing])
+
+  const commitRename = useCallback((input: HTMLInputElement) => {
+    const nextName = input.value.trim()
+    if (nextName && nextName !== cls.name) {
+      try {
+        onRename(nextName)
+      } catch {
+        input.value = cls.name
+      }
+    } else {
+      input.value = cls.name
+    }
+    setIsEditing(false)
+  }, [cls.name, onRename])
+
+  const cancelRename = useCallback((input: HTMLInputElement) => {
+    input.value = cls.name
+    setIsEditing(false)
+  }, [cls.name])
+
+  if (isEditing) {
+    return (
+      <Input
+        ref={inputRef}
+        type="text"
+        fieldSize="xs"
+        emphasis="strong"
+        defaultValue={cls.name}
+        onBlur={(e) => commitRename(e.target)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            ;(e.target as HTMLInputElement).blur()
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            cancelRename(e.target as HTMLInputElement)
+          }
+        }}
+        aria-label="Selector name"
+        className={styles.headerNameInput}
+      />
+    )
+  }
+
+  return (
+    <div className={styles.headerNodeTitle}>
+      <span className={styles.headerNodeLabel} title={cls.name}>{cls.name}</span>
+      <Button
+        variant="ghost"
+        size="xs"
+        iconOnly
+        onClick={() => setIsEditing(true)}
+        aria-label={`Rename selector ${cls.name}`}
+        title="Rename selector"
+      >
+        <EditIcon size={12} aria-hidden="true" />
+      </Button>
+    </div>
+  )
+}
+
+function SelectorInspector({ cls }: { cls: CSSClass }) {
+  return (
+    <div className={styles.scrollArea}>
+      <section className={styles.selectorInspector} aria-label={`Selector ${cls.name}`}>
+        <div className={styles.selectorIntro}>
+          <h2 className={styles.selectorTitle}>{cls.name}</h2>
+          <code className={styles.selectorCode}>{cssClassSelector(cls)}</code>
+        </div>
+        <ClassComposer key={cls.id} classId={cls.id} cls={cls} mode="global" />
+      </section>
     </div>
   )
 }

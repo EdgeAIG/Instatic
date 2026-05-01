@@ -91,7 +91,8 @@ describe('EditorLayout — CMS site hydration gate', () => {
     try {
       renderEditorLayout({ preloadSite: false })
 
-      expect(screen.getByText('Loading...')).toBeDefined()
+      expect(screen.getByRole('status', { name: /loading page builder/i })).toBeDefined()
+      expect(document.querySelector('[data-editor-skeleton="true"]')).toBeNull()
       expect(screen.queryByTestId('toolbar')).toBeNull()
       expect(screen.queryByText(/loading site/i)).toBeNull()
 
@@ -229,22 +230,22 @@ describe('EditorLayout — permanent panel rail', () => {
       'panel-rail-layers',
       'panel-rail-agent',
       'panel-rail-site',
+      'panel-rail-selectors',
       'panel-rail-media',
-      'panel-rail-dependencies',
     ])
     expect(primaryButtons.map((button) => button.getAttribute('data-icon'))).toEqual([
       'bulletlist-2-sharp',
       'ai-settings-solid',
       'files-stack-2',
+      'paint-bucket',
       'images',
-      'box-stack',
     ])
     expect(primaryButtons.map((button) => button.getAttribute('data-accent'))).toEqual([
       'mint',
       'lilac',
       'sky',
-      'sky',
       'peach',
+      'sky',
     ])
   })
 
@@ -351,7 +352,7 @@ describe('EditorLayout — permanent panel rail', () => {
     loadSiteWithSelectedHeading()
     renderEditorLayout()
 
-    const canvasStage = screen.getByTestId('canvas-root').parentElement
+    const canvasStage = screen.getByTestId('canvas-root').closest('[data-right-sidebar-expanded]')
     expect(canvasStage).not.toBeNull()
 
     await waitFor(() => {

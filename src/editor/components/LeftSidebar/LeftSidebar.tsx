@@ -6,12 +6,14 @@ import { DependenciesPanel } from '../DependenciesPanel'
 import { DomPanel } from '../DomPanel'
 import { MediaExplorerPanel } from '../MediaExplorerPanel'
 import { PanelRail } from '../PanelRail'
+import { SelectorsPanel } from '../SelectorsPanel'
 import { SiteExplorerPanel } from '../SiteExplorerPanel'
 import { SidebarResizeHandle } from '../shared/SidebarResizeHandle'
 import styles from './LeftSidebar.module.css'
 
 function selectActiveLeftSidebarPanel(state: ReturnType<typeof useEditorStore.getState>): LeftSidebarPanelId | null {
   if (state.siteExplorerPanelOpen) return 'site'
+  if (state.selectorsPanelOpen) return 'selectors'
   if (state.mediaExplorerPanelOpen) return 'media'
   if (state.dependenciesPanelOpen) return 'dependencies'
   if (!state.domTreePanel.collapsed) return 'layers'
@@ -56,6 +58,9 @@ export function LeftSidebar({ workspace = 'site', contentPanel }: LeftSidebarPro
         </div>
         <div className={styles.panelMount} hidden={activePanel !== 'site'}>
           {workspace === 'content' ? contentPanel : <SiteExplorerPanel variant="docked" />}
+        </div>
+        <div className={styles.panelMount} hidden={activePanel !== 'selectors'}>
+          <SelectorsPanel variant="docked" />
         </div>
         <div className={styles.panelMount} hidden={activePanel !== 'media'}>
           <MediaExplorerPanel variant="docked" />

@@ -18,8 +18,6 @@ import { CloseIcon } from '@ui/icons/icons/close'
 import { SettingsCogIcon } from '@ui/icons/icons/settings-cog'
 import { FileTextIcon } from '@ui/icons/icons/file-text'
 import { SmartphoneIcon } from '@ui/icons/icons/smartphone'
-import { TextAlignLeftIcon } from '@ui/icons/icons/text-align-left'
-import { PaintBucketIcon } from '@ui/icons/icons/paint-bucket'
 import { CommandIcon } from '@ui/icons/icons/command'
 import { UploadIcon } from '@ui/icons/icons/upload'
 import { SlidersHorizontalIcon } from '@ui/icons/icons/sliders-horizontal'
@@ -29,8 +27,6 @@ import { PagesSection } from './sections/PagesSection'
 import { PublishingSection } from './sections/PublishingSection'
 import { ShortcutsSection } from './sections/ShortcutsSection'
 import { PreferencesSection } from './sections/PreferencesSection'
-import { TypographySection } from './sections/TypographySection'
-import { ColorsSection } from './sections/ColorsSection'
 import s from './Settings.module.css'
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
@@ -39,8 +35,6 @@ const NAV_ITEMS = [
   { id: 'general',     label: 'General',     icon: SettingsCogIcon       },
   { id: 'pages',       label: 'Pages',       icon: FileTextIcon          },
   { id: 'breakpoints', label: 'Breakpoints', icon: SmartphoneIcon        },
-  { id: 'typography',  label: 'Typography',  icon: TextAlignLeftIcon     },
-  { id: 'colors',      label: 'Colors',      icon: PaintBucketIcon       },
   { id: 'shortcuts',   label: 'Shortcuts',   icon: CommandIcon           },
   { id: 'publishing',  label: 'Publishing',  icon: UploadIcon            },
   { id: 'preferences', label: 'Preferences', icon: SlidersHorizontalIcon },
@@ -228,8 +222,6 @@ export function SettingsModal() {
             {activeSection === 'general'     && <GeneralSection />}
             {activeSection === 'pages'       && <PagesSection />}
             {activeSection === 'breakpoints' && <BreakpointsSection />}
-            {activeSection === 'typography'  && <TypographySection />}
-            {activeSection === 'colors'      && <ColorsSection />}
             {activeSection === 'shortcuts'   && <ShortcutsSection />}
             {activeSection === 'publishing'  && <PublishingSection />}
             {activeSection === 'preferences' && <PreferencesSection />}

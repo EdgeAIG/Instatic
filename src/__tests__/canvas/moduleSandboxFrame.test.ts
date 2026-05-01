@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { createSandboxSrcDoc } from '../../editor/components/Canvas/ModuleSandboxFrame'
+import { createSandboxSrcDoc } from '../../editor/components/Canvas/moduleSandboxSrcDoc'
 
 describe('ModuleSandboxFrame srcDoc', () => {
   it('builds an isolated iframe document with import map, encoded module source, and host bridge', () => {
@@ -16,11 +16,11 @@ describe('ModuleSandboxFrame srcDoc', () => {
         props: { sceneLabel: 'Scene' },
         nodeId: 'node-1',
         isSelected: false,
-        className: 'mc-class-1',
+        className: 'class-1',
         dependencies: { three: 'https://esm.sh/three@0.184.0?bundle' },
         apiVersion: 1,
       },
-      classCSS: '.mc-class-1 {\\n  height: 360px;\\n}',
+      classCSS: '.class-1 {\\n  height: 360px;\\n}',
     })
 
     expect(srcDoc).toContain('<script type="importmap">')
@@ -30,6 +30,6 @@ describe('ModuleSandboxFrame srcDoc', () => {
     expect(srcDoc).toContain('page-builder-module-sandbox')
     expect(srcDoc).toContain('page-builder-module-host')
     expect(srcDoc).toContain("message.type !== 'update'")
-    expect(srcDoc).toContain('.mc-class-1')
+    expect(srcDoc).toContain('.class-1')
   })
 })

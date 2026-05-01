@@ -292,7 +292,7 @@ describe('sanitiseCssValue', () => {
   // This was the pattern MISSING from escape.ts before Task #296 consolidation.
   // -------------------------------------------------------------------------
 
-  it('blocks } — closes surrounding .mc-{id} selector block', () => {
+  it('blocks } — closes surrounding class selector block', () => {
     // "red; } a { color: blue" would inject rogue CSS rules without this check
     expect(sanitiseCssValue('red; } a { color: blue')).toBeNull()
   })

@@ -2,7 +2,9 @@ import type {
   ContentCollection,
   ContentEntry,
   ContentEntryDraftInput,
+  ContentEntryStatus,
   CreateContentEntryInput,
+  UpdateContentCollectionInput,
 } from '../../content/types'
 import { responseErrorMessage } from './httpErrors'
 
@@ -44,6 +46,26 @@ export async function listCmsContentEntries(
     `CMS content entries failed with ${res.status}`,
   )
   return Array.isArray(body.entries) ? body.entries : []
+}
+
+export async function updateCmsContentCollection(
+  collectionId: string,
+  input: UpdateContentCollectionInput,
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  basePath = '/api/cms',
+): Promise<ContentCollection> {
+  const res = await fetchImpl(`${basePath}/content/collections/${encodeURIComponent(collectionId)}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const body = await readJson<{ collection?: ContentCollection }>(
+    res,
+    `CMS content collection update failed with ${res.status}`,
+  )
+  if (!body.collection) throw new Error('CMS content collection update response was missing collection')
+  return body.collection
 }
 
 export async function createCmsContentEntry(
@@ -98,5 +120,25 @@ export async function publishCmsContentEntry(
     `CMS content entry publish failed with ${res.status}`,
   )
   if (!body.entry) throw new Error('CMS content entry publish response was missing entry')
+  return body.entry
+}
+
+export async function updateCmsContentEntryStatus(
+  entryId: string,
+  status: Exclude<ContentEntryStatus, 'published'>,
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  basePath = '/api/cms',
+): Promise<ContentEntry> {
+  const res = await fetchImpl(`${basePath}/content/entries/${encodeURIComponent(entryId)}/status`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+  const body = await readJson<{ entry?: ContentEntry }>(
+    res,
+    `CMS content entry status update failed with ${res.status}`,
+  )
+  if (!body.entry) throw new Error('CMS content entry status response was missing entry')
   return body.entry
 }

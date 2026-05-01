@@ -475,6 +475,30 @@ describe('SiteExplorerPanel', () => {
     })
   })
 
+  it('opens page routes in a new browser tab from the page context menu', () => {
+    loadSite()
+    const originalOpen = window.open
+    const openCalls: unknown[] = []
+    window.open = ((...args: unknown[]) => {
+      openCalls.push(args)
+      return null
+    }) as typeof window.open
+
+    try {
+      render(<SiteExplorerPanel variant="docked" />)
+
+      fireEvent.contextMenu(screen.getByRole('button', { name: /open page pricing/i }), {
+        clientX: 120,
+        clientY: 140,
+      })
+      fireEvent.click(screen.getByRole('menuitem', { name: /open in new tab/i }))
+
+      expect(openCalls).toEqual([['/pricing', '_blank', 'noopener,noreferrer']])
+    } finally {
+      window.open = originalOpen
+    }
+  })
+
   it('creates pages with an editable slug through the site dialog', () => {
     loadSite()
     render(<SiteExplorerPanel variant="docked" />)

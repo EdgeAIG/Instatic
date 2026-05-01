@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid'
 import type { DbClient } from './db'
+import { normalizeRouteBase } from '../../src/core/templates/templateMatching'
 
 type ContentEntryStatus = 'draft' | 'published' | 'unpublished'
 
@@ -7,6 +8,7 @@ interface ContentCollection {
   id: string
   name: string
   slug: string
+  routeBase: string
   singularLabel: string
   pluralLabel: string
   createdAt: string
@@ -29,11 +31,12 @@ interface ContentEntry {
   deletedAt: string | null
 }
 
-interface PublishedContentEntry {
+export interface PublishedContentEntry {
   id: string
   entryId: string
   collectionId: string
   collectionSlug: string
+  collectionRouteBase: string
   versionNumber: number
   title: string
   slug: string
@@ -64,8 +67,13 @@ interface CreateContentCollectionInput {
   id?: string
   name: string
   slug: string
+  routeBase?: string
   singularLabel: string
   pluralLabel: string
+}
+
+interface UpdateContentCollectionInput {
+  routeBase: string
 }
 
 interface CreateContentEntryInput {
@@ -92,6 +100,7 @@ interface ContentCollectionRow {
   id: string
   name: string
   slug: string
+  route_base: string
   singular_label: string
   plural_label: string
   created_at: Date | string
@@ -131,7 +140,27 @@ interface ContentEntryVersionRow {
 interface PublishedContentEntryRow extends ContentEntryVersionRow {
   collection_id: string
   collection_slug: string
+  collection_route_base: string
   featured_media_path: string | null
+}
+
+interface PreviousPublishedRouteRow {
+  previous_slug: string
+  previous_route_base: string
+}
+
+interface ContentEntryRedirectRow {
+  id: string
+  from_route_base: string
+  from_slug: string
+  target_route_base: string
+  target_slug: string
+}
+
+export interface ContentEntryRedirect {
+  id: string
+  fromPath: string
+  targetPath: string
 }
 
 function toIsoString(value: Date | string): string {
@@ -147,6 +176,7 @@ function mapCollection(row: ContentCollectionRow): ContentCollection {
     id: row.id,
     name: row.name,
     slug: row.slug,
+    routeBase: row.route_base ? normalizeRouteBase(row.route_base) : normalizeRouteBase(row.slug),
     singularLabel: row.singular_label,
     pluralLabel: row.plural_label,
     createdAt: toIsoString(row.created_at),
@@ -193,13 +223,32 @@ function mapPublishedEntry(row: PublishedContentEntryRow): PublishedContentEntry
     ...mapVersion(row),
     collectionId: row.collection_id,
     collectionSlug: row.collection_slug,
+    collectionRouteBase: row.collection_route_base
+      ? normalizeRouteBase(row.collection_route_base)
+      : normalizeRouteBase(row.collection_slug),
     featuredMediaPath: row.featured_media_path,
+  }
+}
+
+function publicContentPath(routeBase: string, slug: string): string {
+  const normalizedBase = normalizeRouteBase(routeBase)
+  return `${normalizedBase === '/' ? '' : normalizedBase}/${slug}`
+}
+
+function mapRedirect(row: ContentEntryRedirectRow): ContentEntryRedirect | null {
+  const fromPath = publicContentPath(row.from_route_base, row.from_slug)
+  const targetPath = publicContentPath(row.target_route_base, row.target_slug)
+  if (fromPath === targetPath) return null
+  return {
+    id: row.id,
+    fromPath,
+    targetPath,
   }
 }
 
 export async function listContentCollections(db: DbClient): Promise<ContentCollection[]> {
   const result = await db.query<ContentCollectionRow>(
-    `select id, name, slug, singular_label, plural_label, created_at, updated_at
+    `select id, name, slug, route_base, singular_label, plural_label, created_at, updated_at
      from content_collections
      where deleted_at is null
      order by created_at asc`,
@@ -212,18 +261,36 @@ export async function createContentCollection(
   input: CreateContentCollectionInput,
 ): Promise<ContentCollection> {
   const result = await db.query<ContentCollectionRow>(
-    `insert into content_collections (id, name, slug, singular_label, plural_label)
-     values ($1, $2, $3, $4, $5)
-     returning id, name, slug, singular_label, plural_label, created_at, updated_at`,
+    `insert into content_collections (id, name, slug, route_base, singular_label, plural_label)
+     values ($1, $2, $3, $4, $5, $6)
+     returning id, name, slug, route_base, singular_label, plural_label, created_at, updated_at`,
     [
       input.id ?? nanoid(),
       input.name,
       input.slug,
+      normalizeRouteBase(input.routeBase ?? input.slug),
       input.singularLabel,
       input.pluralLabel,
     ],
   )
   return mapCollection(result.rows[0])
+}
+
+export async function updateContentCollection(
+  db: DbClient,
+  collectionId: string,
+  input: UpdateContentCollectionInput,
+): Promise<ContentCollection | null> {
+  const result = await db.query<ContentCollectionRow>(
+    `update content_collections
+     set route_base = $2,
+         updated_at = now()
+     where id = $1
+       and deleted_at is null
+     returning id, name, slug, route_base, singular_label, plural_label, created_at, updated_at`,
+    [collectionId, normalizeRouteBase(input.routeBase)],
+  )
+  return result.rows[0] ? mapCollection(result.rows[0]) : null
 }
 
 export async function softDeleteContentCollection(
@@ -246,7 +313,7 @@ export async function softDeleteContentCollection(
      set deleted_at = now(), updated_at = now()
      where id = $1
        and deleted_at is null
-     returning id, name, slug, singular_label, plural_label, created_at, updated_at`,
+     returning id, name, slug, route_base, singular_label, plural_label, created_at, updated_at`,
     [collectionId],
   )
   return result.rows[0] ? mapCollection(result.rows[0]) : null
@@ -355,6 +422,25 @@ export async function softDeleteContentEntry(
   return result.rows[0] ? mapEntry(result.rows[0]) : null
 }
 
+export async function updateContentEntryStatus(
+  db: DbClient,
+  entryId: string,
+  status: Exclude<ContentEntryStatus, 'published'>,
+): Promise<ContentEntry | null> {
+  const result = await db.query<ContentEntryRow>(
+    `update content_entries
+     set status = $2,
+         published_at = null,
+         updated_at = now()
+     where id = $1
+       and deleted_at is null
+     returning id, collection_id, title, slug, status, body_markdown, featured_media_id,
+               seo_title, seo_description, created_at, updated_at, published_at, deleted_at`,
+    [entryId, status],
+  )
+  return result.rows[0] ? mapEntry(result.rows[0]) : null
+}
+
 export async function publishContentEntry(
   db: DbClient,
   entryId: string,
@@ -364,6 +450,19 @@ export async function publishContentEntry(
   try {
     const entry = await getContentEntry(db, entryId)
     if (!entry) throw new Error('content entry not found')
+
+    const previousRouteResult = await db.query<PreviousPublishedRouteRow>(
+      `select content_entry_versions.slug as previous_slug,
+              coalesce(nullif(content_collections.route_base, ''), '/' || content_collections.slug) as previous_route_base
+       from content_entries
+       join content_collections on content_collections.id = content_entries.collection_id
+       join content_entry_versions on content_entry_versions.id = content_entries.active_version_id
+       where content_entries.id = $1
+         and content_entries.deleted_at is null
+         and content_collections.deleted_at is null
+       limit 1`,
+      [entryId],
+    )
 
     const versionResult = await db.query<{ next_version: number }>(
       `select coalesce(max(version_number), 0)::int + 1 as next_version
@@ -392,14 +491,37 @@ export async function publishContentEntry(
 
     const updateResult = await db.query<ContentEntryRow>(
       `update content_entries set status = 'published',
+                                 active_version_id = $2,
                                  published_at = now(),
                                  updated_at = now()
        where id = $1
          and deleted_at is null
        returning id, collection_id, title, slug, status, body_markdown, featured_media_id,
                  seo_title, seo_description, created_at, updated_at, published_at, deleted_at`,
-      [entry.id],
+      [entry.id, versionId],
     )
+
+    const previousRoute = previousRouteResult.rows[0]
+    if (
+      previousRoute?.previous_slug &&
+      publicContentPath(previousRoute.previous_route_base, previousRoute.previous_slug) !==
+        publicContentPath(previousRoute.previous_route_base, entry.slug)
+    ) {
+      await db.query(
+        `insert into content_entry_redirects (id, collection_id, from_route_base, from_slug, target_entry_id)
+         values ($1, $2, $3, $4, $5)
+         on conflict (from_route_base, from_slug) do update
+           set collection_id = excluded.collection_id,
+               target_entry_id = excluded.target_entry_id`,
+        [
+          nanoid(),
+          entry.collectionId,
+          normalizeRouteBase(previousRoute.previous_route_base),
+          previousRoute.previous_slug,
+          entry.id,
+        ],
+      )
+    }
 
     await db.query('commit')
     return {
@@ -430,7 +552,7 @@ export async function publishContentEntry(
 
 export async function getPublishedContentEntryByRoute(
   db: DbClient,
-  collectionSlug: string,
+  collectionRouteBase: string,
   entrySlug: string,
 ): Promise<PublishedContentEntry | null> {
   const result = await db.query<PublishedContentEntryRow>(
@@ -438,6 +560,7 @@ export async function getPublishedContentEntryByRoute(
             content_entry_versions.entry_id,
             content_entries.collection_id,
             content_collections.slug as collection_slug,
+            content_collections.route_base as collection_route_base,
             content_entry_versions.version_number,
             content_entry_versions.title,
             content_entry_versions.slug,
@@ -450,16 +573,41 @@ export async function getPublishedContentEntryByRoute(
             content_entry_versions.created_at
      from content_entries
      join content_collections on content_collections.id = content_entries.collection_id
-     join content_entry_versions on content_entry_versions.entry_id = content_entries.id
+     join content_entry_versions on content_entry_versions.id = content_entries.active_version_id
      left join media_assets on media_assets.id = content_entry_versions.featured_media_id
-     where content_collections.slug = $1
+     where coalesce(nullif(content_collections.route_base, ''), '/' || content_collections.slug) = $1
        and content_entry_versions.slug = $2
        and content_entries.status = 'published'
        and content_entries.deleted_at is null
        and content_collections.deleted_at is null
-     order by content_entry_versions.version_number desc
      limit 1`,
-    [collectionSlug, entrySlug],
+    [normalizeRouteBase(collectionRouteBase), entrySlug],
   )
   return result.rows[0] ? mapPublishedEntry(result.rows[0]) : null
+}
+
+export async function getContentEntryRedirectByRoute(
+  db: DbClient,
+  collectionRouteBase: string,
+  entrySlug: string,
+): Promise<ContentEntryRedirect | null> {
+  const result = await db.query<ContentEntryRedirectRow>(
+    `select content_entry_redirects.id,
+            content_entry_redirects.from_route_base,
+            content_entry_redirects.from_slug,
+            coalesce(nullif(target_collections.route_base, ''), '/' || target_collections.slug) as target_route_base,
+            content_entry_versions.slug as target_slug
+     from content_entry_redirects
+     join content_entries target_entries on target_entries.id = content_entry_redirects.target_entry_id
+     join content_collections target_collections on target_collections.id = target_entries.collection_id
+     join content_entry_versions on content_entry_versions.id = target_entries.active_version_id
+     where content_entry_redirects.from_route_base = $1
+       and content_entry_redirects.from_slug = $2
+       and target_entries.status = 'published'
+       and target_entries.deleted_at is null
+       and target_collections.deleted_at is null
+     limit 1`,
+    [normalizeRouteBase(collectionRouteBase), entrySlug],
+  )
+  return result.rows[0] ? mapRedirect(result.rows[0]) : null
 }

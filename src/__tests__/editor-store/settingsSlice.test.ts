@@ -8,8 +8,9 @@
  *   - setSettingsSection() — updates section without touching isSettingsOpen
  *   - All valid SettingsSection values are accepted
  *
- * Phase 6 (Task #183) expanded SettingsSection to include 'general', 'typography',
- * and 'colors'. DEFAULT_SECTION is now 'general' (first nav item).
+ * Phase 6 (Task #183) expanded SettingsSection. Typography and colors were later
+ * retired from the settings modal while the underlying site settings remain
+ * available for existing documents and publishing.
  *
  * @see src/core/editor-store/slices/settingsSlice.ts
  * @see Guideline #193 — Zustand Store Slice Guidelines
@@ -183,14 +184,11 @@ describe('setSettingsSection', () => {
     expect(getSettings().isSettingsOpen).toBe(true)
   })
 
-  it('accepts all 9 valid SettingsSection values (Phase 6 expanded type)', () => {
-    // Phase 6 added 'general', 'typography', 'colors' to SettingsSection.
+  it('accepts all valid SettingsSection values', () => {
     const sections: SettingsSection[] = [
       'general',
       'pages',
       'breakpoints',
-      'typography',
-      'colors',
       'preferences',
       'shortcuts',
       'publishing',

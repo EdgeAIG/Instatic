@@ -19,6 +19,8 @@ import { nanoid } from 'nanoid'
 import type { StateCreator } from 'zustand'
 import type { EditorStore } from '../store'
 import type { CSSClass, CSSPropertyBag } from '../../page-tree/types'
+import { isUserVisibleClass } from '../../page-tree/classUtils'
+import { assertValidCssClassName } from '../../page-tree/classNames'
 
 export interface ClassPreviewAssignment {
   nodeId: string
@@ -64,6 +66,9 @@ export interface ClassSlice {
   /** Rename a class. Throws if the new name is already taken. */
   renameClass(classId: string, name: string): void
 
+  /** Duplicate a reusable class. Returns the new class, or null if not found. */
+  duplicateClass(classId: string): CSSClass | null
+
   /** Delete a class and remove it from all nodes that reference it. */
   deleteClass(classId: string): void
 
@@ -83,6 +88,48 @@ export interface ClassSlice {
    * No-op at array boundaries (Guideline #242 — no-op mutation guard).
    */
   reorderNodeClass(nodeId: string, classId: string, direction: 'up' | 'down'): void
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function hasStylePatchChanges(
+  current: Partial<CSSPropertyBag>,
+  patch: Partial<CSSPropertyBag>,
+): boolean {
+  for (const [key, value] of Object.entries(patch)) {
+    const prop = key as keyof CSSPropertyBag
+    if (value === undefined || value === null) {
+      if (prop in current) return true
+    } else if (!Object.is(current[prop], value)) {
+      return true
+    }
+  }
+  return false
+}
+
+function cloneBreakpointStyles(
+  breakpointStyles: CSSClass['breakpointStyles'],
+): CSSClass['breakpointStyles'] {
+  return Object.fromEntries(
+    Object.entries(breakpointStyles).map(([breakpointId, styles]) => [
+      breakpointId,
+      { ...styles },
+    ]),
+  )
+}
+
+function uniqueClassCopyName(classes: Record<string, CSSClass>, originalName: string): string {
+  const existingNames = new Set(Object.values(classes).map((cls) => cls.name))
+  const baseName = `${originalName}-copy`
+  if (!existingNames.has(baseName)) return baseName
+
+  let suffix = 2
+  while (existingNames.has(`${baseName}-${suffix}`)) {
+    suffix += 1
+  }
+  return `${baseName}-${suffix}`
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +167,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
   createClass(name, styles = {}) {
     const { site } = get()
     if (!site) throw new Error('[classSlice] Site document is not initialized')
+    assertValidCssClassName(name)
 
     // Uniqueness check
     const existing = Object.values(site.classes).find((c) => c.name === name)
@@ -135,11 +183,13 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
       updatedAt: now,
     }
 
+    get().pushHistory()
     set(
       produce((state: EditorStore) => {
         if (!state.site) return
         state.site.classes[newClass.id] = newClass
         state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
       }),
     )
 
@@ -148,45 +198,54 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
 
   updateClassStyles(classId, patch) {
     const { site } = get()
-    if (!site?.classes[classId]) return
+    const cls = site?.classes[classId]
+    if (!cls) return
+    if (!hasStylePatchChanges(cls.styles, patch)) return
 
+    get().pushHistory()
     set(
       produce((state: EditorStore) => {
         if (!state.site?.classes[classId]) return
-        const cls = state.site.classes[classId]
-        Object.assign(cls.styles, patch)
+        const draftClass = state.site.classes[classId]
+        Object.assign(draftClass.styles, patch)
         // Remove keys explicitly set to undefined/null (allow clearing a property)
         for (const [k, v] of Object.entries(patch)) {
           if (v === undefined || v === null) {
-            delete cls.styles[k as keyof CSSPropertyBag]
+            delete draftClass.styles[k as keyof CSSPropertyBag]
           }
         }
-        cls.updatedAt = Date.now()
+        draftClass.updatedAt = Date.now()
         state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
       }),
     )
   },
 
   setClassBreakpointStyles(classId, breakpointId, patch) {
     const { site } = get()
-    if (!site?.classes[classId]) return
+    const cls = site?.classes[classId]
+    if (!cls) return
+    const currentStyles = cls.breakpointStyles[breakpointId] ?? {}
+    if (!hasStylePatchChanges(currentStyles, patch)) return
 
+    get().pushHistory()
     set(
       produce((state: EditorStore) => {
         if (!state.site?.classes[classId]) return
-        const cls = state.site.classes[classId]
-        if (!cls.breakpointStyles[breakpointId]) {
-          cls.breakpointStyles[breakpointId] = {}
+        const draftClass = state.site.classes[classId]
+        if (!draftClass.breakpointStyles[breakpointId]) {
+          draftClass.breakpointStyles[breakpointId] = {}
         }
-        Object.assign(cls.breakpointStyles[breakpointId], patch)
+        Object.assign(draftClass.breakpointStyles[breakpointId], patch)
         // Remove keys explicitly set to undefined/null
         for (const [k, v] of Object.entries(patch)) {
           if (v === undefined || v === null) {
-            delete cls.breakpointStyles[breakpointId][k as keyof CSSPropertyBag]
+            delete draftClass.breakpointStyles[breakpointId][k as keyof CSSPropertyBag]
           }
         }
-        cls.updatedAt = Date.now()
+        draftClass.updatedAt = Date.now()
         state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
       }),
     )
   },
@@ -220,6 +279,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
       updatedAt: now,
     }
 
+    get().pushHistory()
     set(
       produce((state: EditorStore) => {
         if (!state.site) return
@@ -236,6 +296,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
           break
         }
         state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
       }),
     )
 
@@ -244,7 +305,10 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
 
   renameClass(classId, name) {
     const { site } = get()
-    if (!site?.classes[classId]) return
+    const cls = site?.classes[classId]
+    if (!cls) return
+    assertValidCssClassName(name)
+    if (Object.is(cls.name, name)) return
 
     // Uniqueness check (allow keeping same name)
     const existing = Object.values(site.classes).find(
@@ -252,17 +316,53 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
     )
     if (existing) throw new Error(`[classSlice] A class named "${name}" already exists`)
 
+    get().pushHistory()
     set(
       produce((state: EditorStore) => {
         if (!state.site?.classes[classId]) return
         state.site.classes[classId].name = name
         state.site.classes[classId].updatedAt = Date.now()
         state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
       }),
     )
   },
 
+  duplicateClass(classId) {
+    const { site } = get()
+    const cls = site?.classes[classId]
+    if (!site || !cls || !isUserVisibleClass(cls)) return null
+
+    const now = Date.now()
+    const newClass: CSSClass = {
+      id: nanoid(),
+      name: uniqueClassCopyName(site.classes, cls.name),
+      description: cls.description,
+      styles: { ...cls.styles },
+      breakpointStyles: cloneBreakpointStyles(cls.breakpointStyles),
+      tags: cls.tags ? [...cls.tags] : undefined,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    get().pushHistory()
+    set(
+      produce((state: EditorStore) => {
+        if (!state.site) return
+        state.site.classes[newClass.id] = newClass
+        state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
+      }),
+    )
+
+    return newClass
+  },
+
   deleteClass(classId) {
+    const { site } = get()
+    if (!site?.classes[classId]) return
+
+    get().pushHistory()
     set(
       produce((state: EditorStore) => {
         if (!state.site) return
@@ -281,6 +381,10 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
         if (state.activeClassId === classId) {
           state.activeClassId = null
         }
+        if (state.selectedSelectorClassId === classId) {
+          state.selectedSelectorClassId = null
+        }
+        state.hasUnsavedChanges = true
       }),
     )
   },
@@ -296,6 +400,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
     // No-op if already assigned
     if (page.nodes[nodeId].classIds?.includes(classId)) return
 
+    get().pushHistory()
     set(
       produce((state: EditorStore) => {
         if (!state.site) return
@@ -307,6 +412,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
           }
         }
         state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
       }),
     )
   },
@@ -314,7 +420,11 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
   removeNodeClass(nodeId, classId) {
     const { site } = get()
     if (!site) return
+    const page = site.pages.find((p) => p.nodes[nodeId])
+    const classIds = page?.nodes[nodeId]?.classIds
+    if (!classIds?.includes(classId)) return
 
+    get().pushHistory()
     set(
       produce((state: EditorStore) => {
         if (!state.site) return
@@ -325,6 +435,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
           }
         }
         state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
       }),
     )
   },
@@ -333,7 +444,12 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
     const { site } = get()
     if (!site) return
     if (fromIndex === toIndex) return
+    if (fromIndex < 0 || toIndex < 0) return
+    const page = site.pages.find((p) => p.nodes[nodeId])
+    const classIds = page?.nodes[nodeId]?.classIds
+    if (!classIds || classIds.length <= Math.max(fromIndex, toIndex)) return
 
+    get().pushHistory()
     set(
       produce((state: EditorStore) => {
         if (!state.site) return
@@ -347,6 +463,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
           }
         }
         state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
       }),
     )
   },
@@ -363,6 +480,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
     // No-op at array boundaries — Guideline #242
     if (newIdx < 0 || newIdx >= classIds.length) return
 
+    get().pushHistory()
     set(
       produce((state: EditorStore) => {
         if (!state.site) return
@@ -376,6 +494,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
           }
         }
         state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
       }),
     )
   },

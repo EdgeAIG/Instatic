@@ -13,6 +13,8 @@
 import type { Page, PageNode, SiteDocument } from '../page-tree/types'
 import type { IModuleRegistry } from '../module-engine/types'
 import { resolveProps } from '../page-tree/selectors'
+import { resolveDynamicProps, type TemplateRenderDataContext } from '../templates/dynamicBindings'
+import { classNamesForClassIds } from '../page-tree/classNames'
 import { sanitizeModuleCSS, collectClassCSS } from './cssCollector'
 import { escapeHtml, isSafeUrl } from './utils'
 
@@ -102,11 +104,11 @@ export function escapeProps(
  *
  * Handles two cases:
  * 1. Element already has a class attribute → prepend the new classes.
- *    `<div class="existing">` → `<div class="mc-abc existing">`
+ *    `<div class="existing">` → `<div class="class_name existing">`
  * 2. Element has no class attribute → inject one after the tag name.
- *    `<button type="button">` → `<button class="mc-abc" type="button">`
+ *    `<button type="button">` → `<button class="class_name" type="button">`
  *
- * The classAttr string is pre-validated by the caller (nanoid IDs, HTML-escaped).
+ * The classAttr string is pre-validated by the caller (class tokens, HTML-escaped).
  * The function only touches the first opening tag so it does not modify nested elements.
  */
 function injectClassIntoRootElement(html: string, classAttr: string): string {
@@ -126,6 +128,7 @@ export interface RenderContext {
   site: SiteDocument
   registry: IModuleRegistry
   breakpointId: string | undefined
+  templateContext?: TemplateRenderDataContext
   /**
    * CSS deduplication map: moduleId → CSS string.
    * Each module type contributes at most one CSS entry regardless of instance count.
@@ -159,9 +162,10 @@ export function renderNode(nodeId: string, ctx: RenderContext): string {
 
   // 2. Resolve effective props (base + breakpoint shallow-merge)
   const effectiveProps = resolveProps(node, ctx.breakpointId)
+  const resolvedProps = resolveDynamicProps(effectiveProps, node.dynamicBindings, ctx.templateContext)
 
   // 3. Escape all string props (Constraint #211) before calling render()
-  const safeProps = escapeProps(effectiveProps)
+  const safeProps = escapeProps(resolvedProps)
 
   // 4. Call the pure render() function
   const output = def.render(safeProps as never, renderedChildren)
@@ -172,13 +176,13 @@ export function renderNode(nodeId: string, ctx: RenderContext): string {
     ctx.cssMap.set(node.moduleId, sanitizeModuleCSS(output.css))
   }
 
-  // 6. Inject mc-{classId} class names into the root HTML element (Task #401 Bug 3).
-  //    classIds are nanoid strings (alphanumeric + hyphen) — escapeHtml is a no-op but
-  //    applied defensively so the injection is safe even if ID format changes.
+  // 6. Inject user-facing class names into the root HTML element.
   let html = output.html
   if (node.classIds?.length) {
-    const classAttr = node.classIds.map((id) => `mc-${escapeHtml(id)}`).join(' ')
-    html = injectClassIntoRootElement(html, classAttr)
+    const classAttr = classNamesForClassIds(ctx.site.classes, node.classIds)
+      .map(escapeHtml)
+      .join(' ')
+    if (classAttr) html = injectClassIntoRootElement(html, classAttr)
   }
 
   return html
@@ -271,9 +275,10 @@ export function publishPage(
   site: SiteDocument,
   registry: IModuleRegistry,
   breakpointId?: string,
+  templateContext?: TemplateRenderDataContext,
 ): PublishedPage {
   const cssMap = new Map<string, string>()
-  const ctx: RenderContext = { page, site, registry, breakpointId, cssMap }
+  const ctx: RenderContext = { page, site, registry, breakpointId, templateContext, cssMap }
 
   // Render entire tree from root
   const bodyHtml = renderNode(page.rootNodeId, ctx)

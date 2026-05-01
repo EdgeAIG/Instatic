@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 /**
  * NodeRenderer — renders a single PageNode in the editor canvas.
  *
@@ -13,45 +12,16 @@
  *   affected nodes re-render per selection/hover event (O(2) not O(N)).
  */
 
-import { memo, useCallback, useContext, createContext } from 'react'
+import { memo, useCallback, useContext } from 'react'
 import { useEditorStore, selectActiveCanvasPage } from '../../../core/editor-store/store'
 import { resolveProps } from '../../../core/page-tree/selectors'
 import { registry } from '../../../core/module-engine/registry'
-import type { ClassPreviewAssignment } from '../../../core/editor-store/slices/classSlice'
+import { resolveDynamicProps } from '../../../core/templates/dynamicBindings'
 import { WarningDiamondIcon } from '@ui/icons/icons/warning-diamond'
 import { ModuleSandboxFrame } from './ModuleSandboxFrame'
+import { CanvasBreakpointContext, CanvasSelectionContext, CanvasTemplateContext } from './CanvasContexts'
+import { getCanvasNodeClassIds, getCanvasNodeClassName } from './canvasNodeClassName'
 import styles from './NodeRenderer.module.css'
-
-// ---------------------------------------------------------------------------
-// Selection context — avoids DOM event propagation across canvas/panel boundary
-// (Canvas & Panel Interaction Guideline #192)
-//
-// PERF NOTE (Contribution #495): selectedNodeId and hoveredNodeId are
-// intentionally NOT in this context. Putting them here would cause every
-// NodeRenderer to re-render on every hover/selection change, bypassing
-// React.memo() and causing O(N) re-renders per event.
-// Each NodeRenderer subscribes to its own boolean directly from the store.
-// ---------------------------------------------------------------------------
-
-interface CanvasSelectionContextValue {
-  onNodeClick: (nodeId: string, e: React.MouseEvent) => void
-  onNodeHover: (nodeId: string | null) => void
-  onNodeContextMenu: (nodeId: string, e: React.MouseEvent) => void
-  /**
-   * Double-click on a canvas node — used by base.visualComponentRef to enter VC canvas mode.
-   * Provided by CanvasRoot; no-op default prevents crashes when context is missing.
-   */
-  onNodeDoubleClick: (nodeId: string, e: React.MouseEvent) => void
-}
-
-export const CanvasSelectionContext = createContext<CanvasSelectionContextValue>({
-  onNodeClick: () => {},
-  onNodeHover: () => {},
-  onNodeContextMenu: () => {},
-  onNodeDoubleClick: () => {},
-})
-
-export const CanvasBreakpointContext = createContext<string | undefined>(undefined)
 
 // ---------------------------------------------------------------------------
 // NodeRenderer
@@ -83,9 +53,17 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       [nodeId],
     ),
   )
+  const mcClassName = useEditorStore(
+    useCallback((s) => {
+      const canvasNode = selectActiveCanvasPage(s)?.nodes[nodeId]
+      const preview = s.previewClassAssignment?.nodeId === nodeId ? s.previewClassAssignment : null
+      return getCanvasNodeClassName(canvasNode?.classIds, preview, nodeId, s.site?.classes)
+    }, [nodeId]),
+  )
 
   const { onNodeClick, onNodeHover, onNodeContextMenu, onNodeDoubleClick } = useContext(CanvasSelectionContext)
   const breakpointId = useContext(CanvasBreakpointContext)
+  const templateContext = useContext(CanvasTemplateContext)
 
   if (!node) return null
   if (node.hidden) return null
@@ -109,12 +87,10 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
 
   const ComponentType = definition.component
   const shouldRenderSandbox = Boolean(definition.editorRuntime?.sandbox && !definition.trusted)
-  const effectiveProps = resolveProps(node, breakpointId)
+  const effectiveProps = resolveDynamicProps(resolveProps(node, breakpointId), node.dynamicBindings, templateContext)
 
-  // Build className from classIds — each class gets a mc-{id} selector
-  // that ClassStyleInjector injects into document.head
+  // Build className from classIds using the user-facing class names.
   const effectiveClassIds = getCanvasNodeClassIds(node.classIds, previewClassAssignment, nodeId)
-  const mcClassName = getCanvasNodeClassName(node.classIds, previewClassAssignment, nodeId)
 
   return (
     <NodeWrapper
@@ -147,33 +123,6 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
     </NodeWrapper>
   )
 })
-
-function getCanvasNodeClassIds(
-  classIds: readonly string[] | undefined,
-  previewClassAssignment: ClassPreviewAssignment | null,
-  nodeId: string,
-): string[] | undefined {
-  const ids = classIds ? [...classIds] : []
-
-  if (
-    previewClassAssignment?.nodeId === nodeId &&
-    !ids.includes(previewClassAssignment.classId)
-  ) {
-    ids.push(previewClassAssignment.classId)
-  }
-
-  return ids.length > 0 ? ids : undefined
-}
-
-export function getCanvasNodeClassName(
-  classIds: readonly string[] | undefined,
-  previewClassAssignment: ClassPreviewAssignment | null,
-  nodeId: string,
-): string | undefined {
-  return getCanvasNodeClassIds(classIds, previewClassAssignment, nodeId)
-    ?.map((id) => `mc-${id}`)
-    .join(' ')
-}
 
 // ---------------------------------------------------------------------------
 // NodeWrapper — click/hover target, selection ring

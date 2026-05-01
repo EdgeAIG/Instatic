@@ -50,6 +50,10 @@ function setupSite() {
   return { rootId, childId, site: useEditorStore.getState().site! }
 }
 
+function historyLength() {
+  return useEditorStore.getState()._historyPast.length
+}
+
 // ---------------------------------------------------------------------------
 // createClass
 // ---------------------------------------------------------------------------
@@ -77,6 +81,12 @@ describe('classSlice.createClass', () => {
     setupSite()
     getStore().createClass('btn')
     expect(() => getStore().createClass('btn')).toThrow()
+  })
+
+  it('throws if the class name cannot be represented as one HTML class token', () => {
+    setupSite()
+    expect(() => getStore().createClass('feature card')).toThrow(/whitespace/)
+    expect(() => getStore().createClass(' feature-card')).toThrow(/whitespace/)
   })
 
   it('throws if no site is loaded', () => {
@@ -201,6 +211,12 @@ describe('classSlice.renameClass', () => {
     expect(() => getStore().renameClass(cls1.id, 'card')).toThrow()
   })
 
+  it('throws if the new name cannot be represented as one HTML class token', () => {
+    setupSite()
+    const cls = getStore().createClass('btn')
+    expect(() => getStore().renameClass(cls.id, 'feature card')).toThrow(/whitespace/)
+  })
+
   it('is a no-op for unknown classId', () => {
     setupSite()
     expect(() => getStore().renameClass('nonexistent', 'whatever')).not.toThrow()
@@ -248,6 +264,45 @@ describe('classSlice.deleteClass', () => {
     getStore().setActiveClass(cls1.id)
     getStore().deleteClass(cls2.id)
     expect(useEditorStore.getState().activeClassId).toBe(cls1.id)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// duplicateClass
+// ---------------------------------------------------------------------------
+
+describe('classSlice.duplicateClass', () => {
+  it('copies styles and breakpoint styles without copying node assignments', () => {
+    const { childId } = setupSite()
+    const original = getStore().createClass('card', { padding: '16px', color: '#111' })
+    getStore().setClassBreakpointStyles(original.id, 'mobile', { padding: '8px' })
+    getStore().addNodeClass(childId, original.id)
+
+    const copy = getStore().duplicateClass(original.id)
+
+    expect(copy).not.toBeNull()
+    expect(copy!.id).not.toBe(original.id)
+    expect(copy!.name).toBe('card-copy')
+    expect(copy!.styles).toEqual({ padding: '16px', color: '#111' })
+    expect(copy!.breakpointStyles).toEqual({ mobile: { padding: '8px' } })
+    expect(useEditorStore.getState().site!.pages[0].nodes[childId].classIds).toEqual([original.id])
+  })
+
+  it('generates a unique copy name when a copy already exists', () => {
+    setupSite()
+    const original = getStore().createClass('badge')
+    const firstCopy = getStore().duplicateClass(original.id)
+    const secondCopy = getStore().duplicateClass(original.id)
+
+    expect(firstCopy?.name).toBe('badge-copy')
+    expect(secondCopy?.name).toBe('badge-copy-2')
+  })
+
+  it('returns null for unknown classId', () => {
+    setupSite()
+    const before = historyLength()
+    expect(getStore().duplicateClass('missing')).toBeNull()
+    expect(historyLength()).toBe(before)
   })
 })
 
@@ -387,5 +442,136 @@ describe('classSlice.setActiveClass', () => {
     const storeAfter = useEditorStore.getState()
     // The store object reference should be the same when no mutation occurred
     expect(storeAfter.activeClassId).toBe(storeBefore.activeClassId)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// undo / redo integration for class mutations
+// ---------------------------------------------------------------------------
+
+describe('classSlice — undo / redo', () => {
+  it('createClass is undoable and redoable', () => {
+    const { childId } = setupSite()
+    const cls = getStore().createClass('undoable')
+
+    expect(useEditorStore.getState().site!.classes[cls.id]).toBeDefined()
+    useEditorStore.getState().undo()
+    expect(useEditorStore.getState().site!.classes[cls.id]).toBeUndefined()
+    expect(useEditorStore.getState().site!.pages[0].nodes[childId]).toBeDefined()
+
+    useEditorStore.getState().redo()
+    expect(useEditorStore.getState().site!.classes[cls.id]).toBeDefined()
+  })
+
+  it('renameClass is undoable and redoable', () => {
+    setupSite()
+    const cls = getStore().createClass('before-name')
+
+    getStore().renameClass(cls.id, 'after-name')
+    expect(useEditorStore.getState().site!.classes[cls.id].name).toBe('after-name')
+
+    useEditorStore.getState().undo()
+    expect(useEditorStore.getState().site!.classes[cls.id].name).toBe('before-name')
+
+    useEditorStore.getState().redo()
+    expect(useEditorStore.getState().site!.classes[cls.id].name).toBe('after-name')
+  })
+
+  it('duplicateClass is undoable and redoable', () => {
+    setupSite()
+    const cls = getStore().createClass('duplicated')
+    const copy = getStore().duplicateClass(cls.id)
+
+    expect(copy).not.toBeNull()
+    expect(useEditorStore.getState().site!.classes[copy!.id]).toBeDefined()
+
+    useEditorStore.getState().undo()
+    expect(useEditorStore.getState().site!.classes[copy!.id]).toBeUndefined()
+
+    useEditorStore.getState().redo()
+    expect(useEditorStore.getState().site!.classes[copy!.id]).toBeDefined()
+  })
+
+  it('deleteClass is undoable and redoable including node assignments', () => {
+    const { childId } = setupSite()
+    const cls = getStore().createClass('removable')
+    getStore().addNodeClass(childId, cls.id)
+
+    getStore().deleteClass(cls.id)
+    expect(useEditorStore.getState().site!.classes[cls.id]).toBeUndefined()
+    expect(useEditorStore.getState().site!.pages[0].nodes[childId].classIds ?? []).not.toContain(cls.id)
+
+    useEditorStore.getState().undo()
+    expect(useEditorStore.getState().site!.classes[cls.id]).toBeDefined()
+    expect(useEditorStore.getState().site!.pages[0].nodes[childId].classIds ?? []).toContain(cls.id)
+
+    useEditorStore.getState().redo()
+    expect(useEditorStore.getState().site!.classes[cls.id]).toBeUndefined()
+    expect(useEditorStore.getState().site!.pages[0].nodes[childId].classIds ?? []).not.toContain(cls.id)
+  })
+
+  it('style edits are undoable and redoable', () => {
+    setupSite()
+    const cls = getStore().createClass('styled')
+
+    getStore().updateClassStyles(cls.id, { fontSize: '18px' })
+    expect(useEditorStore.getState().site!.classes[cls.id].styles.fontSize).toBe('18px')
+
+    useEditorStore.getState().undo()
+    expect(useEditorStore.getState().site!.classes[cls.id].styles.fontSize).toBeUndefined()
+
+    useEditorStore.getState().redo()
+    expect(useEditorStore.getState().site!.classes[cls.id].styles.fontSize).toBe('18px')
+  })
+
+  it('breakpoint style edits are undoable and redoable', () => {
+    setupSite()
+    const cls = getStore().createClass('responsive')
+
+    getStore().setClassBreakpointStyles(cls.id, 'mobile', { fontSize: '14px' })
+    expect(useEditorStore.getState().site!.classes[cls.id].breakpointStyles.mobile?.fontSize).toBe('14px')
+
+    useEditorStore.getState().undo()
+    expect(useEditorStore.getState().site!.classes[cls.id].breakpointStyles.mobile?.fontSize).toBeUndefined()
+
+    useEditorStore.getState().redo()
+    expect(useEditorStore.getState().site!.classes[cls.id].breakpointStyles.mobile?.fontSize).toBe('14px')
+  })
+
+  it('node class assignments are undoable and redoable', () => {
+    const { childId } = setupSite()
+    const cls = getStore().createClass('assignable')
+
+    getStore().addNodeClass(childId, cls.id)
+    expect(useEditorStore.getState().site!.pages[0].nodes[childId].classIds ?? []).toContain(cls.id)
+
+    useEditorStore.getState().undo()
+    expect(useEditorStore.getState().site!.pages[0].nodes[childId].classIds ?? []).not.toContain(cls.id)
+
+    useEditorStore.getState().redo()
+    expect(useEditorStore.getState().site!.pages[0].nodes[childId].classIds ?? []).toContain(cls.id)
+
+    getStore().removeNodeClass(childId, cls.id)
+    expect(useEditorStore.getState().site!.pages[0].nodes[childId].classIds ?? []).not.toContain(cls.id)
+
+    useEditorStore.getState().undo()
+    expect(useEditorStore.getState().site!.pages[0].nodes[childId].classIds ?? []).toContain(cls.id)
+  })
+
+  it('no-op class mutations do not push undo history', () => {
+    const { childId } = setupSite()
+    const cls = getStore().createClass('stable')
+
+    const beforeSameRename = historyLength()
+    getStore().renameClass(cls.id, 'stable')
+    expect(historyLength()).toBe(beforeSameRename)
+
+    const beforeEmptyStylePatch = historyLength()
+    getStore().updateClassStyles(cls.id, {})
+    expect(historyLength()).toBe(beforeEmptyStylePatch)
+
+    const beforeUnassignedRemove = historyLength()
+    getStore().removeNodeClass(childId, cls.id)
+    expect(historyLength()).toBe(beforeUnassignedRemove)
   })
 })

@@ -30,7 +30,7 @@ import { generateClassCSS } from './classCss'
  * Sanitised via sanitizeModuleCSS (Constraint #228).
  *
  * @param site The site containing the class registry and page nodes.
- * @returns A CSS string of all `.mc-{id}` rules, or empty string if none.
+ * @returns A CSS string of all used class-name rules, or empty string if none.
  */
 export function collectClassCSS(site: SiteDocument): string {
   // Defensive guard: corrupted/partial snapshots may have classes undefined

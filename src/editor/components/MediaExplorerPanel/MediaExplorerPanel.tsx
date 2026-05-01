@@ -41,6 +41,8 @@ import styles from '../SiteExplorerPanel/SiteExplorerPanel.module.css'
 
 interface MediaExplorerPanelProps {
   variant?: 'docked'
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 type MediaBucket = 'images' | 'videos' | 'other'
@@ -157,8 +159,11 @@ function targetBucket(target: CmsMediaAsset) {
 
 export function MediaExplorerPanel({
   variant = 'docked',
+  open,
+  onOpenChange,
 }: MediaExplorerPanelProps) {
-  const isOpen = useEditorStore((s) => s.mediaExplorerPanelOpen)
+  const storeOpen = useEditorStore((s) => s.mediaExplorerPanelOpen)
+  const isOpen = open ?? storeOpen
   const site = useEditorStore((s) => s.site)
   const setMediaExplorerPanelOpen = useEditorStore((s) => s.setMediaExplorerPanelOpen)
   const updateNodeProps = useEditorStore((s) => s.updateNodeProps)
@@ -190,6 +195,14 @@ export function MediaExplorerPanel({
     const activePage = site.pages.find((page) => page.id === activePageId)
     return activePage?.nodes[selectedNodeId] ?? null
   }, [site, activePageId, selectedNodeId])
+
+  function closePanel() {
+    if (onOpenChange) {
+      onOpenChange(false)
+      return
+    }
+    setMediaExplorerPanelOpen(false)
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -378,7 +391,7 @@ export function MediaExplorerPanel({
       <PanelHeader
         panelId="media-explorer"
         title="Media"
-        onClose={() => setMediaExplorerPanelOpen(false)}
+        onClose={closePanel}
       />
 
       <div className={styles.content}>

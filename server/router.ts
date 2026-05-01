@@ -1,10 +1,12 @@
 import { handleAgentRequest } from './agentHandler'
 import { handleCmsRequest } from './cms/handlers'
 import type { DbClient } from './cms/db'
-import { getPublishedContentEntryByRoute } from './cms/contentRepository'
-import { renderContentDocumentHtml } from './cms/contentRenderer'
-import { getPublishedPageBySlug } from './cms/publishRepository'
-import { renderPublishedSnapshot } from './cms/publicRenderer'
+import {
+  getContentEntryRedirectByRoute,
+  getPublishedContentEntryByRoute,
+} from './cms/contentRepository'
+import { getLatestPublishedSiteSnapshot, getPublishedPageBySlug } from './cms/publishRepository'
+import { renderPublishedContentTemplate, renderPublishedSnapshot } from './cms/publicRenderer'
 import { jsonResponse } from './http'
 import { serveAdminApp, serveStaticFile } from './static'
 
@@ -19,12 +21,12 @@ function publicSlugFromPath(pathname: string): string {
   return trimmed === '' ? 'index' : trimmed
 }
 
-function contentRouteFromPath(pathname: string): { collectionSlug: string; entrySlug: string } | null {
+function contentRouteFromPath(pathname: string): { collectionRouteBase: string; entrySlug: string } | null {
   const parts = pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean)
-  if (parts.length !== 2) return null
+  if (parts.length < 2) return null
   return {
-    collectionSlug: decodeURIComponent(parts[0]),
-    entrySlug: decodeURIComponent(parts[1]),
+    collectionRouteBase: `/${parts.slice(0, -1).map((part) => decodeURIComponent(part)).join('/')}`,
+    entrySlug: decodeURIComponent(parts[parts.length - 1]),
   }
 }
 
@@ -76,18 +78,30 @@ export async function handleServerRequest(
     if (contentRoute) {
       const entry = await getPublishedContentEntryByRoute(
         runtime.db,
-        contentRoute.collectionSlug,
+        contentRoute.collectionRouteBase,
         contentRoute.entrySlug,
       )
       if (entry) {
-        return new Response(renderContentDocumentHtml({
-          title: entry.title,
-          bodyMarkdown: entry.bodyMarkdown,
-          seoTitle: entry.seoTitle,
-          seoDescription: entry.seoDescription,
-          featuredMediaPath: entry.featuredMediaPath,
-        }), {
-          headers: { 'content-type': 'text/html; charset=utf-8' },
+        const siteSnapshot = await getLatestPublishedSiteSnapshot(runtime.db)
+        if (siteSnapshot) {
+          const html = renderPublishedContentTemplate(siteSnapshot, entry)
+          if (html) {
+            return new Response(html, {
+              headers: { 'content-type': 'text/html; charset=utf-8' },
+            })
+          }
+        }
+      }
+
+      const redirect = await getContentEntryRedirectByRoute(
+        runtime.db,
+        contentRoute.collectionRouteBase,
+        contentRoute.entrySlug,
+      )
+      if (redirect) {
+        return new Response(null, {
+          status: 301,
+          headers: { location: `${redirect.targetPath}${url.search}` },
         })
       }
     }

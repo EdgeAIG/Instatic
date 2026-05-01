@@ -6,7 +6,7 @@
  *   2.  ARIA dialog shell — role/aria-modal/aria-labelledby/heading id
  *   3.  data-testid (Guideline #221)
  *   4.  Backdrop — aria-hidden, click-to-close
- *   5.  Section navigation — nav items, aria-current, section switching
+ *   5.  Section navigation — nav items, aria-current, retired section fallback
  *   6.  Section sync — valid/invalid section IDs from store
  *   7.  Close behaviours — close button, Escape key, backdrop click
  *   8.  Focus trap keyboard logic — Tab/Shift+Tab stays inside dialog
@@ -210,19 +210,19 @@ describe('SettingsModal — backdrop', () => {
 // ---------------------------------------------------------------------------
 
 describe('SettingsModal — section navigation', () => {
-  it('renders exactly 8 nav items (general, pages, breakpoints, typography, colors, shortcuts, publishing, preferences)', () => {
+  it('renders exactly 6 nav items (general, pages, breakpoints, shortcuts, publishing, preferences)', () => {
     openModal()
     render(<SettingsModal />)
     const nav = screen.getByRole('navigation', { name: /settings sections/i })
-    // The nav contains 8 section buttons + 1 close button.
+    // The nav contains 6 section buttons + 1 close button.
     // Exclude the close button (identified by aria-label="Close settings").
     const navBtns = Array.from(nav.querySelectorAll('button')).filter(
       (btn) => btn.getAttribute('aria-label') !== 'Close settings'
     )
-    expect(navBtns.length).toBe(8)
+    expect(navBtns.length).toBe(6)
   })
 
-  it('renders nav items with correct labels (Phase 6: 8 sections)', () => {
+  it('renders nav items with correct labels after retiring typography and colors', () => {
     // Open on 'pages' so the Preferences section content is not rendered,
     // avoiding duplicate "Preferences" text (nav button + section h3).
     openModal('pages')
@@ -231,11 +231,11 @@ describe('SettingsModal — section navigation', () => {
     expect(within(nav).getByText('General')).toBeDefined()
     expect(within(nav).getByText('Pages')).toBeDefined()
     expect(within(nav).getByText('Breakpoints')).toBeDefined()
-    expect(within(nav).getByText('Typography')).toBeDefined()
-    expect(within(nav).getByText('Colors')).toBeDefined()
     expect(within(nav).getByText('Publishing')).toBeDefined()
     expect(within(nav).getByText('Shortcuts')).toBeDefined()
     expect(within(nav).getByText('Preferences')).toBeDefined()
+    expect(within(nav).queryByText('Typography')).toBeNull()
+    expect(within(nav).queryByText('Colors')).toBeNull()
   })
 
   it('active nav item has aria-current="page"', () => {
@@ -328,6 +328,24 @@ describe('SettingsModal — section sync from store', () => {
     const nav = screen.getByRole('navigation', { name: /settings sections/i })
     const generalBtn = within(nav).getByText('General').closest('button')!
     expect(generalBtn.getAttribute('aria-current')).toBe('page')
+  })
+
+  it('falls back to "general" when store section is retired typography', () => {
+    openModal('typography')
+    render(<SettingsModal />)
+    const nav = screen.getByRole('navigation', { name: /settings sections/i })
+    const generalBtn = within(nav).getByText('General').closest('button')!
+    expect(generalBtn.getAttribute('aria-current')).toBe('page')
+    expect(screen.queryByRole('heading', { name: 'Typography' })).toBeNull()
+  })
+
+  it('falls back to "general" when store section is retired colors', () => {
+    openModal('colors')
+    render(<SettingsModal />)
+    const nav = screen.getByRole('navigation', { name: /settings sections/i })
+    const generalBtn = within(nav).getByText('General').closest('button')!
+    expect(generalBtn.getAttribute('aria-current')).toBe('page')
+    expect(screen.queryByRole('heading', { name: 'Colors' })).toBeNull()
   })
 })
 
@@ -434,7 +452,7 @@ describe('SettingsModal — PreferencesSection toggles', () => {
     openModal('preferences')
     render(<SettingsModal />)
     const switches = screen.getAllByRole('switch')
-    expect(switches.length).toBe(4) // autosave, snap-to-grid, reduce-motion, class hover preview
+    expect(switches.length).toBe(2) // autosave, class hover preview
   })
 
   it('Auto-save toggle has aria-checked="true" by default', () => {
@@ -445,21 +463,21 @@ describe('SettingsModal — PreferencesSection toggles', () => {
     expect(autoSaveToggle.getAttribute('aria-checked')).toBe('true')
   })
 
-  it('Snap-to-grid toggle has aria-checked="false" by default', () => {
-    // defaultPrefs.snapToGrid = false
+  it('retired snap-to-grid and reduce-motion preferences are not rendered', () => {
     openModal('preferences')
     render(<SettingsModal />)
-    const snapToggle = screen.getByRole('switch', { name: /snap to grid/i })
-    expect(snapToggle.getAttribute('aria-checked')).toBe('false')
+
+    expect(screen.queryByRole('switch', { name: /snap to grid/i })).toBeNull()
+    expect(screen.queryByRole('switch', { name: /reduce motion/i })).toBeNull()
   })
 
   it('clicking a toggle flips its aria-checked state', () => {
     openModal('preferences')
     render(<SettingsModal />)
-    const snapToggle = screen.getByRole('switch', { name: /snap to grid/i })
-    expect(snapToggle.getAttribute('aria-checked')).toBe('false')
-    fireEvent.click(snapToggle)
-    expect(snapToggle.getAttribute('aria-checked')).toBe('true')
+    const autoSaveToggle = screen.getByRole('switch', { name: /auto-save/i })
+    expect(autoSaveToggle.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(autoSaveToggle)
+    expect(autoSaveToggle.getAttribute('aria-checked')).toBe('false')
   })
 
   it('class hover preview toggle is enabled by default and can be disabled', () => {

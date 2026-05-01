@@ -439,6 +439,30 @@ describe('PP-11 — Editing a text-type class property via TextControl updates c
     const updatedCls = useEditorStore.getState().site!.classes[cls.id]
     expect(updatedCls.styles.fontFamily).toBe('Inter, sans-serif')
   })
+
+  it('uses the active canvas breakpoint for class style edits without changing base styles', () => {
+    const { nodeId } = loadSiteWithHeading()
+    const state = useEditorStore.getState()
+    const cls = state.createClass('responsive-edit-class')
+    state.addNodeClass(nodeId, cls.id)
+    state.updateClassStyles(cls.id, { fontFamily: 'serif' })
+    useEditorStore.setState({ activeBreakpointId: 'mobile' } as Parameters<typeof useEditorStore.setState>[0])
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+
+    const pill = screen.getByRole('button', { name: /edit class responsive-edit-class/i })
+    fireEvent.click(pill)
+
+    const breakpointSelect = screen.getByRole('combobox', { name: /class style breakpoint/i }) as HTMLSelectElement
+    expect(breakpointSelect.value).toBe('Mobile')
+
+    const input = screen.getByDisplayValue('serif') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'Inter, sans-serif' } })
+
+    const updatedCls = useEditorStore.getState().site!.classes[cls.id]
+    expect(updatedCls.styles.fontFamily).toBe('serif')
+    expect(updatedCls.breakpointStyles.mobile.fontFamily).toBe('Inter, sans-serif')
+  })
 })
 
 // ---------------------------------------------------------------------------

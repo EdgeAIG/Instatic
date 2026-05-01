@@ -35,6 +35,17 @@ describe('development workflow', () => {
     expect(viteConfig).toContain('changeOrigin: true')
   })
 
+  it('Vite forwards public page routes to the CMS server instead of the admin SPA', () => {
+    const viteConfig = readSiteFile('vite.config.ts')
+
+    expect(viteConfig).toContain('function publicSiteDevProxyPlugin')
+    expect(viteConfig).toContain('publicSiteDevProxyPlugin()')
+    expect(viteConfig).toContain("pathname === '/admin'")
+    expect(viteConfig).toContain("pathname.startsWith('/admin/')")
+    expect(viteConfig).toContain("pathname === '/'")
+    expect(viteConfig).toContain('proxyPublicSiteRequest')
+  })
+
   it('Docker Postgres uses a non-default host port for local dev', () => {
     const compose = readSiteFile('docker-compose.yml')
 

@@ -30,4 +30,12 @@ export const router = createBrowserRouter([
     path: '/admin/content',
     element: withSuspense(createElement(AdminEntry, { section: 'content' })),
   },
+  {
+    path: '/admin/plugins',
+    element: withSuspense(createElement(AdminEntry, { section: 'plugins' })),
+  },
+  {
+    path: '/admin/plugins/:pluginId/:pageId',
+    element: withSuspense(createElement(AdminEntry, { section: 'pluginPage' })),
+  },
 ])

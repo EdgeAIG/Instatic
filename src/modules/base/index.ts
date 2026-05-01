@@ -15,6 +15,7 @@ import './container'
 // Typography modules
 import './text'
 import './list'
+import './content'
 
 // Media modules
 import './image'

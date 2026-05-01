@@ -20,7 +20,7 @@ export const createSelectionSlice: StateCreator<EditorStore, [], [], SelectionSl
 
   selectNode: (id) => {
     const current = get()
-    const shouldCollapseProperties = !id
+    const shouldCollapseProperties = !id && !current.selectedSelectorClassId
     const selectedChanged = !Object.is(current.selectedNodeId, id)
     const panelChanged = !Object.is(current.propertiesPanel.collapsed, shouldCollapseProperties)
     const nextActiveClassId = getSelectionActiveClassId(current, id)
@@ -30,6 +30,7 @@ export const createSelectionSlice: StateCreator<EditorStore, [], [], SelectionSl
 
     set((state) => ({
       selectedNodeId: id,
+      selectedSelectorClassId: id ? null : state.selectedSelectorClassId,
       activeClassId: nextActiveClassId,
       propertiesPanel: panelChanged
         ? { ...state.propertiesPanel, collapsed: shouldCollapseProperties }

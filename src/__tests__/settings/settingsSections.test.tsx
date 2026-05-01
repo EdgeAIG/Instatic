@@ -405,53 +405,18 @@ describe('BreakpointsSection — minimum breakpoint guard (Task #241)', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 8 — PreferencesSection — reducedMotion OS detection (Task #241 item 4)
-//
-// defaultPrefs.reducedMotion was always false regardless of OS setting.
-// Fix: initialise from window.matchMedia with ?. guard for environments
-// where matchMedia is unavailable (SSR, happy-dom).
+// 8 — PreferencesSection — retired preferences
 // ---------------------------------------------------------------------------
 
-describe('PreferencesSection — reducedMotion OS detection (Task #241)', () => {
-  const prefsSrc = readFileSync(
-    new URL('../../editor/components/Settings/sections/PreferencesSection.tsx', import.meta.url),
-    'utf-8',
-  )
-
-  it('source uses window.matchMedia to detect OS prefers-reduced-motion', () => {
-    // The default must query the OS setting rather than hard-coding false.
-    expect(prefsSrc).toContain('matchMedia')
-    expect(prefsSrc).toContain('prefers-reduced-motion')
-  })
-
-  it('source uses optional chaining (?.) for matchMedia (safe in test env / SSR)', () => {
-    // happy-dom does not implement matchMedia — optional chaining prevents a crash.
-    expect(prefsSrc).toMatch(/matchMedia\?\./)
-  })
-
-  it('source provides a ?? false fallback when matchMedia is unavailable', () => {
-    expect(prefsSrc).toContain('?? false')
-  })
-
-  it('Reduce Motion toggle renders and is reachable in the section', () => {
-    // Even if matchMedia is unavailable (test env returns undefined → defaults to false),
-    // the section must still render the toggle.
-    useEditorStore.setState({} as Parameters<typeof useEditorStore.setState>[0])
+describe('PreferencesSection — retired preferences', () => {
+  it('renders only active preference switches', () => {
     render(<PreferencesSection />)
-    // The section always renders all 4 toggles regardless of pref defaults.
-    const switches = screen.getAllByRole('switch')
-    expect(switches.length).toBe(4)
-    // "Reduce motion" toggle is present
-    const reduceToggle = screen.getByRole('switch', { name: /reduce motion/i })
-    expect(reduceToggle).toBeDefined()
-  })
 
-  it('Reduce Motion toggle defaults to false in test env (matchMedia unavailable → fallback)', () => {
-    // happy-dom: window.matchMedia is undefined → optional chain short-circuits → ?? false
-    render(<PreferencesSection />)
-    const reduceToggle = screen.getByRole('switch', { name: /reduce motion/i })
-    // In test env matchMedia is not available, so reducedMotion defaults to false
-    expect(reduceToggle.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getAllByRole('switch')).toHaveLength(2)
+    expect(screen.getByRole('switch', { name: /auto-save/i })).toBeDefined()
+    expect(screen.getByRole('switch', { name: /preview classes on hover/i })).toBeDefined()
+    expect(screen.queryByRole('switch', { name: /snap to grid/i })).toBeNull()
+    expect(screen.queryByRole('switch', { name: /reduce motion/i })).toBeNull()
   })
 })
 

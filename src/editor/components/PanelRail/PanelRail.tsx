@@ -7,6 +7,7 @@ import { AiSettingsSolidIcon } from '@ui/icons/icons/ai-settings-solid'
 import { FilesStack2Icon } from '@ui/icons/icons/files-stack-2'
 import { ImagesIcon } from '@ui/icons/icons/images'
 import { BoxStackIcon } from '@ui/icons/icons/box-stack'
+import { PaintBucketIcon } from '@ui/icons/icons/paint-bucket'
 import { Button } from '@ui/components/Button'
 import styles from './PanelRail.module.css'
 
@@ -63,6 +64,13 @@ const PRIMARY_RAIL_ITEMS: PrimaryRailItem[] = [
     shortcutLabel: 'Ctrl+Shift+E',
   },
   {
+    id: 'selectors',
+    label: 'Selectors',
+    icon: PaintBucketIcon,
+    iconName: 'paint-bucket',
+    accent: 'peach',
+  },
+  {
     id: 'media',
     label: 'Media',
     icon: ImagesIcon,
@@ -85,6 +93,7 @@ interface PanelRailProps {
 export function PanelRail({ workspace = 'site' }: PanelRailProps) {
   const domOpen = useEditorStore((s) => !s.domTreePanel.collapsed)
   const siteOpen = useEditorStore((s) => s.siteExplorerPanelOpen)
+  const selectorsOpen = useEditorStore((s) => s.selectorsPanelOpen)
   const mediaOpen = useEditorStore((s) => s.mediaExplorerPanelOpen)
   const dependenciesOpen = useEditorStore((s) => s.dependenciesPanelOpen)
   const agentOpen = useEditorStore((s) => s.isAgentOpen)
@@ -127,6 +136,7 @@ export function PanelRail({ workspace = 'site' }: PanelRailProps) {
     layers: domOpen,
     agent: agentOpen,
     site: siteOpen,
+    selectors: selectorsOpen,
     media: mediaOpen,
     dependencies: dependenciesOpen,
   } satisfies Record<LeftSidebarPanelId, boolean>

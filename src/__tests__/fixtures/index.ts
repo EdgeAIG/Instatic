@@ -146,6 +146,9 @@ export function makeNode(overrides: Partial<PageNode> & { id?: string } = {}): P
     // test the CSS class pipeline (e.g. makeNode({ classIds: ['cls-1'] })) are
     // not silently dropped (same bug class as publisher/helpers.ts Task #427).
     classIds: overrides.classIds,
+    dynamicBindings: overrides.dynamicBindings,
+    propBindings: overrides.propBindings,
+    childNodes: overrides.childNodes,
   }
 }
 
@@ -165,6 +168,7 @@ export function makePage(overrides: Partial<Page> = {}): Page {
     title: overrides.title ?? 'Home',
     rootNodeId: rootId,
     nodes: overrides.nodes ?? defaultNodes,
+    template: overrides.template,
   }
 }
 

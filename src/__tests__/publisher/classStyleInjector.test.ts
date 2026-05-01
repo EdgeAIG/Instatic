@@ -5,7 +5,7 @@
  * - camelCase → kebab-case conversion (toKebab)
  * - Allowlist enforcement (unknown props are dropped)
  * - Value sanitisation: javascript:, expression(), behavior:, data:text all blocked
- * - Base class CSS generation (.mc-{id})
+ * - Base class CSS generation using the user-facing class name
  * - @media breakpoint override blocks
  * - Security: empty/no-styles classes emit nothing
  *
@@ -20,10 +20,15 @@ import type { CSSClass } from '../../core/page-tree/types'
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeClass(id: string, styles: CSSClass['styles'], breakpointStyles: CSSClass['breakpointStyles'] = {}): CSSClass {
+function makeClass(
+  id: string,
+  styles: CSSClass['styles'],
+  breakpointStyles: CSSClass['breakpointStyles'] = {},
+  name = id,
+): CSSClass {
   return {
     id,
-    name: `class-${id}`,
+    name,
     styles,
     breakpointStyles,
     createdAt: 0,
@@ -120,25 +125,33 @@ describe('bagToCSS', () => {
 // ---------------------------------------------------------------------------
 
 describe('generateClassCSS', () => {
-  it('generates a .mc-{id} rule from base styles', () => {
+  it('generates a rule from the user-facing class name', () => {
     const classes = { abc: makeClass('abc', { color: '#fff', fontSize: '16px' }) }
     const css = generateClassCSS(classes, BREAKPOINTS)
-    expect(css).toContain('.mc-abc {')
+    expect(css).toContain('.abc {')
     expect(css).toContain('color: #fff;')
     expect(css).toContain('font-size: 16px;')
     expect(css).toContain('}')
   })
 
-  it('uses the class id in the selector (not the name)', () => {
-    const classes = { myClass: makeClass('myClass', { display: 'flex' }) }
+  it('uses the class name in the selector, not the generated id', () => {
+    const classes = { generatedId: makeClass('generatedId', { display: 'flex' }, {}, 'hero_title') }
     const css = generateClassCSS(classes, BREAKPOINTS)
-    expect(css).toContain('.mc-myClass {')
+    expect(css).toContain('.hero_title {')
+    expect(css).not.toContain('.generatedId')
+    expect(css).not.toContain('.mc-generatedId')
+  })
+
+  it('escapes class names in CSS selectors without replacing the stored name', () => {
+    const classes = { generatedId: makeClass('generatedId', { color: 'red' }, {}, 'hero:featured') }
+    const css = generateClassCSS(classes, BREAKPOINTS)
+    expect(css).toContain('.hero\\:featured {')
   })
 
   it('skips base rule when the class has no styles', () => {
     const classes = { empty: makeClass('empty', {}) }
     const css = generateClassCSS(classes, BREAKPOINTS)
-    expect(css).not.toContain('.mc-empty')
+    expect(css).not.toContain('.empty')
   })
 
   it('emits @media block for breakpoint override', () => {
@@ -149,7 +162,7 @@ describe('generateClassCSS', () => {
     }
     const css = generateClassCSS(classes, BREAKPOINTS)
     expect(css).toContain('@media (max-width: 375px)')
-    expect(css).toContain('.mc-btn {')
+    expect(css).toContain('.btn {')
     expect(css).toContain('font-size: 12px;')
   })
 
@@ -191,8 +204,8 @@ describe('generateClassCSS', () => {
       b: makeClass('b', { color: 'blue' }),
     }
     const css = generateClassCSS(classes, BREAKPOINTS)
-    expect(css).toContain('.mc-a {')
-    expect(css).toContain('.mc-b {')
+    expect(css).toContain('.a {')
+    expect(css).toContain('.b {')
     expect(css).toContain('color: red;')
     expect(css).toContain('color: blue;')
   })
@@ -214,7 +227,7 @@ describe('generateClassCSS', () => {
     const css = generateClassCSS(classes, BREAKPOINTS)
     expect(css).not.toContain('javascript:')
     // The rule should be omitted entirely (no safe decls → no block emitted)
-    expect(css).not.toContain('.mc-evil')
+    expect(css).not.toContain('.evil')
   })
 })
 
@@ -287,8 +300,8 @@ describe('collectClassCSS', () => {
       { child1: ['used'] },
     )
     const css = collectClassCSS(site)
-    expect(css).toContain('.mc-used {')
-    expect(css).not.toContain('.mc-unused')
+    expect(css).toContain('.used {')
+    expect(css).not.toContain('.unused')
   })
 
   it('emits CSS for all used classes across all nodes', () => {
@@ -300,8 +313,8 @@ describe('collectClassCSS', () => {
       { child1: ['cls1'], child2: ['cls2'] },
     )
     const css = collectClassCSS(site)
-    expect(css).toContain('.mc-cls1')
-    expect(css).toContain('.mc-cls2')
+    expect(css).toContain('.cls1')
+    expect(css).toContain('.cls2')
   })
 
   it('sanitizes </style> injection in class CSS (Constraint #228)', () => {

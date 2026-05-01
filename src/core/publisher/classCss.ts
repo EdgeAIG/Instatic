@@ -1,4 +1,5 @@
 import type { CSSClass, CSSPropertyBag } from '../page-tree/types'
+import { cssClassSelector } from '../page-tree/classNames'
 import { sanitiseCssValue } from './utils'
 
 /**
@@ -62,7 +63,7 @@ export function generateClassCSS(
   for (const cls of Object.values(classes)) {
     const baseDecls = bagToCSS(cls.styles)
     if (baseDecls) {
-      blocks.push(`.mc-${cls.id} {\n${baseDecls}\n}`)
+      blocks.push(`${cssClassSelector(cls)} {\n${baseDecls}\n}`)
     }
 
     for (const [bpId, bpStyles] of Object.entries(cls.breakpointStyles)) {
@@ -70,7 +71,7 @@ export function generateClassCSS(
       if (!decls) continue
       const bp = breakpoints.find((b) => b.id === bpId)
       if (!bp) continue
-      blocks.push(`@media (max-width: ${bp.width}px) {\n  .mc-${cls.id} {\n${decls}\n  }\n}`)
+      blocks.push(`@media (max-width: ${bp.width}px) {\n  ${cssClassSelector(cls)} {\n${decls}\n  }\n}`)
     }
   }
 

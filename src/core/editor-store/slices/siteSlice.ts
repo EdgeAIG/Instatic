@@ -7,8 +7,11 @@ import { registry } from '../../module-engine/registry'
 import {
   type SiteDocument,
   type Page,
+  type PageNode,
   type Breakpoint,
   type SiteSettings,
+  type PageTemplateConfig,
+  type DynamicPropBinding,
   DEFAULT_BREAKPOINTS,
   DEFAULT_SITE_SETTINGS,
   createNode,
@@ -50,6 +53,8 @@ export interface SiteSlice {
   deletePage: (pageId: string) => void
   renamePage: (pageId: string, title: string, slug?: string) => void
   reorderPages: (fromIndex: number, toIndex: number) => void
+  convertPageToTemplate: (pageId: string, config: PageTemplateConfig) => void
+  convertTemplateToPage: (pageId: string) => void
 
   // Node mutations (operate on the active page)
   insertNode: (moduleId: string, defaults: Record<string, unknown>, parentId: string, index?: number) => string
@@ -63,6 +68,8 @@ export interface SiteSlice {
   moveNode: (nodeId: string, newParentId: string, newIndex: number) => void
   duplicateNode: (nodeId: string) => string
   wrapNode: (nodeId: string, containerModuleId: string, defaults?: Record<string, unknown>) => string
+  setNodeDynamicBinding: (nodeId: string, propKey: string, binding: DynamicPropBinding) => void
+  clearNodeDynamicBinding: (nodeId: string, propKey: string) => void
 
   // Breakpoint mutations
   addBreakpoint: (bp: Omit<Breakpoint, 'id'>) => Breakpoint
@@ -155,6 +162,13 @@ function legacyHeadingTag(level: unknown): string {
   if (typeof level === 'number' && level >= 1 && level <= 6) return `h${level}`
   const tag = String(level || 'h2').toLowerCase()
   return /^h[1-6]$/.test(tag) ? tag : 'h2'
+}
+
+function clearDynamicBindingsFromNode(node: PageNode): void {
+  delete node.dynamicBindings
+  for (const child of node.childNodes ?? []) {
+    clearDynamicBindingsFromNode(child)
+  }
 }
 
 export const createSiteSlice: StateCreator<EditorStore, [], [], SiteSlice> = (set, get) => {
@@ -338,6 +352,25 @@ export const createSiteSlice: StateCreator<EditorStore, [], [], SiteSlice> = (se
       mutateSite((p) => reorderPages(p, fromIndex, toIndex))
     },
 
+    convertPageToTemplate: (pageId, config) => {
+      mutateSite((site) => {
+        const page = site.pages.find((candidate) => candidate.id === pageId)
+        if (!page) return
+        page.template = config
+      })
+    },
+
+    convertTemplateToPage: (pageId) => {
+      mutateSite((site) => {
+        const page = site.pages.find((candidate) => candidate.id === pageId)
+        if (!page) return
+        delete page.template
+        for (const node of Object.values(page.nodes)) {
+          clearDynamicBindingsFromNode(node)
+        }
+      })
+    },
+
     // ─── Node mutations ───────────────────────────────────────────────────────
     insertNode: (moduleId, defaults, parentId, index) => {
       const mod = registry.get(moduleId)
@@ -395,6 +428,28 @@ export const createSiteSlice: StateCreator<EditorStore, [], [], SiteSlice> = (se
       let wrapperId = ''
       mutatePage((page) => { wrapperId = wrapNode(page, nodeId, containerModuleId, resolvedDefaults) })
       return wrapperId
+    },
+
+    setNodeDynamicBinding: (nodeId, propKey, binding) => {
+      mutatePage((page) => {
+        const node = page.nodes[nodeId]
+        if (!node) return
+        node.dynamicBindings = {
+          ...(node.dynamicBindings ?? {}),
+          [propKey]: binding,
+        }
+      })
+    },
+
+    clearNodeDynamicBinding: (nodeId, propKey) => {
+      mutatePage((page) => {
+        const node = page.nodes[nodeId]
+        if (!node?.dynamicBindings) return
+        delete node.dynamicBindings[propKey]
+        if (Object.keys(node.dynamicBindings).length === 0) {
+          delete node.dynamicBindings
+        }
+      })
     },
 
     // ─── Breakpoint mutations ─────────────────────────────────────────────────

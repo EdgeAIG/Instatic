@@ -101,7 +101,7 @@ export function safeUrl(value: unknown): string {
  * - `javascript:` — invalid in CSS but historically exploited in some parsers
  * - `behavior:` / `-moz-binding:` — legacy IE/Gecko CSS code execution
  * - `data:text/` — data URI in CSS `url()` loads arbitrary HTML in some browsers
- * - `{` or `}` — closes/opens the surrounding `.mc-{id} { … }` selector block,
+ * - `{` or `}` — closes/opens the surrounding class selector block,
  *               enabling injection of arbitrary CSS rules (CWE-74, Medium)
  *
  * Numbers are always safe — they are stringified and returned directly.

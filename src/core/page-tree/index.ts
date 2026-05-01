@@ -1,8 +1,15 @@
 export type {
   Page,
+  PageNode,
   SiteDocument,
   Breakpoint,
   SiteSettings,
+  PageTemplateConfig,
+  TemplateCondition,
+  TemplateContext,
+  DynamicPropBinding,
+  DynamicBindingFormat,
+  DynamicBindingSource,
 } from './types'
 
 export {

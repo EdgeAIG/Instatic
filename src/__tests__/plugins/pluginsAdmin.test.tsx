@@ -1,0 +1,269 @@
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import React from 'react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { PluginsAdmin } from '../../plugins/PluginsAdmin'
+import { useEditorStore } from '../../core/editor-store/store'
+import { makeSite } from '../fixtures'
+
+const originalFetch = globalThis.fetch
+
+const mapManifest = {
+  id: 'local.map',
+  name: 'Map Studio',
+  version: '1.0.0',
+  apiVersion: 1,
+  adminPages: [{
+    id: 'overview',
+    title: 'Map Studio',
+    navLabel: 'Map',
+    icon: 'map',
+    route: '/admin/plugins/local.map/overview',
+    content: {
+      kind: 'map',
+      heading: 'Store Map',
+      body: 'Track important locations.',
+      centerLabel: 'Prague',
+      pins: [{ label: 'HQ', detail: 'Main office', x: 42, y: 55 }],
+    },
+  }],
+}
+
+function pluginRow(enabled = true, overrides: Record<string, unknown> = {}) {
+  return {
+    id: mapManifest.id,
+    name: mapManifest.name,
+    version: mapManifest.version,
+    enabled,
+    lifecycleStatus: enabled ? 'active' : 'disabled',
+    lastError: null,
+    grantedPermissions: [],
+    manifest: mapManifest,
+    installedAt: '2026-05-01T10:00:00.000Z',
+    updatedAt: '2026-05-01T10:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function setupEditorState() {
+  const site = makeSite({ name: 'Plugin Shell Site' })
+  useEditorStore.setState({
+    site,
+    activePageId: site.pages[0].id,
+    selectedNodeId: null,
+    hoveredNodeId: null,
+    activeBreakpointId: 'desktop',
+    domTreePanel: { collapsed: false, x: 0, y: 0, width: 280 },
+    propertiesPanel: { collapsed: false, x: 0, y: 0, width: 360 },
+    propertiesPanelMode: 'docked',
+    leftSidebarWidth: 320,
+    focusedPanel: 'canvas',
+    siteExplorerPanelOpen: false,
+    mediaExplorerPanelOpen: false,
+    codeEditorPanelOpen: false,
+    activeEditorFileId: null,
+    activeMediaAssetPreview: null,
+    dependenciesPanelOpen: false,
+    isAgentOpen: false,
+    isAgentStreaming: false,
+    agentMessages: [],
+    agentError: null,
+    _historyPast: [],
+    _historyFuture: [],
+    canUndo: false,
+    canRedo: false,
+    hasUnsavedChanges: false,
+  } as Parameters<typeof useEditorStore.setState>[0])
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+beforeEach(() => {
+  localStorage.clear()
+  setupEditorState()
+})
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+  cleanup()
+})
+
+describe('PluginsAdmin', () => {
+  it('lists active plugins and can disable or remove them', async () => {
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input, init })
+      const url = String(input)
+      if (url === '/api/cms/plugins' && init?.method === 'GET') {
+        return json({
+          plugins: [pluginRow(true)],
+          adminPages: [{ pluginId: 'local.map', pluginName: 'Map Studio', ...mapManifest.adminPages[0] }],
+        })
+      }
+      if (url === '/api/cms/plugins/local.map' && init?.method === 'PATCH') {
+        return json({ plugin: pluginRow(false), adminPages: [] })
+      }
+      if (url === '/api/cms/plugins/local.map' && init?.method === 'DELETE') {
+        return json({ ok: true })
+      }
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <MemoryRouter>
+        <PluginsAdmin />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Map Studio')).toBeDefined()
+    expect(screen.getAllByRole('link', { name: 'Map' })[0].getAttribute('href')).toBe('/admin/plugins/local.map/overview')
+
+    fireEvent.click(screen.getByRole('button', { name: /disable map studio/i }))
+    await waitFor(() => {
+      expect(calls.some((call) =>
+        String(call.input) === '/api/cms/plugins/local.map' &&
+        call.init?.method === 'PATCH' &&
+        call.init.body === JSON.stringify({ enabled: false })
+      )).toBe(true)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /remove map studio/i }))
+    await waitFor(() => {
+      expect(calls.some((call) =>
+        String(call.input) === '/api/cms/plugins/local.map' &&
+        call.init?.method === 'DELETE'
+      )).toBe(true)
+    })
+  })
+
+  it('uploads a JSON plugin manifest', async () => {
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input, init })
+      const url = String(input)
+      if (url === '/api/cms/plugins' && init?.method === 'GET') {
+        return json({ plugins: [], adminPages: [] })
+      }
+      if (url === '/api/cms/plugins' && init?.method === 'POST') {
+        return json({ plugin: pluginRow(true), adminPages: [] }, 201)
+      }
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <MemoryRouter>
+        <PluginsAdmin />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('No plugins installed yet.')).toBeDefined()
+
+    const input = screen.getByLabelText('Plugin file')
+    fireEvent.change(input, {
+      target: {
+        files: [new File([JSON.stringify(mapManifest)], 'map-studio.plugin.json', { type: 'application/json' })],
+      },
+    })
+
+    await waitFor(() => {
+      const installCall = calls.find((call) =>
+        String(call.input) === '/api/cms/plugins' &&
+        call.init?.method === 'POST'
+      )
+      expect(installCall).toBeDefined()
+      expect(JSON.parse(String(installCall?.init?.body))).toMatchObject({
+        id: 'local.map',
+        permissions: [],
+        resources: [],
+      })
+    })
+  })
+
+  it('asks for permission approval before installing privileged plugins', async () => {
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
+    const privilegedManifest = {
+      ...mapManifest,
+      id: 'acme.workflow',
+      name: 'Workflow Tools',
+      permissions: ['editor.toolbar', 'editor.commands', 'editor.store.write', 'cms.storage'],
+      entrypoints: { editor: 'editor/index.js' },
+    }
+
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input, init })
+      const url = String(input)
+      if (url === '/api/cms/plugins' && init?.method === 'GET') {
+        return json({ plugins: [], adminPages: [] })
+      }
+      if (url === '/api/cms/plugins' && init?.method === 'POST') {
+        return json({ plugin: pluginRow(true), adminPages: [] }, 201)
+      }
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <MemoryRouter>
+        <PluginsAdmin />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('No plugins installed yet.')).toBeDefined()
+
+    fireEvent.change(screen.getByLabelText('Plugin file'), {
+      target: {
+        files: [new File([JSON.stringify(privilegedManifest)], 'workflow.plugin.json', { type: 'application/json' })],
+      },
+    })
+
+    expect(await screen.findByText('Approve Plugin Permissions')).toBeDefined()
+    expect(screen.getByText('Add controls to the editor toolbar')).toBeDefined()
+    expect(screen.getByText('Register editor commands')).toBeDefined()
+    expect(screen.getByText('Allows the plugin to mutate editor store state through a host transaction.')).toBeDefined()
+    expect(calls.some((call) => String(call.input) === '/api/cms/plugins' && call.init?.method === 'POST')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: /approve and install/i }))
+
+    await waitFor(() => {
+      const installCall = calls.find((call) =>
+        String(call.input) === '/api/cms/plugins' &&
+        call.init?.method === 'POST'
+      )
+      expect(installCall).toBeDefined()
+      expect(JSON.parse(String(installCall?.init?.body))).toMatchObject({
+        manifest: { id: 'acme.workflow' },
+        grantedPermissions: privilegedManifest.permissions,
+      })
+    })
+  })
+
+  it('shows lifecycle error diagnostics for failed plugin hooks', async () => {
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/api/cms/plugins' && init?.method === 'GET') {
+        return json({
+          plugins: [pluginRow(true, {
+            lifecycleStatus: 'error',
+            lastError: 'install exploded',
+          })],
+          adminPages: [],
+        })
+      }
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <MemoryRouter>
+        <PluginsAdmin />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Map Studio')).toBeDefined()
+    expect(screen.getByText('Error')).toBeDefined()
+    expect(screen.getByText('install exploded')).toBeDefined()
+  })
+})

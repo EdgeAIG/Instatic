@@ -1,5 +1,5 @@
 /**
- * ClassStyleInjector — injects/updates `.mc-{classId}` CSS into the document
+ * ClassStyleInjector — injects/updates user class CSS into the document
  * whenever the site's class registry changes.
  *
  * This is a pure side-effect component (renders null). It subscribes to

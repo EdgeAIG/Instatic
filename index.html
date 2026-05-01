@@ -5,9 +5,78 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Page Builder</title>
+    <style data-initial-loader>
+      html,
+      body,
+      #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        overflow: hidden;
+        background: #000;
+      }
+
+      .pb-initial-loading {
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        overflow: hidden;
+        background: #000;
+        color: #ededed;
+      }
+
+      .pb-initial-loader {
+        position: relative;
+        display: grid;
+        width: 128px;
+        height: 128px;
+        place-items: center;
+      }
+
+      .pb-initial-loader-track {
+        position: absolute;
+        width: 86px;
+        height: 86px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 50%;
+      }
+
+      .pb-initial-loader-spinner {
+        display: block;
+        width: 52px;
+        height: 52px;
+        border: 2px solid rgba(255, 255, 255, 0.16);
+        border-top-color: #ededed;
+        border-right-color: rgba(255, 255, 255, 0.42);
+        border-radius: 50%;
+        animation: pb-initial-loader-spin 780ms linear infinite;
+      }
+
+      @keyframes pb-initial-loader-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .pb-initial-loader-spinner {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="pb-initial-loading" role="status" aria-busy="true" aria-label="Loading Page Builder">
+        <div class="pb-initial-loader" aria-hidden="true">
+          <span class="pb-initial-loader-spinner" data-initial-loader-spinner="true"></span>
+          <span class="pb-initial-loader-track"></span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/app/main.tsx"></script>
   </body>
 </html>

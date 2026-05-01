@@ -10,12 +10,15 @@ import {
   setupCms,
 } from '@core/persistence'
 import { ContentAdmin } from '../content/ContentAdmin'
+import { PluginPageAdmin } from '../plugins/PluginPageAdmin'
+import { PluginsAdmin } from '../plugins/PluginsAdmin'
 import { AppLoadingScreen } from './AppLoadingScreen'
 import EditorLayout from './EditorLayout'
+import type { AdminWorkspace } from './EditorLayout'
 import styles from './AdminEntry.module.css'
 
 type AdminPhase = 'loading' | 'setup' | 'login' | 'editor'
-type AdminSection = 'site' | 'content'
+type AdminSection = AdminWorkspace
 
 interface AdminEntryProps {
   section?: AdminSection
@@ -95,7 +98,10 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
 
   if (phase === 'loading') return <AppLoadingScreen />
   if (phase === 'editor') {
-    return section === 'content' ? <ContentAdmin /> : <EditorLayout />
+    if (section === 'content') return <ContentAdmin />
+    if (section === 'plugins') return <PluginsAdmin />
+    if (section === 'pluginPage') return <PluginPageAdmin />
+    return <EditorLayout />
   }
 
   const isSetup = phase === 'setup'

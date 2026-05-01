@@ -49,3 +49,7 @@ export function createUniquePageSlug(title: string, pages: Page[]): string {
   }
   return candidate
 }
+
+export function pagePublicPath(slug: string): string {
+  return slug === 'index' ? '/' : `/${slug}`
+}

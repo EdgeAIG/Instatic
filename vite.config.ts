@@ -3,6 +3,94 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+const CMS_DEV_SERVER_ORIGIN = 'http://localhost:3001'
+const FILE_EXTENSION_RE = /\.[a-zA-Z0-9]+$/
+
+function isEditorAppPath(pathname: string): boolean {
+  return (
+    pathname === '/admin' ||
+    pathname.startsWith('/admin/') ||
+    pathname === '/index.html' ||
+    pathname.startsWith('/@') ||
+    pathname.startsWith('/__vite') ||
+    pathname.startsWith('/src/') ||
+    pathname.startsWith('/node_modules/') ||
+    pathname.startsWith('/assets/') ||
+    pathname.startsWith('/api/') ||
+    pathname.startsWith('/uploads/')
+  )
+}
+
+function shouldProxyPublicSiteRequest(req: IncomingMessage): boolean {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false
+  if (!req.url) return false
+
+  const { pathname } = new URL(req.url, CMS_DEV_SERVER_ORIGIN)
+  if (isEditorAppPath(pathname)) return false
+
+  return pathname === '/' || !FILE_EXTENSION_RE.test(pathname)
+}
+
+async function proxyPublicSiteRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const target = new URL(req.url ?? '/', CMS_DEV_SERVER_ORIGIN)
+  const headers = new Headers()
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (!value) continue
+    if (['connection', 'host', 'content-length'].includes(key.toLowerCase())) continue
+    headers.set(key, Array.isArray(value) ? value.join(', ') : value)
+  }
+
+  let upstream: Response
+  try {
+    upstream = await fetch(target, {
+      method: req.method,
+      headers,
+      redirect: 'manual',
+    })
+  } catch {
+    res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' })
+    res.end('CMS development server is not reachable')
+    return
+  }
+
+  const responseHeaders: Record<string, string> = {}
+  upstream.headers.forEach((value, key) => {
+    responseHeaders[key] = value
+  })
+  res.writeHead(upstream.status, responseHeaders)
+
+  if (req.method === 'HEAD' || !upstream.body) {
+    res.end()
+    return
+  }
+
+  const body = Buffer.from(await upstream.arrayBuffer())
+  res.end(body)
+}
+
+function publicSiteDevProxyPlugin(): Plugin {
+  return {
+    name: 'page-builder-public-site-dev-proxy',
+    apply: 'serve',
+
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!shouldProxyPublicSiteRequest(req)) {
+          next()
+          return
+        }
+
+        void proxyPublicSiteRequest(req, res).catch((err) => {
+          next(err)
+        })
+      })
+    },
+  }
+}
+
 /**
  * Embeds the Claude Agent SDK handler directly in the Vite dev server so
  * `bun dev` is all that's needed — no separate `bun run dev:agent` process.
@@ -137,6 +225,7 @@ function agentDevPlugin(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    publicSiteDevProxyPlugin(),
     react(),
     agentDevPlugin(),
   ],

@@ -183,6 +183,92 @@
     min-width: 0;
 }
 
+/* ── DynamicBindingControl ───────────────────────────────────────────────── */
+.bindingWrapper {
+    position: relative;
+    display: block;
+}
+
+.bindingMenu {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 4px);
+    right: 0;
+    width: min(220px, 100%);
+    overflow: hidden;
+    border: 1px solid var(--editor-border);
+    border-radius: 8px;
+    background: var(--editor-surface-2);
+    box-shadow: 0 12px 28px rgb(0 0 0 / 28%);
+    padding: 4px;
+}
+
+.bindingMenuItem {
+    display: block;
+    width: 100%;
+    min-height: 28px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--editor-text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    letter-spacing: 0;
+    line-height: 1.2;
+    padding: 0 8px;
+    text-align: left;
+}
+
+.bindingMenuItem:hover,
+.bindingMenuItem:focus-visible {
+    background: var(--editor-surface);
+    outline: none;
+}
+
+.boundControlWrapper {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 4px;
+    width: 100%;
+    min-height: 28px;
+}
+
+.boundValueRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 26px;
+    gap: 4px;
+    min-width: 0;
+}
+
+.boundValueButton {
+    min-width: 0;
+    min-height: 30px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--editor-accent) 48%, var(--editor-border));
+    border-radius: var(--editor-radius);
+    background:
+        repeating-linear-gradient(
+            135deg,
+            rgb(255 255 255 / 0.08) 0,
+            rgb(255 255 255 / 0.08) 9px,
+            transparent 9px,
+            transparent 18px
+        ),
+        color-mix(in srgb, var(--editor-accent) 22%, var(--editor-surface));
+    color: var(--editor-text);
+    cursor: default;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.2;
+    padding: 0 9px;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .videoPreview {
     display: flex;
     align-items: center;

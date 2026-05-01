@@ -19,6 +19,7 @@
     min-width: 0;
     min-height: 0;
     overflow: hidden;
+    view-transition-name: admin-left-sidebar-panel;
     transition:
         flex-basis 180ms ease,
         width 180ms ease;

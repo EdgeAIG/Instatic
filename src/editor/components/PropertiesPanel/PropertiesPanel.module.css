@@ -124,3 +124,41 @@
     color: var(--editor-text);
     font-weight: 650;
 }
+
+.selectorInspector {
+    display: grid;
+    gap: 10px;
+    padding: 10px 14px 14px;
+}
+
+.selectorIntro {
+    display: grid;
+    gap: 5px;
+    padding: 10px;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--editor-radius);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.selectorTitle {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--editor-text);
+    font-size: 13px;
+    font-weight: 750;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selectorCode {
+    overflow: hidden;
+    color: var(--editor-text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

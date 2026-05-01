@@ -11,6 +11,7 @@
 
 import { forwardRef } from 'react'
 import type { Page, Breakpoint } from '../../../core/page-tree/types'
+import type { TemplateRenderDataContext } from '../../../core/templates/dynamicBindings'
 import { BreakpointFrame } from './BreakpointFrame'
 import { cn } from '@ui/cn'
 import styles from './CanvasTransformLayer.module.css'
@@ -20,11 +21,12 @@ interface CanvasTransformLayerProps {
   breakpoints: Breakpoint[]
   activeBreakpointId: string
   onBreakpointActivate: (id: string) => void
+  templateContext?: TemplateRenderDataContext
 }
 
 export const CanvasTransformLayer = forwardRef<HTMLDivElement, CanvasTransformLayerProps>(
   function CanvasTransformLayer(
-    { page, breakpoints, activeBreakpointId, onBreakpointActivate },
+    { page, breakpoints, activeBreakpointId, onBreakpointActivate, templateContext },
     ref,
   ) {
     return (
@@ -42,6 +44,7 @@ export const CanvasTransformLayer = forwardRef<HTMLDivElement, CanvasTransformLa
               breakpoint={bp}
               isActive={activeBreakpointId === bp.id}
               onActivate={onBreakpointActivate}
+              templateContext={templateContext}
             />
           ))
         ) : (

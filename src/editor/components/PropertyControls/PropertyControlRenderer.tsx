@@ -7,6 +7,7 @@
  */
 import { useState } from 'react'
 import type { PropertyControl, PropertySchema } from '../../../core/module-engine/types'
+import type { DynamicPropBinding } from '../../../core/page-tree'
 import { sanitizeRichtext } from '../../../core/sanitize'
 import { ChevronRightIcon } from '@ui/icons/icons/chevron-right'
 import { TextControl } from './TextControl'
@@ -18,8 +19,15 @@ import { ToggleControl } from './ToggleControl'
 import { ImageControl } from './ImageControl'
 import { MediaLibraryControl } from './MediaLibraryControl'
 import { UrlControl } from './UrlControl'
+import { DynamicBindingControl } from './DynamicBindingControl'
 import { cn } from '@ui/cn'
 import styles from './controls.module.css'
+
+export interface DynamicBindingRenderContext {
+  binding?: DynamicPropBinding
+  onSet: (binding: DynamicPropBinding) => void
+  onClear: () => void
+}
 
 interface RenderControlOptions {
   propKey: string
@@ -28,6 +36,7 @@ interface RenderControlOptions {
   onChange: (key: string, val: unknown) => void
   isOverride?: boolean
   disabled?: boolean
+  dynamicBinding?: DynamicBindingRenderContext
 }
 
 /**
@@ -41,6 +50,7 @@ export function PropertyControlRenderer({
   onChange,
   isOverride = false,
   disabled = false,
+  dynamicBinding,
 }: RenderControlOptions) {
   const shared = {
     propKey,
@@ -167,13 +177,26 @@ export function PropertyControlRenderer({
     )
   }
 
+  const content = dynamicBinding && !disabled ? (
+    <DynamicBindingControl
+      propKey={propKey}
+      label={control.label ?? propKey}
+      control={control}
+      binding={dynamicBinding.binding}
+      onSet={dynamicBinding.onSet}
+      onClear={dynamicBinding.onClear}
+    >
+      {inner}
+    </DynamicBindingControl>
+  ) : inner
+
   return (
     <div
       data-testid={`property-control-${propKey}`}
       data-disabled={disabled ? 'true' : undefined}
       data-override={isOverride ? 'true' : undefined}
     >
-      {inner}
+      {content}
     </div>
   )
 }

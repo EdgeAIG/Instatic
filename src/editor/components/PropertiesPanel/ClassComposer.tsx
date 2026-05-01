@@ -44,7 +44,9 @@ interface ClassComposerProps {
   cls: CSSClass
   moduleDefinition?: AnyModuleDefinition | null
   moduleProps?: Record<string, unknown>
+  preferredBreakpointId?: string
   autoFocusName?: boolean
+  mode?: 'contextual' | 'global'
 }
 
 interface StyleMenuPosition {
@@ -53,20 +55,31 @@ interface StyleMenuPosition {
   width: number
 }
 
-export function ClassComposer({ classId, cls, moduleDefinition, moduleProps = {} }: ClassComposerProps) {
+export function ClassComposer({
+  classId,
+  cls,
+  moduleDefinition,
+  moduleProps = {},
+  preferredBreakpointId,
+  mode = 'contextual',
+}: ClassComposerProps) {
   const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? EMPTY_BREAKPOINTS)
   const updateClassStyles = useEditorStore((s) => s.updateClassStyles)
   const setClassBreakpointStyles = useEditorStore((s) => s.setClassBreakpointStyles)
 
-  const [activeTab, setActiveTab] = useState<'base' | string>('base')
+  const preferredStyleTab = getPreferredStyleTab(preferredBreakpointId)
+  const [activeTab, setActiveTab] = useState<string>(() => preferredStyleTab)
   const [styleQuery, setStyleQuery] = useState('')
   const styleSearchInputRef = useRef<HTMLInputElement>(null)
   const [styleMenuPosition, setStyleMenuPosition] = useState<StyleMenuPosition | null>(null)
 
-  const currentStyles: Partial<CSSPropertyBag> = activeTab !== 'base'
+  const storedStyles: Partial<CSSPropertyBag> = activeTab !== 'base'
     ? (cls.breakpointStyles[activeTab] ?? {})
     : cls.styles
-  const moduleBindings = getModuleStyleBindings(moduleDefinition)
+  const currentStyles: Partial<CSSPropertyBag> = activeTab !== 'base'
+    ? { ...cls.styles, ...storedStyles }
+    : cls.styles
+  const moduleBindings = mode === 'global' ? [] : getModuleStyleBindings(moduleDefinition)
   const assignedModuleBindings = getAssignedModuleStyleBindings(moduleBindings, currentStyles)
   const searchModuleBindings = getSearchModuleStyleBindings(styleQuery, moduleBindings, currentStyles)
   const allModuleOwnedProperties = new Set(moduleBindings.flatMap(({ binding }) => binding.properties))
@@ -140,6 +153,10 @@ export function ClassComposer({ classId, cls, moduleDefinition, moduleProps = {}
     },
     [clearStyleQuery, handleChange],
   )
+
+  useEffect(() => {
+    setActiveTab(preferredStyleTab)
+  }, [preferredStyleTab])
 
   useEffect(() => {
     if (!styleMenuPosition) return undefined
@@ -259,6 +276,7 @@ export function ClassComposer({ classId, cls, moduleDefinition, moduleProps = {}
               key={section.id}
               section={section}
               currentStyles={currentStyles}
+              storedStyles={storedStyles}
               activeTab={activeTab}
               onChange={handleChange}
               onRemove={handleRemoveProperty}
@@ -273,6 +291,7 @@ export function ClassComposer({ classId, cls, moduleDefinition, moduleProps = {}
 interface ClassStyleSectionProps {
   section: ClassStyleSectionDefinition
   currentStyles: Partial<CSSPropertyBag>
+  storedStyles: Partial<CSSPropertyBag>
   activeTab: string
   onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
   onRemove: (property: keyof CSSPropertyBag) => void
@@ -281,11 +300,12 @@ interface ClassStyleSectionProps {
 function ClassStyleSection({
   section,
   currentStyles,
+  storedStyles,
   activeTab,
   onChange,
   onRemove,
 }: ClassStyleSectionProps) {
-  const setCount = section.properties.filter((prop) => hasStyleValue(currentStyles[prop])).length
+  const setCount = section.properties.filter((prop) => hasStyleValue(storedStyles[prop])).length
 
   return (
     <Section
@@ -296,9 +316,10 @@ function ClassStyleSection({
     >
       <div className={styles.styleSectionBody}>
         {section.properties.map((prop) => {
-          const storedValue = currentStyles[prop]
+          const storedValue = storedStyles[prop]
+          const displayValue = currentStyles[prop]
           const isSet = hasStyleValue(storedValue)
-          const value = isSet ? storedValue : getCSSPropertyDefaultValue(prop)
+          const value = hasStyleValue(displayValue) ? displayValue : getCSSPropertyDefaultValue(prop)
 
           return (
             <ClassPropertyRow
@@ -497,6 +518,10 @@ function propertyMatchesQuery(prop: keyof CSSPropertyBag, query: string): boolea
 
 function hasStyleValue(value: string | number | undefined): value is string | number {
   return value !== undefined && value !== null && value !== ''
+}
+
+function getPreferredStyleTab(preferredBreakpointId: string | undefined): string {
+  return preferredBreakpointId && preferredBreakpointId !== 'desktop' ? preferredBreakpointId : 'base'
 }
 
 const EMPTY_BREAKPOINTS: Array<{ id: string; label: string; width: number; icon: string }> = []

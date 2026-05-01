@@ -1,0 +1,49 @@
+{
+  "id": "acme.template",
+  "name": "Template Plugin",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "Starter plugin showing admin, editor, backend, and lifecycle APIs.",
+  "permissions": [
+    "admin.navigation",
+    "cms.storage",
+    "cms.routes",
+    "editor.toolbar",
+    "editor.commands"
+  ],
+  "entrypoints": {
+    "server": "server/index.js",
+    "editor": "editor/index.js"
+  },
+  "resources": [
+    {
+      "id": "items",
+      "title": "Items",
+      "fields": [
+        {
+          "id": "title",
+          "label": "Title",
+          "type": "text",
+          "required": true
+        },
+        {
+          "id": "status",
+          "label": "Status",
+          "type": "text"
+        }
+      ]
+    }
+  ],
+  "adminPages": [
+    {
+      "id": "dashboard",
+      "title": "Template",
+      "navLabel": "Template",
+      "content": {
+        "kind": "app",
+        "heading": "Template Plugin",
+        "entry": "admin/dashboard.js"
+      }
+    }
+  ]
+}

@@ -6,9 +6,10 @@ import styles from './RightSidebar.module.css'
 
 interface RightSidebarProps {
   contentPanel?: ReactNode
+  suppressDefaultPanel?: boolean
 }
 
-export function RightSidebar({ contentPanel }: RightSidebarProps) {
+export function RightSidebar({ contentPanel, suppressDefaultPanel = false }: RightSidebarProps) {
   const sidebarRef = useRef<HTMLElement | null>(null)
   const propertiesPanel = useEditorStore((s) => s.propertiesPanel)
   const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
@@ -17,7 +18,7 @@ export function RightSidebar({ contentPanel }: RightSidebarProps) {
 
   const isDocked = propertiesPanelMode === 'docked'
   const sitePropertiesExpanded = useEditorStore(selectRightSidebarExpanded)
-  const isExpanded = contentPanel ? !propertiesCollapsed : sitePropertiesExpanded
+  const isExpanded = contentPanel ? !propertiesCollapsed : suppressDefaultPanel ? false : sitePropertiesExpanded
   const panelWidth = isExpanded ? propertiesPanel.width : 0
 
   const style = {
@@ -51,7 +52,7 @@ export function RightSidebar({ contentPanel }: RightSidebarProps) {
         >
           {contentPanel}
         </div>
-      ) : isDocked && (
+      ) : !suppressDefaultPanel && isDocked && (
         <div
           className={styles.panelSlot}
           data-testid="right-sidebar-panel-slot"

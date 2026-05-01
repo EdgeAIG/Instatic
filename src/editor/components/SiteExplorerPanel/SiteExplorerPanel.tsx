@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
 import type { SiteFile } from '@core/files/types'
+import type { Page } from '@core/page-tree'
+import { createUniquePageSlug, pagePublicPath } from '@core/page-tree/slugs'
 import { PanelHeader } from '../shared/PanelHeader'
 import { Button } from '@ui/components/Button'
 import type { IconComponent } from '@ui/icons/types'
@@ -9,6 +11,7 @@ import { FileTextIcon } from '@ui/icons/icons/file-text'
 import { BracesIcon } from '@ui/icons/icons/braces'
 import { PaintBucketIcon } from '@ui/icons/icons/paint-bucket'
 import { CodeIcon } from '@ui/icons/icons/code'
+import { ExternalLinkIcon } from '@ui/icons/icons/external-link'
 import { cn } from '@ui/cn'
 import {
   SiteCreateDialog,
@@ -20,6 +23,7 @@ import {
   type SiteCreateKind,
 } from '../SiteCreateDialog'
 import { ExplorerItemContextMenu, ExplorerRenameDialog, type ExplorerRenamePayload } from '../ExplorerPanelActions'
+import { TemplateSettingsDialog, type TemplateSettingsPayload } from '../TemplateSettingsDialog'
 import styles from './SiteExplorerPanel.module.css'
 
 interface SiteExplorerPanelProps {
@@ -91,6 +95,8 @@ export function SiteExplorerPanel({
   const addPage = useEditorStore((s) => s.addPage)
   const renamePage = useEditorStore((s) => s.renamePage)
   const deletePage = useEditorStore((s) => s.deletePage)
+  const convertPageToTemplate = useEditorStore((s) => s.convertPageToTemplate)
+  const convertTemplateToPage = useEditorStore((s) => s.convertTemplateToPage)
   const createVisualComponent = useEditorStore((s) => s.createVisualComponent)
   const renameVisualComponent = useEditorStore((s) => s.renameVisualComponent)
   const deleteVisualComponent = useEditorStore((s) => s.deleteVisualComponent)
@@ -101,6 +107,7 @@ export function SiteExplorerPanel({
   const [createKind, setCreateKind] = useState<SiteCreateKind | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renameTarget, setRenameTarget] = useState<SiteExplorerContextTarget | null>(null)
+  const [templateSettingsTarget, setTemplateSettingsTarget] = useState<Page | null>(null)
   const panelRef = useRef<HTMLElement>(null)
 
   const files = site?.files ?? EMPTY_FILES
@@ -138,7 +145,14 @@ export function SiteExplorerPanel({
   }
 
   const pages = site?.pages ?? []
+  const normalPages = pages.filter((page) => !page.template)
+  const templatePages = pages.filter((page) => page.template)
   const components = site?.visualComponents ?? []
+
+  function pageForTarget(target: SiteExplorerContextTarget): Page | null {
+    if (target.kind !== 'page') return null
+    return pages.find((page) => page.id === target.id) ?? null
+  }
 
   function openContextMenu(target: SiteExplorerContextTarget, event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault()
@@ -181,6 +195,73 @@ export function SiteExplorerPanel({
     setContextMenu(null)
   }
 
+  function handleCreateTemplate() {
+    const slug = createUniquePageSlug('Post Template', pages)
+    const page = addPage('Post Template', slug)
+    openPageInCanvas(page.id)
+    setTemplateSettingsTarget(page)
+  }
+
+  function handleSaveTemplateSettings(payload: TemplateSettingsPayload) {
+    if (!templateSettingsTarget) return
+    renamePage(templateSettingsTarget.id, payload.title, payload.slug)
+    convertPageToTemplate(templateSettingsTarget.id, payload.template)
+    setTemplateSettingsTarget(null)
+    openPageInCanvas(templateSettingsTarget.id)
+  }
+
+  function templateMenuItems(target: SiteExplorerContextTarget) {
+    const page = pageForTarget(target)
+    if (!page) return []
+
+    if (page.template) {
+      return [
+        {
+          label: 'Template settings',
+          icon: <FileTextIcon size={13} />,
+          action: () => {
+            setTemplateSettingsTarget(page)
+            setContextMenu(null)
+          },
+        },
+        {
+          label: 'Convert to page',
+          icon: <FileTextIcon size={13} />,
+          action: () => {
+            convertTemplateToPage(page.id)
+            setContextMenu(null)
+          },
+        },
+      ]
+    }
+
+    return [{
+      label: 'Use as template',
+      icon: <FileTextIcon size={13} />,
+      action: () => {
+        setTemplateSettingsTarget(page)
+        setContextMenu(null)
+      },
+    }]
+  }
+
+  function pageMenuItems(target: SiteExplorerContextTarget) {
+    const page = pageForTarget(target)
+    if (!page) return []
+
+    return [
+      {
+        label: 'Open in new tab',
+        icon: <ExternalLinkIcon size={13} />,
+        action: () => {
+          window.open(pagePublicPath(page.slug), '_blank', 'noopener,noreferrer')
+          setContextMenu(null)
+        },
+      },
+      ...templateMenuItems(target),
+    ]
+  }
+
   return (
     <>
       <aside
@@ -206,12 +287,12 @@ export function SiteExplorerPanel({
             <>
               <ExplorerSection
                 title="Pages"
-                count={pages.length}
+                count={normalPages.length}
                 actionLabel="New page"
                 actionIcon={FilePlusIcon}
                 onAction={() => setCreateKind('page')}
               >
-                {pages.map((page) => (
+                {normalPages.map((page) => (
                   <ExplorerRow
                     key={page.id}
                     icon={FileTextIcon}
@@ -219,6 +300,38 @@ export function SiteExplorerPanel({
                     meta={page.slug === 'index' ? '/' : `/${page.slug}`}
                     active={page.id === activePageId && activeDocument?.kind !== 'visualComponent'}
                     ariaLabel={`Open page ${page.title}`}
+                    onClick={() => openPageInCanvas(page.id)}
+                    onContextMenu={(event) => openContextMenu({
+                      kind: 'page',
+                      id: page.id,
+                      title: page.title,
+                      slug: page.slug,
+                    }, event)}
+                    onKeyDown={(event) => openKeyboardContextMenu({
+                      kind: 'page',
+                      id: page.id,
+                      title: page.title,
+                      slug: page.slug,
+                    }, event)}
+                  />
+                ))}
+              </ExplorerSection>
+
+              <ExplorerSection
+                title="Templates"
+                count={templatePages.length}
+                actionLabel="New template"
+                actionIcon={FilePlusIcon}
+                onAction={handleCreateTemplate}
+              >
+                {templatePages.map((page) => (
+                  <ExplorerRow
+                    key={page.id}
+                    icon={FileTextIcon}
+                    label={page.title}
+                    meta={page.template?.collectionId ?? ''}
+                    active={page.id === activePageId && activeDocument?.kind !== 'visualComponent'}
+                    ariaLabel={`Open template ${page.title}`}
                     onClick={() => openPageInCanvas(page.id)}
                     onContextMenu={(event) => openContextMenu({
                       kind: 'page',
@@ -333,12 +446,22 @@ export function SiteExplorerPanel({
           y={contextMenu.y}
           ariaLabel="Site item options"
           deleteDisabled={contextMenu.target.kind === 'page' && pages.length <= 1}
+          extraItems={pageMenuItems(contextMenu.target)}
           onClose={() => setContextMenu(null)}
           onRename={() => {
             setRenameTarget(contextMenu.target)
             setContextMenu(null)
           }}
           onDelete={() => handleDelete(contextMenu.target)}
+        />
+      )}
+
+      {templateSettingsTarget && (
+        <TemplateSettingsDialog
+          page={templateSettingsTarget}
+          pages={pages}
+          onCancel={() => setTemplateSettingsTarget(null)}
+          onSave={handleSaveTemplateSettings}
         />
       )}
 

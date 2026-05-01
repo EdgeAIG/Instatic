@@ -1,222 +1,380 @@
 .toolbarStatus {
-  color: var(--editor-text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .contentCanvas {
-  user-select: text;
-  touch-action: pan-y;
+    user-select: text;
+    touch-action: pan-y;
 }
 
 .notchAddButton {
-  min-width: 72px;
+    min-width: 72px;
 }
 
 .documentScroll {
-  position: absolute;
-  inset: 0;
-  overflow-y: auto;
-  padding: 86px 28px 80px;
+    position: absolute;
+    inset: 0;
+    padding-inline: 20px;
+    overflow-y: auto;
 }
 
 .document {
-  display: grid;
-  gap: 22px;
-  width: min(820px, 100%);
-  min-height: calc(100vh - 176px);
-  margin: 0 auto;
-  padding: 56px 64px 80px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 8px;
-  background: #fbfbfa;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.16);
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    width: min(820px, 100%);
+    min-height: min(640px, calc(100vh - 176px));
+    margin: 100px auto;
 }
 
 .titleLabel {
-  color: #747474;
-  font-size: 12px;
-  font-weight: 800;
+    color: var(--editor-text-muted);
+    font-size: 16px;
+    font-weight: 500;
 }
 
 .titleInput {
-  height: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: #141414;
-  font-size: 56px;
-  font-weight: 780;
-  line-height: 0.98;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--editor-text);
+    font-size: 56px;
+    font-weight: 780;
+    line-height: 0.98;
 }
 
 .titleInput:focus {
-  box-shadow: none;
+    box-shadow: none;
 }
 
 .emptyState {
-  display: grid;
-  justify-items: center;
-  gap: 12px;
-  width: min(520px, 100%);
-  margin: 18vh auto 0;
-  color: var(--editor-text);
-  text-align: center;
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    width: min(520px, 100%);
+    margin: 18vh auto 0;
+    color: var(--editor-text);
+    text-align: center;
 }
 
 .emptyState h2 {
-  margin: 0;
-  font-size: 24px;
-  letter-spacing: 0;
+    margin: 0;
+    font-size: 24px;
+    letter-spacing: 0;
 }
 
 .emptyState p,
 .muted,
 .error {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
 }
 
 .emptyState p,
 .muted {
-  color: var(--editor-text-muted);
+    color: var(--editor-text-muted);
+}
+
+.canvasLoading {
+    display: grid;
+    gap: 18px;
+    width: min(760px, 100%);
+    margin: 108px auto 0;
+}
+
+.skeletonShape {
+    display: block;
+    overflow: hidden;
+    border-radius: 8px;
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--editor-surface-2) 80%, transparent),
+        color-mix(in srgb, var(--editor-surface-3) 88%, white 12%),
+        color-mix(in srgb, var(--editor-surface-2) 80%, transparent)
+    );
+    background-size: 220% 100%;
+    animation: pbContentSkeleton 1200ms ease-in-out infinite;
+}
+
+.canvasSkeletonTitle {
+    width: min(440px, 72%);
+    height: 48px;
+}
+
+.canvasSkeletonLine {
+    width: min(620px, 90%);
+    height: 18px;
+}
+
+.canvasSkeletonShortLine {
+    width: min(520px, 76%);
+    height: 18px;
+}
+
+.canvasSkeletonBlock {
+    width: 100%;
+    height: 280px;
+    margin-top: 18px;
 }
 
 .error {
-  color: var(--editor-danger);
+    color: var(--editor-danger);
 }
 
 .entryTitle {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.entriesSkeletonRow {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 34px;
+    align-items: center;
+    gap: 8px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--editor-surface-2) 50%, transparent);
+}
+
+.entriesSkeletonIcon {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+}
+
+.entriesSkeletonLabel {
+    width: 72%;
+    height: 12px;
+    border-radius: 999px;
+}
+
+.entriesSkeletonMeta {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
 }
 
 .settingsBody {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 10px 14px 18px;
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px 14px 18px;
+}
+
+.settingsSkeleton {
+    display: grid;
+    gap: 10px;
+}
+
+.settingsSkeletonLabel {
+    width: 84px;
+    height: 12px;
+    margin-top: 6px;
+    border-radius: 999px;
+}
+
+.settingsSkeletonInput {
+    width: 100%;
+    height: 42px;
+}
+
+.settingsSkeletonTextarea {
+    width: 100%;
+    height: 126px;
+}
+
+.settingsSkeletonCard {
+    width: 100%;
+    height: 88px;
+    margin-top: 8px;
 }
 
 .field {
-  display: grid;
-  gap: 7px;
+    display: grid;
+    gap: 7px;
 }
 
 .field span,
-.metaBlock span {
-  color: var(--editor-text-muted);
-  font-size: 11px;
-  font-weight: 750;
+.metaBlock span,
+.featuredMediaField > span {
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 750;
 }
 
-.metaBlock {
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  background: var(--editor-surface-2);
+.metaBlock,
+.featuredMediaField {
+    display: grid;
+    gap: 6px;
 }
 
 .metaBlock strong {
-  overflow-wrap: anywhere;
-  color: var(--editor-text);
-  font-size: 12px;
-  font-weight: 700;
+    overflow-wrap: anywhere;
+    color: var(--editor-text);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.featuredMediaCard {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+}
+
+.featuredMediaPreview {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    overflow: hidden;
+    border-radius: 7px;
+    background: var(--editor-surface-3);
+    color: var(--editor-text-muted);
+}
+
+.featuredMediaPreview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.featuredMediaText {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.featuredMediaText strong,
+.featuredMediaText small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.featuredMediaText small,
+.featuredMediaField small {
+    color: var(--editor-text-muted);
+    font-size: 11px;
+}
+
+.featuredMediaActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .mediaOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.62);
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.62);
 }
 
 .mediaDialog {
-  display: grid;
-  gap: 16px;
-  width: min(760px, 100%);
-  max-height: min(720px, 90vh);
-  overflow: auto;
-  padding: 18px;
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  background: var(--editor-surface);
+    display: grid;
+    gap: 16px;
+    width: min(760px, 100%);
+    max-height: min(720px, 90vh);
+    overflow: auto;
+    padding: 18px;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: var(--editor-surface);
 }
 
 .mediaHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 .mediaHeader h2 {
-  margin: 0;
-  font-size: 18px;
-  letter-spacing: 0;
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: 0;
 }
 
 .mediaGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px;
 }
 
 .mediaTile {
-  display: grid;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  background: var(--editor-surface-2);
-  color: var(--editor-text);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: var(--editor-surface-2);
+    color: var(--editor-text);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
 }
 
 .mediaTile:hover {
-  background: var(--editor-surface-3);
+    background: var(--editor-surface-3);
 }
 
 .mediaTile img,
 .mediaTile video {
-  width: 100%;
-  aspect-ratio: 1.2;
-  object-fit: cover;
-  border-radius: 6px;
-  background: var(--editor-surface-3);
+    width: 100%;
+    aspect-ratio: 1.2;
+    object-fit: cover;
+    border-radius: 6px;
+    background: var(--editor-surface-3);
 }
 
 .mediaTile span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+@keyframes pbContentSkeleton {
+    from {
+        background-position: 120% 0;
+    }
+
+    to {
+        background-position: -120% 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeletonShape {
+        animation: none;
+    }
 }
 
 @media (max-width: 720px) {
-  .documentScroll {
-    padding: 72px 16px 48px;
-  }
+    .documentScroll {
+        padding: 72px 16px 48px;
+    }
 
-  .document {
-    padding: 36px 28px 56px;
-  }
+    .document {
+        padding: 36px 28px 56px;
+    }
 
-  .titleInput {
-    font-size: 40px;
-  }
+    .titleInput {
+        font-size: 40px;
+    }
 }

@@ -4,10 +4,12 @@ import { readServerConfig } from './config'
 
 await import('./domEnvironment')
 const { handleServerRequest } = await import('./router')
+const { activateInstalledServerPlugins } = await import('./cms/serverPluginRuntime')
 
 const config = readServerConfig()
 const db = createPgPool(config.databaseUrl)
 await runMigrations(db)
+await activateInstalledServerPlugins(db, config.uploadsDir)
 
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',

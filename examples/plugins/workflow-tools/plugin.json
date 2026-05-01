@@ -1,0 +1,78 @@
+{
+  "id": "acme.workflow",
+  "name": "Workflow Tools",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "Adds an approval workflow dashboard, backend status route, and editor toolbar action.",
+  "permissions": [
+    "admin.navigation",
+    "cms.storage",
+    "cms.routes",
+    "editor.toolbar",
+    "editor.commands",
+    "editor.store.read"
+  ],
+  "entrypoints": {
+    "server": "server/index.js",
+    "editor": "editor/index.js"
+  },
+  "resources": [
+    {
+      "id": "approvals",
+      "title": "Approvals",
+      "singularLabel": "Approval",
+      "pluralLabel": "Approvals",
+      "fields": [
+        {
+          "id": "page-title",
+          "label": "Page Title",
+          "type": "text",
+          "required": true
+        },
+        {
+          "id": "page-id",
+          "label": "Page ID",
+          "type": "text"
+        },
+        {
+          "id": "status",
+          "label": "Status",
+          "type": "text",
+          "required": true
+        },
+        {
+          "id": "reviewer",
+          "label": "Reviewer",
+          "type": "text"
+        },
+        {
+          "id": "notes",
+          "label": "Notes",
+          "type": "longtext"
+        },
+        {
+          "id": "urgent",
+          "label": "Urgent",
+          "type": "boolean"
+        },
+        {
+          "id": "requested-at",
+          "label": "Requested At",
+          "type": "date"
+        }
+      ]
+    }
+  ],
+  "adminPages": [
+    {
+      "id": "dashboard",
+      "title": "Workflow",
+      "navLabel": "Workflow",
+      "content": {
+        "kind": "app",
+        "heading": "Workflow Dashboard",
+        "entry": "admin/dashboard.js"
+      }
+    }
+  ]
+}
