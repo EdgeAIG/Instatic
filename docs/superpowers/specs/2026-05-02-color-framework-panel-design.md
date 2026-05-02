@@ -82,7 +82,7 @@ The model must support:
 - Rebuilding generated classes deterministically when token settings change.
 - Reusing the same mechanism for typography utilities later.
 
-Because generated framework utilities can include properties that are not currently exposed in the user-editable class composer, such as `fill`, the implementation should either extend the safe class property bag for those properties or add a generated-declaration path used only by locked generated classes. User-authored class editing should stay limited to the existing supported controls unless the implementation intentionally broadens them.
+Because generated framework utilities can include color-related properties that are not currently exposed in the user-editable class composer, the implementation should extend the safe `CSSPropertyBag` for those properties. `fill` is required for the color framework. User-authored class editing should stay limited to the existing supported controls unless the implementation intentionally broadens the controls.
 
 ## Color Data Model
 
@@ -337,5 +337,6 @@ Focused tests should cover:
 - Theme scopes use `.theme-dark` and `.theme-light`, not `cf-*` class names.
 - Generated utility classes appear in the class picker and can be assigned to nodes.
 - Generated utility classes are locked from direct style editing in Properties.
+- The safe `CSSPropertyBag` supports `fill` so generated fill utilities use the same class pipeline as other utilities.
 - The locked/generated class metadata is reusable for typography utilities later.
 - Published pages include the generated color variables and assigned utility class CSS.
