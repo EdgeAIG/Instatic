@@ -6,6 +6,7 @@ import { generatedClassKindLabel, isGeneratedClass, isGeneratedClassLocked } fro
 import type { CSSClass } from '@core/page-tree/schemas'
 import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
+import { EmptyState } from '@ui/components/EmptyState'
 import { FilterBar, type FilterBarItem } from '@ui/components/FilterBar'
 import { Input } from '@ui/components/Input'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
@@ -228,14 +229,16 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
           />
 
           {reusableClasses.length === 0 ? (
-            <div className={styles.emptyState}>
-              <span>No reusable selectors yet.</span>
-              <Button variant="secondary" size="sm" onClick={() => setCreateDialogOpen(true)}>
-                Create selector
-              </Button>
-            </div>
+            <EmptyState
+              title="No reusable selectors yet."
+              action={
+                <Button variant="secondary" size="sm" onClick={() => setCreateDialogOpen(true)}>
+                  Create selector
+                </Button>
+              }
+            />
           ) : filteredClasses.length === 0 ? (
-            <div className={styles.emptyState}>{getEmptyFilterMessage(filter, query)}</div>
+            <EmptyState title={getEmptyFilterMessage(filter, query)} />
           ) : (
             <div className={styles.rows} aria-label="Reusable selectors">
               {filteredClasses.map((cls) => (

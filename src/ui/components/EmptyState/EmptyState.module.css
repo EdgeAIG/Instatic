@@ -1,0 +1,103 @@
+/* ── EmptyState — shared placeholder for empty panels and empty sections ──── */
+
+.root {
+    display: flex;
+    flex-direction: column;
+    color: var(--editor-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* ── variant=card ─────────────────────────────────────────────────────────────
+ * Surfaced placeholder with rounded background — used inline inside a panel
+ * body when the panel itself has data (filters, headers) but the list is empty.
+ * Default for in-panel "no items yet" + Create CTA empty states.
+ */
+.variant-card {
+    gap: 10px;
+    padding: 14px;
+    border-radius: 12px;
+    background: var(--editor-surface);
+}
+
+/* ── variant=centered ─────────────────────────────────────────────────────────
+ * Stretches to fill its parent and centers the content along both axes — used
+ * when the empty state replaces the entire panel body (e.g. "Select an element
+ * to view its properties", agent intro screen, empty canvas).
+ */
+.variant-centered {
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--editor-text-subtle);
+}
+
+/* ── compact modifier ─────────────────────────────────────────────────────────
+ * Smaller padding for in-section / inline empties (e.g. "None yet" inside a
+ * section row, inline manual-list empties). Pairs with variant=card.
+ */
+.compact {
+    padding: 8px;
+    gap: 6px;
+    line-height: 1.4;
+}
+
+/* ── plain modifier ───────────────────────────────────────────────────────────
+ * Drops the surface background — used for inline empties that already sit
+ * inside a card / list (e.g. class generator empty inside a Section).
+ */
+.plain {
+    background: transparent;
+    padding: 4px 0;
+    border-radius: 0;
+}
+
+/* ── alignment ──────────────────────────────────────────────────────────────── */
+
+.align-start {
+    align-items: flex-start;
+    text-align: left;
+}
+
+.align-center {
+    align-items: center;
+    text-align: center;
+}
+
+/* ── content slots ──────────────────────────────────────────────────────────── */
+
+.icon {
+    opacity: 0.4;
+    color: var(--editor-text-subtle);
+}
+
+.title {
+    margin: 0;
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+}
+
+/* In centered mode the title reads as the primary label and the description
+ * is the supporting hint underneath. */
+.variant-centered .title {
+    color: var(--editor-text-subtle);
+}
+
+.description {
+    margin: 0;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--editor-border-med);
+}
+
+.action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+}

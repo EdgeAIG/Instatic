@@ -56,6 +56,7 @@ import { SearchBar } from '@ui/components/SearchBar'
 import { PanelHeader } from '../shared/PanelHeader'
 import { useDraggablePanel } from '../../hooks/useDraggablePanel'
 import { Button } from '@ui/components/Button'
+import { EmptyState } from '@ui/components/EmptyState'
 import { Input } from '@ui/components/Input'
 import { OpenIcon } from 'pixel-art-icons/icons/open'
 import { DockIcon } from 'pixel-art-icons/icons/dock'
@@ -309,9 +310,10 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
           activeDocument?.kind === 'visualComponent' && selectedNodeId === null && selectedSelectorClassId === null && activeVc
             ? <ComponentParamsOverview vc={activeVc} />
             : (
-              <div className={styles.emptyState}>
-                Select an element on the canvas to view its properties.
-              </div>
+              <EmptyState
+                variant="centered"
+                title="Select an element on the canvas to view its properties."
+              />
             )
         ) : selectedNode.moduleId === 'base.visual-component-ref' ? (
           /* ── Visual Component instance view (Task #438 / Contribution #619 §8.5) ── */
@@ -323,16 +325,23 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
         ) : (
           /* ── Unified panel: ClassPicker above StyleSurface ────────────── */
           <div className={styles.nodeArea}>
-            {activeDocument?.kind !== 'visualComponent' &&
-              selectedNode.moduleId !== 'base.root' &&
-              selectedNode.moduleId !== 'base.visual-component-ref' && (
-                <ConvertToComponentButton nodeId={selectedNodeId!} />
-              )
-            }
-
-            {/* ClassPicker — always visible, manages class assignment */}
+            {/* ClassPicker — always visible, manages class assignment.
+                On regular page nodes we render the Convert-to-component
+                button as the input row's trailing action so the two share
+                a 2-column layout with matching heights, and the suggestions
+                dropdown spans the full row. */}
             <div className={styles.headerClassPicker}>
-              <ClassPicker ref={classPickerRef} nodeId={selectedNodeId!} />
+              <ClassPicker
+                ref={classPickerRef}
+                nodeId={selectedNodeId!}
+                trailingAction={
+                  activeDocument?.kind !== 'visualComponent' &&
+                  selectedNode.moduleId !== 'base.root' &&
+                  selectedNode.moduleId !== 'base.visual-component-ref'
+                    ? <ConvertToComponentButton nodeId={selectedNodeId!} />
+                    : undefined
+                }
+              />
             </div>
 
             {/* Unified StyleSurface: Module section + CSS sections (scroll-anchor) */}

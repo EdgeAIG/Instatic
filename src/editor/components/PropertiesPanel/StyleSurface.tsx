@@ -8,8 +8,11 @@
  *   1. Module settings — wrapped in a Section accordion, always first.
  *   2. CSS area — ClassComposer (all CSS sections) or locked preview.
  *
- * Search filters across both module settings (by prop key/label) and CSS
- * properties simultaneously.
+ * The search bar is bound to the active editable class and filters across
+ * module settings (by prop key/label) and the class's CSS properties
+ * simultaneously. It is hidden when there is no active class (locked
+ * preview) or when the active class is a locked generated utility — neither
+ * state has editable CSS rows to search.
  *
  * Rail icons are scroll-anchor shortcuts; the active icon is derived from
  * scroll position. "All styles" (BoxStackIcon) scrolls to the top.
@@ -160,9 +163,15 @@ export function StyleSurface({
   const hasModuleContent = definition != null && moduleContent != null
   const moduleVisible = hasModuleContent && (!styleQuery || moduleMatchesQuery(styleQuery, definition!))
 
-  // Hide search bar when the CSS area shows the generated utility lock —
-  // there are no CSS properties to search in that state.
-  const showSearchBar = !activeClass || !isGeneratedClassLocked(activeClass)
+  // The search bar is bound to the active class — both its placeholder and
+  // the rows it filters belong to that class. It only renders when the class
+  // exists and is editable.
+  //   - no active class selected → LockedStylePreview teaser is shown instead
+  //   - active class is a locked generated utility → GeneratedUtilityLockedState
+  //     is shown instead (no editable CSS rows to search)
+  const searchableClass = activeClass != null && !isGeneratedClassLocked(activeClass)
+    ? activeClass
+    : null
 
   // CSS area content.
   let cssContent: ReactNode
@@ -198,28 +207,25 @@ export function StyleSurface({
       <div className={styles.surfaceContent}>
 
         {/* Search bar — sticky at the top, searches both module and CSS.
-            Hidden when a generated utility class is active (nothing to search). */}
-        {showSearchBar && <div className={styles.searchBarRow}>
-          <SearchBar
-            value={styleQuery}
-            onValueChange={setStyleQuery}
-            onClear={clearStyleQuery}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                clearStyleQuery()
-              }
-            }}
-            placeholder={
-              activeClass
-                ? `Search styles in ${activeClass.name}...`
-                : definition
-                ? `Search ${definition.name} settings...`
-                : 'Search properties...'
-            }
-            aria-label="Search class style properties to add"
-          />
-        </div>}
+            Hidden when no class is selected or the active class is a locked
+            generated utility (no CSS rows to search in either state). */}
+        {searchableClass && (
+          <div className={styles.searchBarRow}>
+            <SearchBar
+              value={styleQuery}
+              onValueChange={setStyleQuery}
+              onClear={clearStyleQuery}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  clearStyleQuery()
+                }
+              }}
+              placeholder={`Search styles in ${searchableClass.name}...`}
+              aria-label="Search class style properties to add"
+            />
+          </div>
+        )}
 
         {/* Module section — same Section accordion as CSS sections */}
         {moduleVisible && (

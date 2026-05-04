@@ -180,24 +180,6 @@
   color: var(--editor-text-subtle);
 }
 
-.emptyState {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: var(--editor-text-subtle);
-  font-size: 11px;
-  padding: 24px;
-  text-align: center;
-}
-
-.emptyHint {
-  font-size: 10px;
-  color: var(--editor-border-med);
-}
-
 /* ── CodeMirror container fill ───────────────────────────────────────────── */
 /* Applied via data-codemirror-container attribute on the container div.
    Fills the editorBody flex container so CM6 takes up all available space. */

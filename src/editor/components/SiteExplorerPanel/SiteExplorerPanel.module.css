@@ -185,13 +185,9 @@
     opacity: 0.5;
 }
 
-.sectionEmpty,
-.emptyState {
-    color: var(--editor-text-muted);
-    background: var(--editor-surface);
-    border-radius: 8px;
+/* Layout escape hatch — lets the section's "None yet" EmptyState span the full
+ * width when the parent layout is a CSS grid (e.g. media tile grid). The
+ * surface chrome itself comes from the EmptyState primitive. */
+.sectionEmpty {
     grid-column: 1 / -1;
-    padding: 8px;
-    font-size: 12px;
-    line-height: 1.4;
 }

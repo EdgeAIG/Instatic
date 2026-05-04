@@ -1,13 +1,12 @@
 /**
- * ClassPicker — always-visible class pill manager.
+ * ClassPicker — always-visible class chip manager.
  *
  * Replaces ClassesTab in the Properties Panel redesign (Spec #659 §2).
  * Now permanently visible (no tab click required — PP-2 acceptance criterion).
  *
  * Changes vs. ClassesTab:
- *   - Pill cascade order badges (¹²³) — PP-7
  *   - Pill right-click context menu owns reorder/rename/remove actions — PP-8
- *   - Pill × has tooltip="Remove from this element" — PP-9
+ *   - Chip × has tooltip="Remove from this element" — PP-9
  *   - Class assignment UI lives directly under the selected element header
  *   - Uses reorderNodeClass store action (new in classSlice — Task #456)
  *
@@ -29,6 +28,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   type MouseEvent,
+  type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditorStore, selectActiveCanvasPage } from '@core/editor-store/store'
@@ -57,12 +57,6 @@ import type { CSSClass } from '@core/page-tree/schemas'
 import dialogStyles from '../SiteCreateDialog/SiteCreateDialog.module.css'
 import styles from './ClassPicker.module.css'
 
-// ---------------------------------------------------------------------------
-// Superscript badge helper — converts 1 → '¹', 2 → '²', etc.
-// ---------------------------------------------------------------------------
-
-const SUPERSCRIPTS: readonly string[] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹']
-
 interface SuggestionsPosition {
   x: number
   y: number
@@ -75,11 +69,20 @@ interface ClassContextMenuState {
   classId: string
 }
 
-function toSuperscript(n: number): string {
-  return String(n)
-    .split('')
-    .map((d) => SUPERSCRIPTS[parseInt(d)] ?? d)
-    .join('')
+// ---------------------------------------------------------------------------
+// Pill accent — deterministic hash from the class name.
+// Kept local: purely presentational, not shared logic.
+// ---------------------------------------------------------------------------
+
+type PillAccent = 'mint' | 'lilac' | 'sky' | 'peach'
+const PILL_ACCENTS: readonly PillAccent[] = ['mint', 'lilac', 'sky', 'peach']
+
+function pillAccent(name: string): PillAccent {
+  let h = 0
+  for (let i = 0; i < name.length; i++) {
+    h = (Math.imul(h, 31) + name.charCodeAt(i)) | 0
+  }
+  return PILL_ACCENTS[Math.abs(h) % PILL_ACCENTS.length]!
 }
 
 function keyboardMenuPosition(element: HTMLElement) {
@@ -101,10 +104,16 @@ export interface ClassPickerHandle {
 
 interface ClassPickerProps {
   nodeId: string
+  /**
+   * Optional inline action rendered to the right of the 'Add or create class…'
+   * input as a sibling cell in the same two-column row. The suggestions
+   * dropdown spans both cells so search results can use the full row width.
+   */
+  trailingAction?: ReactNode
 }
 
 export const ClassPicker = forwardRef<ClassPickerHandle, ClassPickerProps>(
-function ClassPickerInner({ nodeId }: ClassPickerProps, ref) {
+function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
   const site = useEditorStore((s) => s.site)
   const node = useEditorStore(
     useCallback(
@@ -132,6 +141,9 @@ function ClassPickerInner({ nodeId }: ClassPickerProps, ref) {
   )
 
   const inputRef = useRef<HTMLInputElement>(null)
+  // The dropdown anchors to the input but takes the *row* width so search
+  // results can use both columns when a trailingAction is present.
+  const inputRowRef = useRef<HTMLDivElement>(null)
 
   useImperativeHandle(ref, () => ({
     focusInput: () => {
@@ -156,12 +168,16 @@ function ClassPickerInner({ nodeId }: ClassPickerProps, ref) {
     !allClasses.some((c) => c.name === query.trim())
 
   const updateSuggestionsPosition = useCallback(() => {
-    const rect = inputRef.current?.getBoundingClientRect()
-    if (!rect) return
+    // Anchor vertically to the input (so the dropdown opens just below it),
+    // but use the full input-row width so the menu can span the trailing
+    // action column as well.
+    const inputRect = inputRef.current?.getBoundingClientRect()
+    const rowRect = inputRowRef.current?.getBoundingClientRect() ?? inputRect
+    if (!inputRect || !rowRect) return
     setSuggestionsPosition({
-      x: rect.left,
-      y: rect.bottom + 6,
-      width: rect.width,
+      x: rowRect.left,
+      y: inputRect.bottom + 6,
+      width: rowRect.width,
     })
   }, [])
 
@@ -285,10 +301,10 @@ function ClassPickerInner({ nodeId }: ClassPickerProps, ref) {
 
   return (
     <div className={styles.container}>
-      {/* Assigned class pills with cascade badges */}
+      {/* Assigned class chips */}
       {visibleAssignedIds.length > 0 && (
         <div className={styles.pillsContainer}>
-          {visibleAssignedIds.map((id, idx) => {
+          {visibleAssignedIds.map((id) => {
             const cls = site?.classes[id]
             if (!cls) return null
             const isActive = activeClassId === id
@@ -296,6 +312,7 @@ function ClassPickerInner({ nodeId }: ClassPickerProps, ref) {
               <div
                 key={id}
                 className={cn(styles.pill, isActive ? styles.pillActive : styles.pillInactive)}
+                data-accent={pillAccent(cls.name)}
                 onClick={() => {
                   setActiveClass(isActive ? null : id)
                 }}
@@ -313,10 +330,6 @@ function ClassPickerInner({ nodeId }: ClassPickerProps, ref) {
                   openKeyboardClassContextMenu(id, e)
                 }}
               >
-                {/* Cascade order badge (1-based position = cascade priority) */}
-                <span className={styles.pillOrder} aria-hidden="true">
-                  {toSuperscript(idx + 1)}
-                </span>
                 <span className={styles.pillName}>{cls.name}</span>
 
                 {/* Remove from this element (does NOT delete the class globally) */}
@@ -381,11 +394,15 @@ function ClassPickerInner({ nodeId }: ClassPickerProps, ref) {
         />
       )}
 
-      {/* Add class input */}
-      <div className={styles.inputWrap}>
+      {/* Add-class input + optional trailing action (e.g. the Componentize
+          button). Two-column grid when trailingAction is provided, single
+          column otherwise. The suggestions dropdown anchors to the input but
+          spans the full row. */}
+      <div ref={inputRowRef} className={styles.inputRow} data-with-action={trailingAction != null}>
         <Input
           ref={inputRef}
           type="text"
+          fieldSize="sm"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
@@ -403,6 +420,8 @@ function ClassPickerInner({ nodeId }: ClassPickerProps, ref) {
           placeholder="Add or create class…"
           aria-label="Add or create a CSS class"
         />
+
+        {trailingAction}
 
         {/* Suggestions dropdown */}
         {showSuggestions && suggestionsPosition && (query.length > 0 || suggestions.length > 0) && createPortal(

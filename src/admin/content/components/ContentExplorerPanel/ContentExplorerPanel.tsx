@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Button } from '@ui/components/Button'
+import { EmptyState } from '@ui/components/EmptyState'
 import { cn } from '@ui/cn'
 import { BookOpenIcon } from 'pixel-art-icons/icons/book-open'
 import { BookPlusIcon } from 'pixel-art-icons/icons/book-plus'
@@ -255,7 +256,7 @@ export function ContentExplorerPanel({
             {loading ? (
               <ContentEntriesLoading />
             ) : entries.length === 0 ? (
-              <p className={explorerStyles.emptyState}>No entries yet.</p>
+              <EmptyState compact title="No entries yet." />
             ) : (
               <div className={explorerStyles.rows}>
                 {entries.map((entry) => (

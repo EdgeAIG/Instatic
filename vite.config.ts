@@ -226,6 +226,31 @@ function agentDevPlugin(): Plugin {
   }
 }
 
+// Stable vendor chunk groups for long-term browser caching. Vendor code
+// rarely changes, so isolating it from the app code means returning users
+// re-download only the (small) app chunks when we ship a new build.
+//
+// Notes:
+//   - We deliberately do NOT chunk @codemirror / @lezer / codemirror — they
+//     are already isolated via React.lazy() in CodeMirrorEditor.tsx.
+//   - We deliberately do NOT chunk pixel-art-icons — it tree-shakes through
+//     deep imports, and forcing a vendor chunk would pull every icon in.
+function vendorChunkName(moduleId: string): string | null {
+  if (!moduleId.includes('node_modules')) return null
+  if (moduleId.includes('node_modules/react-dom') || /node_modules\/react(\/|\\)/.test(moduleId)) {
+    return 'react-vendor'
+  }
+  if (moduleId.includes('node_modules/react-router')) return 'router-vendor'
+  if (moduleId.includes('node_modules/@dnd-kit') || moduleId.includes('node_modules/@use-gesture')) {
+    return 'dnd-vendor'
+  }
+  if (moduleId.includes('node_modules/zod')) return 'validation-vendor'
+  if (moduleId.includes('node_modules/dompurify') || moduleId.includes('node_modules/immer')) {
+    return 'state-vendor'
+  }
+  return null
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -242,6 +267,15 @@ export default defineConfig({
       '@admin': path.resolve(__dirname, 'src/admin'),
       // pixel-art-icons resolves through node_modules (link: dep during local
       // dev, registry version once published). No alias needed.
+    },
+  },
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [{ name: vendorChunkName }],
+        },
+      },
     },
   },
   server: {

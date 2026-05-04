@@ -1,19 +1,19 @@
 /**
- * ConvertToComponentButton — inline strip for converting a page node to a Visual Component.
+ * ConvertToComponentButton — inline control for converting a page node into a
+ * Visual Component. Lives in the same row as the ClassPicker's add-class
+ * input, sharing a 2-column grid managed by ClassPicker.
  *
  * Achromatic palette (Guideline #376). CSS Modules only (Constraint #402/#403).
  * Token-only colours — no hardcoded hex/rgb/hsl.
  */
 
-/* ── Outer wrapper ────────────────────────────────────────────────────────── */
-
-.root {
-  padding: 8px 12px 4px;
-}
-
-/* ── Editing strip ────────────────────────────────────────────────────────── */
+/* ── Editing strip ─────────────────────────────────────────────────────────
+ * In editing state we need three controls (input + Create + Cancel) — far
+ * too much to fit into half a row. Span the full parent row so the strip
+ * gets the whole width of the input row above it. */
 
 .editingStrip {
+  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   gap: 5px;

@@ -10,7 +10,7 @@
  *   PP-4  Module props in collapsible Section (defaultOpen=true), titled definition.name
  *   PP-5  Advanced Section removed from the Properties panel
  *   PP-6  Both ClassComposer + PropertiesPanel import Section from same path (static gate)
- *   PP-7  Each pill shows cascade position badge (1-based ordinal ¹ ² ³)
+ *   PP-7  Order superscript removed — chips render without ¹ ² ³ badges (position conveys order)
  *   PP-8  Class pill context menu owns reorder actions; hover arrows are not mounted
  *   PP-9  Pill × has title="Remove from this element" (static gate)
  *   PP-10 "Edit CSS" textarea is writable; typing + blur applies to class styles
@@ -156,20 +156,25 @@ describe('PP-3 — Pill click toggles CSS editor; locked preview shown with no a
     render(<PropertiesPanel />)
 
     // No active class — LockedStylePreview is shown with its "Add class" CTA.
-    // Search bar is always visible (searches module settings and CSS properties).
+    // The style search bar is bound to the active class, so it's hidden in
+    // the no-class state (nothing to search).
     expect(screen.getByRole('button', { name: /^add class$/i })).toBeDefined()
-    expect(screen.getByRole('searchbox', { name: /search class style properties to add/i })).toBeDefined()
+    expect(screen.queryByRole('searchbox', { name: /search class style properties to add/i })).toBeNull()
 
     // Click the pill to activate the class CSS editor.
     const pill = screen.getByRole('button', { name: /edit class class-1/i })
     fireEvent.click(pill)
 
-    // CSS editor active — locked preview CTA gone, CSS property rows accessible.
+    // CSS editor active — locked preview CTA gone, CSS property rows accessible,
+    // and the style search bar is now visible (scoped to the active class).
     expect(screen.queryByRole('button', { name: /^add class$/i })).toBeNull()
+    expect(screen.getByRole('searchbox', { name: /search class style properties to add/i })).toBeDefined()
 
-    // Click again to deselect — locked preview returns.
+    // Click again to deselect — locked preview returns and the search bar
+    // disappears with it.
     fireEvent.click(pill)
     expect(screen.getByRole('button', { name: /^add class$/i })).toBeDefined()
+    expect(screen.queryByRole('searchbox', { name: /search class style properties to add/i })).toBeNull()
   })
 })
 
@@ -355,18 +360,19 @@ describe("PP-6 — StyleSurface used by PropertiesPanel; Section shared in Class
 })
 
 // ---------------------------------------------------------------------------
-// PP-7: Each pill shows cascade position badge (1-based ¹²³)
+// PP-7: Order superscript removed — chips render without ¹²³ badges.
+// Cascade order is conveyed by left-to-right position in the chip row.
 // ---------------------------------------------------------------------------
 
-describe('PP-7 — Cascade order badges on pills', () => {
-  it('Three pills show ordinal superscript badges ¹ ² ³', () => {
+describe('PP-7 — No cascade order badges on chips', () => {
+  it('Three chips render without ordinal superscript badges ¹ ² ³', () => {
     const { nodeId } = loadSiteWithClasses(3)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
-    expect(screen.getByText('¹')).toBeDefined()
-    expect(screen.getByText('²')).toBeDefined()
-    expect(screen.getByText('³')).toBeDefined()
+    expect(screen.queryByText('¹')).toBeNull()
+    expect(screen.queryByText('²')).toBeNull()
+    expect(screen.queryByText('³')).toBeNull()
   })
 })
 

@@ -66,7 +66,7 @@ describe('PPVC-1 — no selection → Convert button not present', () => {
     // No site, no selection
     render(<PropertiesPanel />)
     expect(
-      screen.queryByRole('button', { name: /Convert to component/i }),
+      screen.queryByRole('button', { name: /Componentize/i }),
     ).toBeNull()
   })
 
@@ -81,7 +81,7 @@ describe('PPVC-1 — no selection → Convert button not present', () => {
 
     render(<PropertiesPanel />)
     expect(
-      screen.queryByRole('button', { name: /Convert to component/i }),
+      screen.queryByRole('button', { name: /Componentize/i }),
     ).toBeNull()
   })
 })
@@ -110,7 +110,7 @@ describe('PPVC-2 — root node selected → Convert button not present', () => {
     render(<PropertiesPanel />)
 
     expect(
-      screen.queryByRole('button', { name: /Convert to component/i }),
+      screen.queryByRole('button', { name: /Componentize/i }),
     ).toBeNull()
   })
 })
@@ -146,7 +146,7 @@ describe('PPVC-3 — base.visual-component-ref selected → Convert button not p
     render(<PropertiesPanel />)
 
     expect(
-      screen.queryByRole('button', { name: /Convert to component/i }),
+      screen.queryByRole('button', { name: /Componentize/i }),
     ).toBeNull()
   })
 })
@@ -202,7 +202,7 @@ describe('PPVC-4 — VC canvas mode → Convert button not present', () => {
 
     // The panel should be open (selectedNodeId is set) but the button must NOT appear
     expect(
-      screen.queryByRole('button', { name: /Convert to component/i }),
+      screen.queryByRole('button', { name: /Componentize/i }),
     ).toBeNull()
   })
 })
@@ -240,7 +240,7 @@ describe('PPVC-5 — regular node on page → Convert button present', () => {
     render(<PropertiesPanel />)
 
     expect(
-      screen.getByRole('button', { name: /Convert to component/i }),
+      screen.getByRole('button', { name: /Componentize/i }),
     ).toBeDefined()
   })
 })

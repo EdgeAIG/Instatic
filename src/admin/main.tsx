@@ -4,8 +4,9 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './router'
 import '../styles/globals.css'
 
-// Register all base modules before the app mounts
-import '../modules/base'
+// Base module registration is deferred to AdminEntry (the lazy admin chunk)
+// so the publisher / page-tree / sanitize stack stays out of the eager entry
+// bundle. See src/modules/base/index.ts.
 
 const rootElement = document.getElementById('root')
 if (!rootElement) throw new Error('Root element #root not found')

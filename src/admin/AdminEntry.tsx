@@ -17,6 +17,11 @@ import { AppLoadingScreen } from './AppLoadingScreen'
 import type { AdminWorkspace } from './workspace'
 import styles from './AdminEntry.module.css'
 
+// Register base modules with the global registry. Kept here (not in main.tsx)
+// so the publisher / page-tree / sanitize stack only ships in the lazy admin
+// chunk, never on the login / setup cold path.
+import '../modules/base'
+
 type AdminPhase = 'loading' | 'setup' | 'login' | 'editor'
 type AdminSection = AdminWorkspace
 

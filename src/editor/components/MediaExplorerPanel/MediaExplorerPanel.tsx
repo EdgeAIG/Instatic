@@ -20,6 +20,7 @@ import {
 } from '@core/persistence/cmsMedia'
 import { PanelHeader } from '../shared/PanelHeader'
 import { Button } from '@ui/components/Button'
+import { EmptyState } from '@ui/components/EmptyState'
 import { FileUpload } from '@ui/components/FileUpload'
 import { FilterBar, type FilterBarItem } from '@ui/components/FilterBar'
 import type { IconComponent } from 'pixel-art-icons/types'
@@ -586,7 +587,13 @@ function ExplorerSection({
         data-testid={viewMode === 'grid' ? `media-grid-${bucket}` : undefined}
         data-media-view={viewMode}
       >
-        {count === 0 ? <div className={styles.sectionEmpty}>{emptyLabel}</div> : children}
+        {count === 0 ? (
+          <EmptyState
+            compact
+            title={emptyLabel}
+            className={styles.sectionEmpty}
+          />
+        ) : children}
       </div>
     </section>
   )

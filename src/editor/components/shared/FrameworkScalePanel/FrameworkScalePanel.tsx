@@ -21,6 +21,7 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from '@ui/components/ContextMenu'
+import { EmptyState } from '@ui/components/EmptyState'
 import { FilterBar, type FilterBarItem } from '@ui/components/FilterBar'
 import { Input } from '@ui/components/Input'
 import { Select } from '@ui/components/Select'
@@ -276,19 +277,23 @@ export function FrameworkScalePanel<G extends GroupShape, C extends GeneratorSha
 
         <div className={styles.content}>
           {isDisabled ? (
-            <div className={styles.emptyState}>
-              <span>{adapter.title} module is disabled.</span>
-              <Button variant="secondary" size="sm" onClick={adapter.onToggleDisabled}>
-                Enable
-              </Button>
-            </div>
+            <EmptyState
+              title={`${adapter.title} module is disabled.`}
+              action={
+                <Button variant="secondary" size="sm" onClick={adapter.onToggleDisabled}>
+                  Enable
+                </Button>
+              }
+            />
           ) : sortedGroups.length === 0 ? (
-            <div className={styles.emptyState}>
-              <span>No {adapter.title.toLowerCase()} scales yet.</span>
-              <Button variant="secondary" size="sm" onClick={handleAddGroup}>
-                Create scale
-              </Button>
-            </div>
+            <EmptyState
+              title={`No ${adapter.title.toLowerCase()} scales yet.`}
+              action={
+                <Button variant="secondary" size="sm" onClick={handleAddGroup}>
+                  Create scale
+                </Button>
+              }
+            />
           ) : activeGroup ? (
             <GroupEditor<G, C>
               key={activeGroup.id}
@@ -873,7 +878,7 @@ function ManualEditor<G extends GroupShape, C extends GeneratorShape>({
   return (
     <div className={styles.manualList}>
       {items.length === 0 ? (
-        <div className={styles.emptyManual}>No manual sizes yet.</div>
+        <EmptyState plain compact title="No manual sizes yet." />
       ) : (
         items.map((size) => (
           <div key={size.id} className={styles.manualRow}>
@@ -953,9 +958,11 @@ function ClassGeneratorList<C extends GeneratorShape>({
       </header>
       <div className={styles.classGeneratorRows}>
         {localClasses.length === 0 ? (
-          <span className={styles.classGeneratorEmpty}>
-            No utility classes generated for this scale.
-          </span>
+          <EmptyState
+            plain
+            compact
+            title="No utility classes generated for this scale."
+          />
         ) : (
           localClasses.map((generator) => (
             <div className={styles.classGeneratorRow} key={generator.id}>

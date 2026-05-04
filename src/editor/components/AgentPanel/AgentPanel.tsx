@@ -34,6 +34,7 @@ import { CircleAlertIcon } from 'pixel-art-icons/icons/circle-alert'
 import { AiBoxIcon } from 'pixel-art-icons/icons/ai-box'
 import { PanelHeader } from '../shared/PanelHeader'
 import { Button } from '@ui/components/Button'
+import { EmptyState } from '@ui/components/EmptyState'
 import { Textarea } from '@ui/components/Input'
 import { useDraggablePanel } from '../../hooks/useDraggablePanel'
 import { cn } from '@ui/cn'
@@ -190,7 +191,7 @@ export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { v
         className={styles.thread}
       >
         {messages.length === 0 ? (
-          <EmptyState />
+          <AgentEmptyState />
         ) : (
           messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)
         )}
@@ -352,16 +353,13 @@ function formatActionLabel(actionType: string, params: unknown): string {
 // Empty state
 // ---------------------------------------------------------------------------
 
-function EmptyState() {
+function AgentEmptyState() {
   return (
-    <div className={styles.emptyState}>
-      <AiBoxIcon size={28} color="var(--editor-text-subtle)" className={styles.emptyIcon} />
-      <p className={styles.emptyText}>
-        Describe what you want to build and I'll do it for you.
-      </p>
-      <p className={styles.emptyHint}>
-        Try: "Add a hero section with a heading and button"
-      </p>
-    </div>
+    <EmptyState
+      variant="centered"
+      icon={<AiBoxIcon size={28} color="var(--editor-text-subtle)" />}
+      title="Describe what you want to build and I'll do it for you."
+      description={'Try: "Add a hero section with a heading and button"'}
+    />
   )
 }

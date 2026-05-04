@@ -2,7 +2,7 @@
  * ConvertToComponentButton — inline control to convert a page node into a Visual Component.
  *
  * Two states:
- *   idle    → single "Convert to component" Button (secondary, full-width).
+ *   idle    → single "Componentize" Button (secondary, full-width).
  *   editing → inline Input + Create + Cancel strip with inline error display.
  *
  * Visibility is gated by the parent (PropertiesPanel) — this component is
@@ -55,70 +55,67 @@ export function ConvertToComponentButton({ nodeId }: ConvertToComponentButtonPro
 
   if (!editing) {
     return (
-      <div className={styles.root}>
-        <Button
-          variant="secondary"
-          size="sm"
-          fullWidth
-          onClick={() => setEditing(true)}
-        >
-          Convert to component
-        </Button>
-      </div>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => setEditing(true)}
+      >
+        Componentize
+      </Button>
     )
   }
 
+  // Editing state — span the full parent row so the inline Input + Create +
+  // Cancel strip is not crammed into a half-column.
   return (
-    <div className={styles.root}>
-      <div className={styles.editingStrip}>
-        <div className={styles.inputRow}>
-          <Input
-            ref={inputRef}
-            fieldSize="xs"
-            defaultValue=""
-            placeholder="ComponentName"
-            autoFocus
-            aria-label="Component name"
-            invalid={!!error}
-            onChange={() => {
-              if (error) setError(null)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                handleSubmit()
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                setEditing(false)
-                setError(null)
-              }
-            }}
-          />
-          <Button
-            variant="primary"
-            size="xs"
-            onClick={handleSubmit}
-          >
-            Create
-          </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => {
+    <div className={styles.editingStrip}>
+      <div className={styles.inputRow}>
+        <Input
+          ref={inputRef}
+          fieldSize="sm"
+          defaultValue=""
+          placeholder="ComponentName"
+          autoFocus
+          aria-label="Component name"
+          invalid={!!error}
+          onChange={() => {
+            if (error) setError(null)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              handleSubmit()
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault()
               setEditing(false)
               setError(null)
-            }}
-          >
-            Cancel
-          </Button>
-        </div>
-        {error !== null && (
-          <div role="alert" className={styles.errorAlert}>
-            {error}
-          </div>
-        )}
+            }
+          }}
+        />
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleSubmit}
+        >
+          Create
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setEditing(false)
+            setError(null)
+          }}
+        >
+          Cancel
+        </Button>
       </div>
+      {error !== null && (
+        <div role="alert" className={styles.errorAlert}>
+          {error}
+        </div>
+      )}
     </div>
   )
 }

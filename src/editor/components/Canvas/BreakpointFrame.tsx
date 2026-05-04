@@ -36,6 +36,7 @@ import {
 } from './useRuntimePreviewBuild'
 import { PlusBoxIcon } from 'pixel-art-icons/icons/plus-box'
 import { Button } from '@ui/components/Button'
+import { EmptyState } from '@ui/components/EmptyState'
 import { Tooltip } from '@ui/components/Tooltip'
 import { cn } from '@ui/cn'
 import styles from './BreakpointFrame.module.css'
@@ -189,12 +190,12 @@ function RuntimePreviewChromeStatus({ build }: RuntimePreviewChromeStatusProps) 
 
 function EmptyCanvasState() {
   return (
-    <div className={styles.emptyState}>
-      <PlusBoxIcon size={40} color="var(--editor-text-subtle)" />
-      <p className={styles.emptyTitle}>Empty page</p>
-      <p className={styles.emptyHint}>
-        Add your first element using the toolbar.
-      </p>
-    </div>
+    <EmptyState
+      variant="centered"
+      className={styles.emptyState}
+      icon={<PlusBoxIcon size={40} color="var(--editor-text-subtle)" />}
+      title="Empty page"
+      description="Add your first element using the toolbar."
+    />
   )
 }

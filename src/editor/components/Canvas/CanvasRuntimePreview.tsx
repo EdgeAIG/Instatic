@@ -13,6 +13,7 @@
  */
 
 import type { Page } from '@core/page-tree/schemas'
+import { EmptyState } from '@ui/components/EmptyState'
 import styles from './BreakpointFrame.module.css'
 
 interface CanvasRuntimePreviewProps {
@@ -24,12 +25,12 @@ interface CanvasRuntimePreviewProps {
 export function CanvasRuntimePreview({ page, srcDoc, hasScripts }: CanvasRuntimePreviewProps) {
   if (!hasScripts) {
     return (
-      <div className={styles.emptyState}>
-        <p className={styles.emptyTitle}>Nothing to preview</p>
-        <p className={styles.emptyHint}>
-          Add a script in the Site explorer and enable “Run in canvas” to test it here.
-        </p>
-      </div>
+      <EmptyState
+        variant="centered"
+        className={styles.emptyState}
+        title="Nothing to preview"
+        description="Add a script in the Site explorer and enable “Run in canvas” to test it here."
+      />
     )
   }
 

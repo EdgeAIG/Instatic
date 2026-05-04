@@ -8,6 +8,7 @@
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 32px;
+    padding-bottom: 30px;
     gap: 0;
     overflow-y: auto;
     overflow-x: hidden;
@@ -23,11 +24,15 @@
 
 /* ── Sticky search bar ───────────────────────────────────────────────────── */
 .searchBarRow {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    padding: 10px 14px;
-    background: var(--panel-bg);
+    position: absolute;
+    bottom: -1px;
+    right: 0;
+    left: 0;
+    z-index: 2;
+    padding: 20px;
+    padding-top: 40px;
+    padding-bottom: 12px;
+    background: linear-gradient(0, var(--editor-bg) 50%, transparent);
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
@@ -76,11 +81,7 @@
     inset-inline: 0;
     bottom: 0;
     height: 80px;
-    background: linear-gradient(
-        to bottom,
-        transparent,
-        var(--editor-bg)
-    );
+    background: linear-gradient(to bottom, transparent, var(--editor-bg));
     pointer-events: none;
 }
 

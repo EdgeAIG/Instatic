@@ -19,6 +19,7 @@ import {
 } from "@core/framework/colors";
 import { Button } from "@ui/components/Button";
 import { ColorInput } from "@ui/components/ColorInput";
+import { EmptyState } from "@ui/components/EmptyState";
 import {
   ContextMenu,
   ContextMenuItem,
@@ -321,20 +322,20 @@ export function ColorsPanel({ variant = "docked" }: ColorsPanelProps) {
           />
 
           {colors.tokens.length === 0 ? (
-            <div className={styles.emptyState}>
-              <span>No colors yet.</span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setCreateDialogOpen(true)}
-              >
-                Create color
-              </Button>
-            </div>
+            <EmptyState
+              title="No colors yet."
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCreateDialogOpen(true)}
+                >
+                  Create color
+                </Button>
+              }
+            />
           ) : filteredTokens.length === 0 ? (
-            <div className={styles.emptyState}>
-              No colors match the current filters.
-            </div>
+            <EmptyState title="No colors match the current filters." />
           ) : (
             <div className={styles.rows}>
               {filteredTokens.map((token) => (

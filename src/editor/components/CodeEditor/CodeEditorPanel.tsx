@@ -32,6 +32,7 @@ import { PanelHeader } from '../shared/PanelHeader'
 import { useDraggablePanel } from '../../hooks/useDraggablePanel'
 import { ImagePreview, RemoteAssetPreview } from './ImagePreview'
 import { ScriptSettingsPane } from './ScriptSettingsPane'
+import { EmptyState } from '@ui/components/EmptyState'
 import { cn } from '@ui/cn'
 import styles from './CodeEditorPanel.module.css'
 
@@ -148,12 +149,11 @@ export const CodeEditorPanel = memo(function CodeEditorPanel() {
 
           ) : !activeFile ? (
             /* No file selected — show empty state */
-            <div className={styles.emptyState}>
-              <p>Select a file to edit</p>
-              <p className={styles.emptyHint}>
-                Click any file in the Files panel to open it here.
-              </p>
-            </div>
+            <EmptyState
+              variant="centered"
+              title="Select a file to edit"
+              description="Click any file in the Files panel to open it here."
+            />
 
           ) : isImageAsset || isNonImageAsset ? (
             /* Asset file — ImagePreview handles both image and binary cases */

@@ -94,12 +94,12 @@ export async function handleServerRequest(
   }
 
   if (runtime.staticDir && url.pathname.startsWith('/assets/')) {
-    const asset = await serveStaticFile(runtime.staticDir, url.pathname)
+    const asset = await serveStaticFile(runtime.staticDir, url.pathname, req)
     if (asset) return asset
   }
 
   if (runtime.uploadsDir && url.pathname.startsWith('/uploads/')) {
-    const upload = await serveStaticFile(runtime.uploadsDir, url.pathname.slice('/uploads'.length))
+    const upload = await serveStaticFile(runtime.uploadsDir, url.pathname.slice('/uploads'.length), req)
     if (upload) return upload
   }
 
@@ -107,7 +107,7 @@ export async function handleServerRequest(
 
   if (isAdminPath) {
     if (runtime.staticDir) {
-      const adminApp = await serveAdminApp(runtime.staticDir)
+      const adminApp = await serveAdminApp(runtime.staticDir, req)
       if (adminApp) return adminApp
     }
     // Admin SPA isn't served from this port (dev mode, or production

@@ -15,6 +15,7 @@ import { findParamOrigin } from '@core/visualComponents/origin'
 import { registry } from '@core/module-engine/registry'
 import type { VisualComponent, VCParam, VCNode } from '@core/visualComponents/schemas'
 import { Button } from '@ui/components/Button'
+import { EmptyState } from '@ui/components/EmptyState'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import styles from './ComponentParamsOverview.module.css'
 
@@ -106,9 +107,11 @@ export function ComponentParamsOverview({ vc }: ComponentParamsOverviewProps) {
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
       {vc.params.length === 0 ? (
-        <p className={styles.emptyHint}>
-          Promote a property to create your first param.
-        </p>
+        <EmptyState
+          plain
+          compact
+          title="Promote a property to create your first param."
+        />
       ) : (
         <ul className={styles.paramList} aria-label="Component params">
           {vc.params.map((param) => {

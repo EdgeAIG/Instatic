@@ -461,7 +461,7 @@ describe('ContentPage', () => {
 
     clickToolbarPublish()
     const publishedButton = await screen.findByRole('button', { name: /^published$/i }) as HTMLButtonElement
-    expect(publishedButton.disabled).toBe(true)
+    expect(publishedButton.getAttribute('aria-disabled')).toBe('true')
 
     const calls = (globalThis as typeof globalThis & { __contentFetchCalls?: FetchCall[] }).__contentFetchCalls ?? []
     const saveCall = calls.find((call) => String(call.input) === '/api/cms/content/entries/entry_1' && call.init?.method === 'PUT')
@@ -1366,7 +1366,7 @@ describe('ContentPage', () => {
     fireEvent.change(title, { target: { value: 'My first post' } })
     clickToolbarPublish()
     const publishedButton = await screen.findByRole('button', { name: /^published$/i }) as HTMLButtonElement
-    expect(publishedButton.disabled).toBe(true)
+    expect(publishedButton.getAttribute('aria-disabled')).toBe('true')
 
     const slugInput = screen.getByLabelText('Slug') as HTMLInputElement
     expect(slugInput.disabled).toBe(false)

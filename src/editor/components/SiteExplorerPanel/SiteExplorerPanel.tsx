@@ -7,6 +7,7 @@ import type { VisualComponent } from '@core/visualComponents/schemas'
 import { createUniquePageSlug, pagePublicPath } from '@core/page-tree/slugs'
 import { PanelHeader } from '../shared/PanelHeader'
 import { Button } from '@ui/components/Button'
+import { EmptyState } from '@ui/components/EmptyState'
 import type { IconComponent } from 'pixel-art-icons/types'
 import { FilePlusIcon } from 'pixel-art-icons/icons/file-plus'
 import { FileTextIcon } from 'pixel-art-icons/icons/file-text'
@@ -284,7 +285,7 @@ export function SiteExplorerPanel({
 
         <div className={styles.content}>
           {!site ? (
-            <div className={styles.emptyState}>Loading site...</div>
+            <EmptyState compact title="Loading site..." />
           ) : (
             <>
               <ExplorerSection
@@ -578,7 +579,13 @@ function ExplorerSection({
         </Button>
       </div>
       <div className={styles.rows}>
-        {count === 0 ? <div className={styles.sectionEmpty}>{emptyLabel}</div> : children}
+        {count === 0 ? (
+          <EmptyState
+            compact
+            title={emptyLabel}
+            className={styles.sectionEmpty}
+          />
+        ) : children}
       </div>
     </section>
   )

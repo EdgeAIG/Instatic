@@ -188,32 +188,3 @@
   opacity: 0.70;
 }
 
-/* ── Empty state ─────────────────────────────────────────────────────────── */
-.emptyState {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--editor-text-subtle);
-  padding: 24px 16px;
-  text-align: center;
-}
-
-.emptyIcon {
-  opacity: 0.40;
-}
-
-.emptyText {
-  font-size: 12px;
-  line-height: 1.6;
-  margin: 0;
-}
-
-.emptyHint {
-  font-size: 10px;
-  line-height: 1.5;
-  margin: 0;
-  color: var(--editor-border-med);
-}

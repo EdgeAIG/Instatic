@@ -58,17 +58,6 @@
     overflow: hidden;
 }
 
-.emptyState {
-    display: grid;
-    place-items: center;
-    flex: 1;
-    padding: 28px 20px;
-    color: var(--editor-text-muted);
-    font-size: 12px;
-    line-height: 1.6;
-    text-align: center;
-}
-
 /* ── Node inspector container — holds ClassPicker + StyleSurface (no overflow) */
 .nodeArea {
     flex: 1;

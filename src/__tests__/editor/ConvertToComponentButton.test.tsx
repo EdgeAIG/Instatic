@@ -1,7 +1,7 @@
 /**
  * ConvertToComponentButton — component tests
  *
- * CTB-1  Idle state: "Convert to component" button is rendered
+ * CTB-1  Idle state: "Componentize" button is rendered
  * CTB-2  Click → transitions to editing state (input + Create + Cancel)
  * CTB-3  Submit invalid name → role="alert" rendered, no VC created
  * CTB-4  Submit valid PascalCase name → activeDocument switches to new VC
@@ -73,13 +73,13 @@ function setupPageWithNode(): { nodeId: string; rootId: string } {
 }
 
 // ---------------------------------------------------------------------------
-// CTB-1 — idle state renders "Convert to component" button
+// CTB-1 — idle state renders "Componentize" button
 // ---------------------------------------------------------------------------
 
 describe('CTB-1 — idle state', () => {
-  it('renders a "Convert to component" button in idle state', () => {
+  it('renders a "Componentize" button in idle state', () => {
     render(<ConvertToComponentButton nodeId="any" />)
-    expect(screen.getByRole('button', { name: /convert to component/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /componentize/i })).toBeDefined()
   })
 
   it('does NOT show the name input in idle state', () => {
@@ -96,19 +96,19 @@ describe('CTB-2 — click transitions to editing state', () => {
   it('shows the component name input, Create button, and Cancel button after click', () => {
     render(<ConvertToComponentButton nodeId="any" />)
 
-    fireEvent.click(screen.getByRole('button', { name: /convert to component/i }))
+    fireEvent.click(screen.getByRole('button', { name: /componentize/i }))
 
     expect(screen.getByRole('textbox', { name: /component name/i })).toBeDefined()
     expect(screen.getByRole('button', { name: /create/i })).toBeDefined()
     expect(screen.getByRole('button', { name: /cancel/i })).toBeDefined()
   })
 
-  it('hides the "Convert to component" button when in editing state', () => {
+  it('hides the "Componentize" button when in editing state', () => {
     render(<ConvertToComponentButton nodeId="any" />)
 
-    fireEvent.click(screen.getByRole('button', { name: /convert to component/i }))
+    fireEvent.click(screen.getByRole('button', { name: /componentize/i }))
 
-    expect(screen.queryByRole('button', { name: /convert to component/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /componentize/i })).toBeNull()
   })
 })
 
@@ -125,7 +125,7 @@ describe('CTB-3 — invalid name shows alert and does not create a VC', () => {
     render(<ConvertToComponentButton nodeId="any-node" />)
 
     // Enter editing state
-    fireEvent.click(screen.getByRole('button', { name: /convert to component/i }))
+    fireEvent.click(screen.getByRole('button', { name: /componentize/i }))
 
     const input = screen.getByRole('textbox', { name: /component name/i }) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'lowercase' } })
@@ -143,7 +143,7 @@ describe('CTB-3 — invalid name shows alert and does not create a VC', () => {
 
     render(<ConvertToComponentButton nodeId="any-node" />)
 
-    fireEvent.click(screen.getByRole('button', { name: /convert to component/i }))
+    fireEvent.click(screen.getByRole('button', { name: /componentize/i }))
     // Input value is '' (defaultValue="")
     fireEvent.click(screen.getByRole('button', { name: /create/i }))
 
@@ -163,7 +163,7 @@ describe('CTB-4 — valid name converts node and switches to VC canvas', () => {
 
     render(<ConvertToComponentButton nodeId={nodeId} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /convert to component/i }))
+    fireEvent.click(screen.getByRole('button', { name: /componentize/i }))
 
     const input = screen.getByRole('textbox', { name: /component name/i }) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'MyCard' } })
@@ -183,7 +183,7 @@ describe('CTB-4 — valid name converts node and switches to VC canvas', () => {
 
     render(<ConvertToComponentButton nodeId={nodeId} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /convert to component/i }))
+    fireEvent.click(screen.getByRole('button', { name: /componentize/i }))
 
     const input = screen.getByRole('textbox', { name: /component name/i }) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'HeroSection' } })
@@ -201,15 +201,15 @@ describe('CTB-5 — Escape key cancels back to idle', () => {
   it('pressing Escape in the name input resets to idle state', () => {
     render(<ConvertToComponentButton nodeId="any" />)
 
-    fireEvent.click(screen.getByRole('button', { name: /convert to component/i }))
+    fireEvent.click(screen.getByRole('button', { name: /componentize/i }))
     expect(screen.getByRole('textbox', { name: /component name/i })).toBeDefined()
 
     const input = screen.getByRole('textbox', { name: /component name/i })
     fireEvent.keyDown(input, { key: 'Escape' })
 
-    // Input and action buttons gone; "Convert to component" button back
+    // Input and action buttons gone; "Componentize" button back
     expect(screen.queryByRole('textbox', { name: /component name/i })).toBeNull()
-    expect(screen.getByRole('button', { name: /convert to component/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /componentize/i })).toBeDefined()
   })
 
   it('Escape also clears any inline validation error', () => {
@@ -219,7 +219,7 @@ describe('CTB-5 — Escape key cancels back to idle', () => {
     render(<ConvertToComponentButton nodeId="any-node" />)
 
     // Produce a validation error first
-    fireEvent.click(screen.getByRole('button', { name: /convert to component/i }))
+    fireEvent.click(screen.getByRole('button', { name: /componentize/i }))
     const input = screen.getByRole('textbox', { name: /component name/i })
     fireEvent.change(input, { target: { value: 'bad' } })
     fireEvent.keyDown(input, { key: 'Enter' })
@@ -228,7 +228,7 @@ describe('CTB-5 — Escape key cancels back to idle', () => {
     // Escape cancels and clears the error
     fireEvent.keyDown(input, { key: 'Escape' })
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.getByRole('button', { name: /convert to component/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /componentize/i })).toBeDefined()
   })
 })
 
@@ -240,13 +240,13 @@ describe('CTB-6 — Cancel button returns to idle', () => {
   it('clicking Cancel resets to idle state', () => {
     render(<ConvertToComponentButton nodeId="any" />)
 
-    fireEvent.click(screen.getByRole('button', { name: /convert to component/i }))
+    fireEvent.click(screen.getByRole('button', { name: /componentize/i }))
     expect(screen.getByRole('textbox', { name: /component name/i })).toBeDefined()
 
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
 
     expect(screen.queryByRole('textbox', { name: /component name/i })).toBeNull()
-    expect(screen.getByRole('button', { name: /convert to component/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /componentize/i })).toBeDefined()
   })
 
   it('Cancel also clears a validation error', () => {
@@ -256,7 +256,7 @@ describe('CTB-6 — Cancel button returns to idle', () => {
     render(<ConvertToComponentButton nodeId="any-node" />)
 
     // Produce a validation error
-    fireEvent.click(screen.getByRole('button', { name: /convert to component/i }))
+    fireEvent.click(screen.getByRole('button', { name: /componentize/i }))
     const input = screen.getByRole('textbox', { name: /component name/i })
     fireEvent.change(input, { target: { value: 'bad' } })
     fireEvent.keyDown(input, { key: 'Enter' })
@@ -265,6 +265,6 @@ describe('CTB-6 — Cancel button returns to idle', () => {
     // Cancel clears it
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.getByRole('button', { name: /convert to component/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /componentize/i })).toBeDefined()
   })
 })
