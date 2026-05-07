@@ -20,6 +20,7 @@ function resetStore() {
     activeDocument: null,
     siteExplorerPanelOpen: false,
     selectedNodeId: null,
+    selectedNodeIds: [],
     _historyPast: [],
     _historyFuture: [],
     canUndo: false,

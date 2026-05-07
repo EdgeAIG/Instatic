@@ -12,6 +12,7 @@ beforeEach(() => {
     site,
     activePageId: site.pages[0].id,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     activeBreakpointId: 'desktop',
     hasUnsavedChanges: false,

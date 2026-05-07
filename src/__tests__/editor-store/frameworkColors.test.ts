@@ -9,6 +9,7 @@ function resetStore() {
     site: makeSite(),
     activePageId: 'page-1',
     selectedNodeId: null,
+    selectedNodeIds: [],
     activeClassId: null,
     selectedSelectorClassId: null,
     _historyPast: [],

@@ -390,7 +390,7 @@ export function createPageBuilderMcpServer(
       ),
       tool(
         'updateNodeProps',
-        'Patch one or more prop values on an existing node. The patch shallow-merges with the current props (omitted keys keep their current value; pass an empty string or null to clear). Pass `breakpointId` to write a breakpoint-specific override instead of changing the base value — the override layers on top of the base value at that breakpoint. Sanitises richtext-keyed props through DOMPurify automatically.',
+        'Patch one or more prop values on an existing node. The patch shallow-merges with the current props (omitted keys keep their current value; pass an empty string or null to clear). `breakpointId` writes a per-breakpoint override and is rejected for content props (text, tag, src, alt, href, …) — those are single-value across all breakpoints because the published page is one HTML document. For per-breakpoint *visual* variation use class breakpoint styles via createClass.breakpointStyles / updateClassStyles instead. Sanitises richtext-keyed props through DOMPurify automatically.',
         updateNodePropsInputSchema,
         async (input) => callBridgeMutation('updateNodeProps', input),
         { alwaysLoad: true },
@@ -560,7 +560,7 @@ export function inspectPageNode(ctx: PageBuilderToolContext, args: InspectNodeAr
   if (!node) return { node: null, error: `Node not found: ${args.nodeId}` }
 
   const breakpointId = args.breakpointId ?? ctx.activeBreakpointId
-  const resolvedProps = resolveNodeProps(node, breakpointId)
+  const resolvedProps = resolveNodeProps(node, breakpointId, ctx.modules)
   const classes = node.classIds.map((classId) => {
     const cls = ctx.classes.find((item) => item.id === classId)
     if (!cls) return { id: classId, missing: true }
@@ -686,11 +686,25 @@ function redactSnapshotForJson(payload: AgentRenderSnapshotPayload): AgentRender
 function resolveNodeProps(
   node: PageContext['nodes'][number],
   breakpointId: string,
+  modules: PageContext['availableModules'],
 ): Record<string, unknown> {
   const override = node.breakpointOverrides[breakpointId]
-  return override && Object.keys(override).length > 0
-    ? { ...node.props, ...override }
-    : node.props
+  if (!override || Object.keys(override).length === 0) return node.props
+  // Filter to props the module schema marks `breakpointOverridable` —
+  // content props are single-value across breakpoints because the published
+  // page is one HTML document. Kept consistent with the canvas/publisher
+  // resolveProps behaviour.
+  const moduleDef = modules.find((m) => m.id === node.moduleId)
+  if (!moduleDef) return { ...node.props, ...override }
+  const overridable = new Set(
+    moduleDef.props.filter((p) => p.breakpointOverridable === true).map((p) => p.key),
+  )
+  const filtered: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(override)) {
+    if (overridable.has(key)) filtered[key] = value
+  }
+  if (Object.keys(filtered).length === 0) return node.props
+  return { ...node.props, ...filtered }
 }
 
 function mergeResolvedClassStyles(classes: Array<{

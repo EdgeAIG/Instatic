@@ -7,6 +7,13 @@
  * slice. The persisted shape is validated via TypeBox (`ClipboardPayloadSchema`)
  * on load; corruption silently resolves to "no clipboard" rather than throwing.
  *
+ * Multi-root payloads (Task #multi-select):
+ * - The persisted payload now stores `rootNodeIds: string[]`. A single-node
+ *   copy is `[id]`; a multi-select copy preserves selection order.
+ * - Paste places every root in document order under the resolved location;
+ *   cross-site class import / scoped-class remapping logic is shared between
+ *   roots in one transaction.
+ *
  * Paste placement is "smart": if the right-clicked target accepts children,
  * the subtree is pasted as the last child of the target; otherwise it is
  * pasted as the next sibling under the target's parent. The page root is
@@ -45,32 +52,42 @@ import type { EditorStoreSliceCreator } from '../types'
  * In-memory snapshot of the latest copy/cut. Mirrors the persisted payload
  * but is also kept reactively on the store so menus / shortcuts can react
  * to clipboard changes without polling localStorage.
+ *
+ * `rootNodeIds` is ordered: a multi-select copy preserves selection order,
+ * a single-node copy is a 1-length array.
  */
 export interface ClipboardEntry {
-  rootNodeId: string
+  rootNodeIds: string[]
   nodes: Record<string, PageNode>
   classes: Record<string, CSSClass>
   copiedAt: number
 }
 
 export interface ClipboardSlice {
-  /** Latest copied / cut subtree. Null when the clipboard is empty. */
+  /** Latest copied / cut subtree(s). Null when the clipboard is empty. */
   clipboardEntry: ClipboardEntry | null
 
   /** Capture a node's subtree into the clipboard (in memory + localStorage). */
   copyNode: (nodeId: string) => boolean
+  /** Capture a multi-selection of subtrees as one ordered clipboard payload. */
+  copyNodes: (nodeIds: string[]) => boolean
   /**
    * Copy a node's subtree, then delete it from the active page.
    * Returns true if a copy + delete actually happened.
    */
   cutNode: (nodeId: string) => boolean
+  /** Multi-cut: copy then delete every id in one undo step. */
+  cutNodes: (nodeIds: string[]) => boolean
   /**
-   * Paste the clipboard subtree relative to `targetNodeId`.
+   * Paste the clipboard subtree(s) relative to `targetNodeId`.
    * If the target accepts children, the subtree is appended inside it;
    * otherwise it's inserted as the next sibling under the target's parent.
-   * Returns the new root node ID, or null if paste was a no-op.
+   * For multi-root payloads, every root is placed consecutively in selection
+   * order at the resolved location (single undo step).
+   * Returns the new root node IDs (in selection order), or null if paste was
+   * a no-op.
    */
-  pasteNode: (targetNodeId: string) => string | null
+  pasteNode: (targetNodeId: string) => string[] | null
 
   /** Clear the clipboard from memory + localStorage. */
   clearClipboard: () => void
@@ -95,26 +112,57 @@ function getActivePage(state: {
 }
 
 /**
- * Collect the subtree rooted at `nodeId` into a flat nodes map, ready to
- * embed in a clipboard payload. Rejects nodes that are missing from the
- * page tree.
+ * Reduce a multi-selection to its top-level set (drop ids whose ancestor is
+ * also in the selection — those would be copied with the ancestor anyway).
+ *
+ * Returned ids preserve input order.
  */
-function collectSubtree(
-  page: Page,
-  nodeId: string,
-): { rootNodeId: string; nodes: Record<string, PageNode> } | null {
-  if (!page.nodes[nodeId]) return null
-  const nodes: Record<string, PageNode> = {}
-  const stack = [nodeId]
-  while (stack.length > 0) {
-    const id = stack.pop()!
-    if (nodes[id]) continue
-    const node = page.nodes[id]
-    if (!node) continue
-    nodes[id] = { ...node, children: [...node.children] }
-    stack.push(...node.children)
+function topLevelOnly(page: Page, ids: string[]): string[] {
+  const idSet = new Set(ids)
+  const result: string[] = []
+  for (const id of ids) {
+    let ancestor = getParent(page, id)
+    let dominated = false
+    while (ancestor) {
+      if (idSet.has(ancestor.id)) {
+        dominated = true
+        break
+      }
+      ancestor = getParent(page, ancestor.id)
+    }
+    if (!dominated) result.push(id)
   }
-  return { rootNodeId: nodeId, nodes }
+  return result
+}
+
+/**
+ * Collect the subtrees rooted at every id in `rootIds` into a single flat
+ * nodes map. Used by both single- and multi-copy code paths. Skips ids not
+ * present in the page (returning a non-null payload as long as at least one
+ * root resolved).
+ */
+function collectSubtrees(
+  page: Page,
+  rootIds: string[],
+): { rootNodeIds: string[]; nodes: Record<string, PageNode> } | null {
+  if (rootIds.length === 0) return null
+  const nodes: Record<string, PageNode> = {}
+  const validRoots: string[] = []
+  for (const rootId of rootIds) {
+    if (!page.nodes[rootId]) continue
+    validRoots.push(rootId)
+    const stack = [rootId]
+    while (stack.length > 0) {
+      const id = stack.pop()!
+      if (nodes[id]) continue
+      const node = page.nodes[id]
+      if (!node) continue
+      nodes[id] = { ...node, children: [...node.children] }
+      stack.push(...node.children)
+    }
+  }
+  if (validRoots.length === 0) return null
+  return { rootNodeIds: validRoots, nodes }
 }
 
 /**
@@ -181,7 +229,7 @@ export const createClipboardSlice: EditorStoreSliceCreator<ClipboardSlice> = (
   const persisted = readClipboardPayload()
   const initialEntry: ClipboardEntry | null = persisted
     ? {
-        rootNodeId: persisted.rootNodeId,
+        rootNodeIds: persisted.rootNodeIds,
         nodes: persisted.nodes,
         classes: persisted.classes,
         copiedAt: persisted.copiedAt,
@@ -191,7 +239,7 @@ export const createClipboardSlice: EditorStoreSliceCreator<ClipboardSlice> = (
   function persistEntry(entry: ClipboardEntry): void {
     const payload: ClipboardPayload = {
       version: CLIPBOARD_VERSION,
-      rootNodeId: entry.rootNodeId,
+      rootNodeIds: entry.rootNodeIds,
       nodes: entry.nodes,
       classes: entry.classes,
       copiedAt: entry.copiedAt,
@@ -199,32 +247,41 @@ export const createClipboardSlice: EditorStoreSliceCreator<ClipboardSlice> = (
     writeClipboardPayload(payload)
   }
 
+  /** Shared implementation for `copyNode` / `copyNodes`. */
+  function copyImpl(nodeIds: string[]): boolean {
+    const state = get()
+    const page = getActivePage(state)
+    if (!page) return false
+    if (nodeIds.length === 0) return false
+
+    // Refuse to include the page root — duplicating "the entire page body" has
+    // no meaningful target placement and matches existing root-guard policy.
+    const filtered = nodeIds.filter((id) => id !== page.rootNodeId)
+    if (filtered.length === 0) return false
+
+    const tops = topLevelOnly(page, filtered)
+    const subtrees = collectSubtrees(page, tops)
+    if (!subtrees) return false
+
+    const siteClasses = state.site?.classes ?? {}
+    const classes = collectReferencedClasses(subtrees.nodes, siteClasses)
+    const entry: ClipboardEntry = {
+      rootNodeIds: subtrees.rootNodeIds,
+      nodes: subtrees.nodes,
+      classes,
+      copiedAt: Date.now(),
+    }
+    set({ clipboardEntry: entry })
+    persistEntry(entry)
+    return true
+  }
+
   return {
     clipboardEntry: initialEntry,
 
-    copyNode: (nodeId) => {
-      const state = get()
-      const page = getActivePage(state)
-      if (!page) return false
-      const subtree = collectSubtree(page, nodeId)
-      if (!subtree) return false
-      // Refuse to copy the page root — duplicating "the entire page body" has
-      // no meaningful target placement and matches the existing duplicate /
-      // delete root-guard policy in page-tree mutations.
-      if (subtree.rootNodeId === page.rootNodeId) return false
+    copyNode: (nodeId) => copyImpl([nodeId]),
 
-      const siteClasses = state.site?.classes ?? {}
-      const classes = collectReferencedClasses(subtree.nodes, siteClasses)
-      const entry: ClipboardEntry = {
-        rootNodeId: subtree.rootNodeId,
-        nodes: subtree.nodes,
-        classes,
-        copiedAt: Date.now(),
-      }
-      set({ clipboardEntry: entry })
-      persistEntry(entry)
-      return true
-    },
+    copyNodes: (nodeIds) => copyImpl(nodeIds),
 
     cutNode: (nodeId) => {
       const state = get()
@@ -240,19 +297,39 @@ export const createClipboardSlice: EditorStoreSliceCreator<ClipboardSlice> = (
       return true
     },
 
+    cutNodes: (nodeIds) => {
+      const state = get()
+      const page = getActivePage(state)
+      if (!page) return false
+      if (nodeIds.length === 0) return false
+      if (!state.copyNodes(nodeIds)) return false
+      // Single undo step for the whole multi-cut. `deleteNodes` orders by
+      // depth-DESC and skips redundant ids, matching the copy semantics.
+      get().deleteNodes(nodeIds)
+      return true
+    },
+
     pasteNode: (targetNodeId) => {
       const state = get()
       const entry = state.clipboardEntry
-      if (!entry) return null
+      if (!entry || entry.rootNodeIds.length === 0) return null
 
       const page = getActivePage(state)
       if (!page) return null
       const location = resolvePasteLocation(page, targetNodeId)
       if (!location) return null
 
-      // Pre-compute new node IDs so scoped-class scope.nodeId can be remapped
-      // before classes are written into the target site.
-      const nodeIdMap = buildSubtreeNodeIdMap(entry.rootNodeId, entry.nodes)
+      // Pre-compute new node IDs across ALL roots so scoped-class scope.nodeId
+      // can be remapped before classes are written into the target site.
+      // Each root's subtree gets its own id-remap; we union them into one map
+      // so a class scoped to any pasted node finds its remap.
+      const nodeIdMap = new Map<string, string>()
+      for (const rootId of entry.rootNodeIds) {
+        const subtreeMap = buildSubtreeNodeIdMap(rootId, entry.nodes)
+        for (const [oldId, newId] of subtreeMap) {
+          if (!nodeIdMap.has(oldId)) nodeIdMap.set(oldId, newId)
+        }
+      }
 
       // Build the class plan. Each entry resolves to one of:
       //   - { kind: 'reuse', id }   — already present in target site
@@ -354,7 +431,7 @@ export const createClipboardSlice: EditorStoreSliceCreator<ClipboardSlice> = (
 
       // Snapshot history once; the entire paste is a single undo step.
       get().pushHistory()
-      let newRootId: string | null = null
+      const newRootIds: string[] = []
       set((draft) => {
         if (!draft.site) return
         const draftPage = draft.site.pages.find((p) => p.id === draft.activePageId)
@@ -367,21 +444,28 @@ export const createClipboardSlice: EditorStoreSliceCreator<ClipboardSlice> = (
           }
         }
 
-        // 2. Insert the subtree using the precomputed nodeIdMap so scoped
-        //    classes already point at the new IDs.
-        newRootId = pasteSubtree(
-          draftPage,
-          { rootNodeId: entry.rootNodeId, nodes: entry.nodes },
-          location.parentId,
-          location.index,
-          { nodeIdMap, classIdRemap },
-        )
+        // 2. Insert each root's subtree at the resolved location, preserving
+        //    selection order. For "inside" pastes (target accepts children),
+        //    every root is appended; for "next sibling" pastes, each root
+        //    increments the insertion index so siblings end up adjacent.
+        let runningIndex = location.index
+        for (const rootId of entry.rootNodeIds) {
+          const newId = pasteSubtree(
+            draftPage,
+            { rootNodeId: rootId, nodes: entry.nodes },
+            location.parentId,
+            runningIndex,
+            { nodeIdMap, classIdRemap },
+          )
+          newRootIds.push(newId)
+          if (typeof runningIndex === 'number') runningIndex += 1
+        }
 
         draft.site.updatedAt = Date.now()
         draft.hasUnsavedChanges = true
       })
 
-      return newRootId
+      return newRootIds.length > 0 ? newRootIds : null
     },
 
     clearClipboard: () => {

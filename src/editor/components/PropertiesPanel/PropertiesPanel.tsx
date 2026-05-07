@@ -40,12 +40,10 @@ import type { PropertyControl } from '@core/module-engine/types'
 import type { CSSClass } from '@core/page-tree/schemas'
 import { ClassPicker, type ClassPickerHandle } from './ClassPicker'
 import { StyleSurface, GeneratedUtilityLockedState } from './StyleSurface'
-import {
-  StyleCategoryRail,
-  ALL_STYLE_CATEGORY_ID,
-} from './StyleCategoryRail'
+import { StyleCategoryRail } from './StyleCategoryRail'
 import { ClassComposer } from './ClassComposer'
 import {
+  CLASS_STYLE_SECTIONS,
   getClassStyleSectionSetCounts,
   getActiveStyleTab,
 } from './cssControlTypes'
@@ -628,9 +626,11 @@ interface SelectorInspectorProps {
   activeBreakpointId: string | undefined
 }
 
+const FIRST_STYLE_SECTION_ID = CLASS_STYLE_SECTIONS[0].id
+
 function SelectorInspector({ cls, activeBreakpointId }: SelectorInspectorProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [activeAnchorId, setActiveAnchorId] = useState(ALL_STYLE_CATEGORY_ID)
+  const [activeAnchorId, setActiveAnchorId] = useState<string>(FIRST_STYLE_SECTION_ID)
   const [styleQuery, setStyleQuery] = useState('')
   const clearStyleQuery = useCallback(() => setStyleQuery(''), [])
   // Smooth-scroll behaviour gated by the `propertiesSmoothScroll` preference.
@@ -645,7 +645,7 @@ function SelectorInspector({ cls, activeBreakpointId }: SelectorInspectorProps) 
       if (!container) return
       const sections = container.querySelectorAll<HTMLElement>('[data-style-section]')
       const containerRect = container.getBoundingClientRect()
-      let activeId = ALL_STYLE_CATEGORY_ID
+      let activeId = FIRST_STYLE_SECTION_ID
       let closestAboveTop = -Infinity
       for (const section of Array.from(sections)) {
         const id = section.getAttribute('data-style-section')
@@ -667,11 +667,6 @@ function SelectorInspector({ cls, activeBreakpointId }: SelectorInspectorProps) 
     const container = scrollRef.current
     if (!container) return
     const behavior: ScrollBehavior = propertiesSmoothScroll ? 'smooth' : 'auto'
-    if (sectionId === ALL_STYLE_CATEGORY_ID) {
-      setActiveAnchorId(ALL_STYLE_CATEGORY_ID)
-      container.scrollTo({ top: 0, behavior })
-      return
-    }
     setActiveAnchorId(sectionId)
     const el = container.querySelector<HTMLElement>(`[data-style-section="${sectionId}"]`)
     if (!el) return

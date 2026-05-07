@@ -29,6 +29,7 @@ function resetStore() {
     site: null,
     activePageId: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     settingsModalOpen: false,
     settingsModalSection: 'pages',

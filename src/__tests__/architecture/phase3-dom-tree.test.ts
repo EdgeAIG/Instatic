@@ -441,11 +441,19 @@ describe('Phase 3 Gate 4 — DomTreeContext must not carry selectedNodeId/hovere
     const rel = treeNodeFile.replace(SRC_ROOT, 'src/')
     const violations: string[] = []
 
-    // 4a — Must contain per-node boolean selector for selectedNodeId
-    if (!/s\.selectedNodeId\s*===\s*nodeId/.test(src)) {
+    // 4a — Must contain per-node boolean selector for selection.
+    // Multi-select (Task #multi-select): the canonical pattern is
+    // `s.selectedNodeIds.includes(nodeId)` so every node in a multi-set shows
+    // the selection ring. The legacy single-anchor pattern
+    // (`s.selectedNodeId === nodeId`) is also accepted for components that
+    // explicitly want anchor-only behavior (e.g. focus tracking).
+    const hasSelectionSelector =
+      /s\.selectedNodeIds\.includes\(nodeId\)/.test(src) ||
+      /s\.selectedNodeId\s*===\s*nodeId/.test(src)
+    if (!hasSelectionSelector) {
       violations.push(
         `${rel} — missing per-node Zustand selector: ` +
-        'useEditorStore(useCallback(s => s.selectedNodeId === nodeId, [nodeId])). ' +
+        'useEditorStore(useCallback(s => s.selectedNodeIds.includes(nodeId), [nodeId])). ' +
         'Without this, all N TreeNodes re-render on every canvas selection event.'
       )
     }

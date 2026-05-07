@@ -32,6 +32,7 @@ function resetStore() {
     activeDocument: null,
     previousActivePageId: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     _historyPast: [],
     _historyFuture: [],

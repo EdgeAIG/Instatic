@@ -388,3 +388,82 @@ describe('LayerNodeContextMenu — orphan slot-instance is NOT locked', () => {
     expect(screen.getByRole('menuitem', { name: /^rename$/i })).toBeDefined()
   })
 })
+
+/**
+ * "Insert module here" must be hidden on non-container nodes (Text, Button,
+ * Image, etc.). With the always-wrap invariant in place, the canvas root is
+ * always a container and the smart-resolve path ascends from non-container
+ * selections, so the only remaining way `useInsertModule` could be called
+ * with a non-container parent is via this submenu's explicit-parent path.
+ * Hiding the menu item upstream is simpler than ascending or aborting downstream.
+ */
+describe('LayerNodeContextMenu — "Insert module here" hidden on non-container nodes', () => {
+  function setupPageWithMixedNodes() {
+    localStorage.clear()
+    const home = makePage({
+      id: 'page-mixed',
+      title: 'Home',
+      slug: 'index',
+      rootNodeId: 'root',
+      nodes: {
+        root: makeNode({ id: 'root', moduleId: 'base.body', children: ['ctr', 'txt', 'btn'] }),
+        ctr: makeNode({ id: 'ctr', moduleId: 'base.container' }),
+        txt: makeNode({ id: 'txt', moduleId: 'base.text' }),
+        btn: makeNode({ id: 'btn', moduleId: 'base.button' }),
+      },
+    })
+    useEditorStore.setState({
+      site: makeSite({ pages: [home], files: [], visualComponents: [] }),
+      activePageId: 'page-mixed',
+      selectedNodeId: null,
+    selectedNodeIds: [],
+      hoveredNodeId: null,
+      activeDocument: null,
+      _historyPast: [],
+      _historyFuture: [],
+      canUndo: false,
+      canRedo: false,
+      hasUnsavedChanges: false,
+    } as Parameters<typeof useEditorStore.setState>[0])
+  }
+
+  function renderMenuFor(nodeId: string) {
+    setupPageWithMixedNodes()
+    return render(
+      <LayerNodeContextMenu
+        x={100}
+        y={200}
+        nodeId={nodeId}
+        onClose={noop}
+        onDelete={noop}
+        onDuplicate={noop}
+        onRename={noop}
+        onWrapInContainer={noop}
+        onCopy={noop}
+        onCut={noop}
+        onPaste={noop}
+      />,
+    )
+  }
+
+  it('"Insert module here" IS shown for a base.container node', () => {
+    renderMenuFor('ctr')
+    expect(
+      screen.getByRole('menuitem', { name: /insert module here/i }),
+    ).toBeDefined()
+  })
+
+  it('"Insert module here" is NOT shown for a base.text node', () => {
+    renderMenuFor('txt')
+    expect(
+      screen.queryByRole('menuitem', { name: /insert module here/i }),
+    ).toBeNull()
+  })
+
+  it('"Insert module here" is NOT shown for a base.button node', () => {
+    renderMenuFor('btn')
+    expect(
+      screen.queryByRole('menuitem', { name: /insert module here/i }),
+    ).toBeNull()
+  })
+})

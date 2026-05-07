@@ -20,6 +20,7 @@ function freshAgentState() {
     canUndo: false,
     canRedo: false,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     activeClassId: null,
     isAgentOpen: true,

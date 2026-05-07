@@ -19,6 +19,7 @@ beforeEach(() => {
     activePageId: 'page-pricing',
     activeDocument: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     hasUnsavedChanges: false,
     previewOpen: false,

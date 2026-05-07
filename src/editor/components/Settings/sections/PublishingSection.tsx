@@ -64,7 +64,6 @@ export function PublishingSection() {
           <Switch
             id={treeShakeId}
             checked={frameworkPreferences.treeShakeGeneratedFrameworkUtilities}
-            hitArea
             onCheckedChange={(value) =>
               updateFrameworkPreferences({ treeShakeGeneratedFrameworkUtilities: value })
             }

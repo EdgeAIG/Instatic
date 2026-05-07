@@ -32,6 +32,7 @@ function freshStore() {
     activePageId: null,
     activeDocument: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     // Anchor activeBreakpointId at 'desktop' so PropertiesPanel.handleChange
     // routes through `updateNodeProps` (writes to props.text). If a prior

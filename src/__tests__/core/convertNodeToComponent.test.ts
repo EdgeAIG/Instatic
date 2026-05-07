@@ -42,6 +42,7 @@ function freshStore() {
     canUndo: false,
     canRedo: false,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     hasUnsavedChanges: false,
     activeDocument: null,

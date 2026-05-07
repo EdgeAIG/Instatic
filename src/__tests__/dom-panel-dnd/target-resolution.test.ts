@@ -60,6 +60,8 @@ describe('DOMPanel DnD target resolution', () => {
       canHaveChildren,
     })).toEqual({
       draggedId: 'c',
+      // Multi-drag: single-drag callers default to `[draggedId]`.
+      draggedIds: ['c'],
       parentId: 'root',
       index: 1,
       position: 'before',
@@ -75,6 +77,7 @@ describe('DOMPanel DnD target resolution', () => {
       canHaveChildren,
     })).toEqual({
       draggedId: 'a',
+      draggedIds: ['a'],
       parentId: 'root',
       index: 1,
       position: 'after',
@@ -98,6 +101,7 @@ describe('DOMPanel DnD target resolution', () => {
       canHaveChildren,
     })).toEqual({
       draggedId: 'leaf',
+      draggedIds: ['leaf'],
       parentId: 'container',
       index: 0,
       position: 'inside',

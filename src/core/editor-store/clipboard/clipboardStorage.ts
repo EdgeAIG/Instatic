@@ -10,12 +10,17 @@
  * changes; `safeParseJson` will fall back to "no clipboard" on mismatch):
  *
  *   {
- *     version: 1,
- *     rootNodeId: string,
- *     nodes: Record<string, PageNode>,    // only the subtree
- *     classes: Record<string, CSSClass>,  // classes referenced by the subtree
+ *     version: 2,
+ *     rootNodeIds: string[],              // ordered roots (multi-select copy)
+ *     nodes: Record<string, PageNode>,    // every node reachable from any root
+ *     classes: Record<string, CSSClass>,  // classes referenced by the nodes
  *     copiedAt: number
  *   }
+ *
+ * Version 2 (this file) — multi-root copy/paste. A single-node copy is
+ * persisted as `rootNodeIds: [id]`. The previous v1 shape (single
+ * `rootNodeId`) is intentionally NOT supported on read; safeParseJson
+ * silently drops v1 payloads (the user's local clipboard is disposable).
  *
  * Any read failure (missing JSON, schema mismatch, unsupported version) is
  * treated as "no clipboard available" — never throws into UI.
@@ -26,18 +31,22 @@ import { CSSClassSchema, PageNodeSchema } from '@core/page-tree/schemas'
 import { safeParseJson } from '@core/utils/jsonValidate'
 
 export const CLIPBOARD_STORAGE_KEY = 'pb-clipboard-v1'
-export const CLIPBOARD_VERSION = 1
+export const CLIPBOARD_VERSION = 2
 
 export const ClipboardPayloadSchema = Type.Object({
   version: Type.Literal(CLIPBOARD_VERSION),
-  /** Root node id INSIDE `nodes` — the entry point for the pasted subtree. */
-  rootNodeId: Type.String(),
-  /** Flat map of every node in the captured subtree. */
+  /**
+   * Ordered root node ids INSIDE `nodes`. A single-node copy uses a 1-length
+   * array; a multi-select copy preserves selection order. Each root's subtree
+   * is reachable through `nodes` via the standard children array.
+   */
+  rootNodeIds: Type.Array(Type.String()),
+  /** Flat map of every node in every captured subtree. */
   nodes: Type.Record(Type.String(), PageNodeSchema),
   /**
-   * Classes referenced by the subtree. Carried alongside the nodes so a
-   * cross-site paste can reconstruct styling. Same-site pastes already have
-   * matching IDs in `site.classes` and ignore this map.
+   * Classes referenced by any node in the payload. Carried alongside the
+   * nodes so a cross-site paste can reconstruct styling. Same-site pastes
+   * already have matching IDs in `site.classes` and ignore this map.
    */
   classes: Type.Record(Type.String(), CSSClassSchema),
   copiedAt: Type.Number(),

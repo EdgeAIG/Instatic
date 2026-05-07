@@ -41,8 +41,10 @@ import {
   toggleNodeLocked,
   toggleNodeHidden,
   moveNode,
+  moveNodes,
   duplicateNode,
   wrapNode,
+  wrapNodes,
 } from '@core/page-tree'
 import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
 import {
@@ -107,6 +109,8 @@ export interface SiteSlice {
    */
   insertComponentRef: (parentId: string, componentId: string) => string | null
   deleteNode: (nodeId: string) => void
+  /** Multi-delete: removes every id and its descendants in one undo step. */
+  deleteNodes: (nodeIds: string[]) => void
   updateNodeProps: (nodeId: string, patch: Record<string, unknown>) => void
   setBreakpointOverride: (nodeId: string, breakpointId: string, patch: Record<string, unknown>) => void
   clearBreakpointOverride: (nodeId: string, breakpointId: string) => void
@@ -114,8 +118,17 @@ export interface SiteSlice {
   toggleNodeLocked: (nodeId: string) => void
   toggleNodeHidden: (nodeId: string) => void
   moveNode: (nodeId: string, newParentId: string, newIndex: number) => void
+  /** Multi-move: moves every top-level id into newParent at newIndex (single undo step). */
+  moveNodes: (nodeIds: string[], newParentId: string, newIndex: number) => void
   duplicateNode: (nodeId: string) => string
+  /** Multi-duplicate: duplicates every id in place (single undo step). Returns the new ids. */
+  duplicateNodes: (nodeIds: string[]) => string[]
   wrapNode: (nodeId: string, containerModuleId: string, defaults?: Record<string, unknown>) => string
+  /**
+   * Wrap a multi-selection inside one new container with closest-common-ancestor
+   * semantics. Returns the new wrapper id, or `null` when the selection is empty.
+   */
+  wrapNodes: (nodeIds: string[], containerModuleId: string, defaults?: Record<string, unknown>) => string | null
   setNodeDynamicBinding: (nodeId: string, propKey: string, binding: DynamicPropBinding) => void
   clearNodeDynamicBinding: (nodeId: string, propKey: string) => void
 
@@ -1061,10 +1074,48 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateActiveTree((tree) => moveNode(tree, nodeId, newParentId, newIndex))
     },
 
+    moveNodes: (nodeIds, newParentId, newIndex) => {
+      if (nodeIds.length === 0) return
+      mutateActiveTree((tree) => moveNodes(tree, nodeIds, newParentId, newIndex))
+    },
+
     duplicateNode: (nodeId) => {
       let newId = ''
       mutateActiveTree((tree) => { newId = duplicateNode(tree, nodeId) })
       return newId
+    },
+
+    duplicateNodes: (nodeIds) => {
+      if (nodeIds.length === 0) return []
+      const newIds: string[] = []
+      mutateActiveTree((tree) => {
+        for (const id of nodeIds) {
+          // Skip the root and any id missing from the tree — duplicateNode
+          // throws on the root, and silently skipping orphans matches the
+          // delete/move guards.
+          if (!tree.nodes[id] || id === tree.rootNodeId) continue
+          newIds.push(duplicateNode(tree, id))
+        }
+      })
+      return newIds
+    },
+
+    deleteNodes: (nodeIds) => {
+      if (nodeIds.length === 0) return
+      mutateActiveTree((tree) => {
+        // Delete each id; descendants of an already-deleted id are gone, so the
+        // helper's "node not found" branch handles the redundant case cleanly.
+        // We sort by depth-DESC so leaves go first, avoiding noisy throws when
+        // a parent is deleted before its child in the same batch.
+        const ordered = [...nodeIds].sort(
+          (a, b) => depthInTree(tree, b) - depthInTree(tree, a),
+        )
+        for (const id of ordered) {
+          if (id === tree.rootNodeId) continue
+          if (!tree.nodes[id]) continue
+          deleteNode(tree, id)
+        }
+      })
     },
 
     wrapNode: (nodeId, containerModuleId, defaults = {}) => {
@@ -1075,6 +1126,19 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       const resolvedDefaults = { ...(mod?.defaults ?? {}), ...defaults }
       let wrapperId = ''
       mutateActiveTree((tree) => { wrapperId = wrapNode(tree, nodeId, containerModuleId, resolvedDefaults) })
+      return wrapperId
+    },
+
+    wrapNodes: (nodeIds, containerModuleId, defaults = {}) => {
+      if (nodeIds.length === 0) return null
+      // Same defaults-resolution rule as `wrapNode` (Task #414 — defaults must
+      // come from the module registry so the wrapper renders).
+      const mod = registry.get(containerModuleId)
+      const resolvedDefaults = { ...(mod?.defaults ?? {}), ...defaults }
+      let wrapperId: string | null = null
+      mutateActiveTree((tree) => {
+        wrapperId = wrapNodes(tree, nodeIds, containerModuleId, resolvedDefaults)
+      })
       return wrapperId
     },
 
@@ -1496,4 +1560,28 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       })
     },
   }
+}
+
+/**
+ * Compute a node's depth in the active tree by walking up to root.
+ * Used by `deleteNodes` to delete leaves before parents within a single batch
+ * so descendants aren't double-removed (which would throw inside the helper).
+ *
+ * Returns 0 for the root, +Infinity for orphans (sorts last in DESC order →
+ * effectively a no-op when the orphan slot is reached).
+ */
+function depthInTree(tree: NodeTree<PageNode>, nodeId: string): number {
+  if (nodeId === tree.rootNodeId) return 0
+  let current = nodeId
+  let depth = 0
+  const visited = new Set<string>()
+  while (!visited.has(current)) {
+    visited.add(current)
+    const parent = Object.values(tree.nodes).find((n) => n.children.includes(current))
+    if (!parent) return Infinity
+    depth++
+    if (parent.id === tree.rootNodeId) return depth
+    current = parent.id
+  }
+  return depth
 }

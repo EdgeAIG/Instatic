@@ -1,0 +1,14 @@
+/*
+ * LayerNodeContextMenu — selection-count chip.
+ *
+ * The chip lives ABOVE the action items in the multi-select state and reads
+ * "N layers selected". It's a presentational label (role="presentation"), not
+ * a menuitem — separated from the rest of the menu by a ContextMenuSeparator.
+ */
+
+.headerChip {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  color: var(--editor-text-subtle);
+  font-weight: 600;
+}

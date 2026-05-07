@@ -3,18 +3,15 @@
  *
  * Renders:
  *   1. Module button (first, always enabled) — uses `definition.icon`. Hidden in global mode.
- *   2. All-styles button.
- *   3. One button per CSS style category from CLASS_STYLE_SECTIONS.
+ *   2. One button per CSS style category from CLASS_STYLE_SECTIONS.
  *
  * CSS category buttons are disabled (with hint tooltip) when no class is active.
  *
  * Exported sentinels:
- *   MODULE_CATEGORY_ID    — 'module'  (module settings tab)
- *   ALL_STYLE_CATEGORY_ID — 'all'    (show all CSS style categories)
+ *   MODULE_CATEGORY_ID — 'module' (module settings tab)
  */
 
 import { Button } from '@ui/components/Button'
-import { BoxStackIcon } from 'pixel-art-icons/icons/box-stack'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
 import type { CSSClass } from '@core/page-tree/schemas'
 import { CLASS_STYLE_SECTIONS } from './cssControlTypes'
@@ -25,7 +22,6 @@ import styles from './StyleCategoryRail.module.css'
 // ---------------------------------------------------------------------------
 
 export const MODULE_CATEGORY_ID = 'module'
-export const ALL_STYLE_CATEGORY_ID = 'all'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -104,21 +100,6 @@ export function StyleCategoryRail({
           onClick={() => onSectionClick(MODULE_CATEGORY_ID)}
         />
       )}
-
-      {/* ── All styles — scroll-to-top shortcut; never carries pressed state ── */}
-      <Button
-        variant="ghost"
-        size="xs"
-        iconOnly
-        pressed={false}
-        onClick={() => onSectionClick(ALL_STYLE_CATEGORY_ID)}
-        disabled={stylesLocked}
-        aria-label="Show all class style categories"
-        tooltip={stylesLocked ? disabledTooltip : 'All styles'}
-        className={styles.categoryRailButton}
-      >
-        <BoxStackIcon size={14} aria-hidden="true" />
-      </Button>
 
       {/* ── CSS category buttons ──────────────────────────────────────── */}
       {CLASS_STYLE_SECTIONS.map((section) => {

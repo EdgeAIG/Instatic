@@ -105,6 +105,7 @@ function setupAnnotatedPage() {
     activePageId: 'page-1',
     activeDocument: null,  // page mode (not VC edit mode)
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     _historyPast: [],
     _historyFuture: [],
@@ -125,6 +126,7 @@ beforeEach(() => {
     activePageId: null,
     activeDocument: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     _historyPast: [],
     _historyFuture: [],

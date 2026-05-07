@@ -28,12 +28,11 @@
     bottom: -1px;
     right: 0;
     left: 0;
-    z-index: 2;
+    z-index: 99;
     padding: 20px;
     padding-top: 40px;
     padding-bottom: 12px;
     background: linear-gradient(0, var(--editor-bg) 50%, transparent);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 /* ── Right column: sticky rail ───────────────────────────────────────────── */

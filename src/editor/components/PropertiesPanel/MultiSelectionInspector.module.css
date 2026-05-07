@@ -1,0 +1,88 @@
+/*
+ * MultiSelectionInspector — body shown in the Properties panel when 2+ nodes
+ * are selected. Replaces the single-node ClassPicker + StyleSurface stack
+ * with:
+ *   - a primary action bar (Duplicate / Delete / Wrap / Copy / Cut / Paste)
+ *   - a list of the selected layers, each with a quick "remove from selection"
+ *
+ * No design tokens are introduced beyond what already lives in globals.css —
+ * the bar uses --editor-* / --panel-* tokens like every other panel surface.
+ */
+
+.root {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Primary action bar — center-aligned grid of buttons inside a soft surface. */
+.actionBar {
+  padding: 14px;
+  border-bottom: 1px solid var(--editor-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.actionRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.actionRow + .actionRow {
+  margin-top: 0;
+}
+
+/* Selected-layers list — scrollable, compact rows */
+.layerList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.layerRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: var(--editor-radius-sm);
+  font-size: 12px;
+  color: var(--editor-text);
+  background: transparent;
+  cursor: default;
+}
+
+.layerRow:hover {
+  background: var(--editor-bg-elevated);
+}
+
+.layerLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layerTag {
+  font-size: 10px;
+  color: var(--editor-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.layerListHeader {
+  padding: 4px 14px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--editor-text-subtle);
+  font-weight: 600;
+}

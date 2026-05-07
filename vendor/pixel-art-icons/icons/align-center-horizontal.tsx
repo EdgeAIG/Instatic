@@ -1,0 +1,18 @@
+import React from 'react';
+import type { IconProps } from '../types';
+
+export function AlignCenterHorizontalIcon({ size = 24, color = 'currentColor', className, style }: IconProps): React.ReactElement {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={color}
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      style={style}
+    >
+      <path d="M5 2h4v2H5zm10 3h4v2h-4zm0 14h4v-2h-4zM3 15h2v5H3zM3 4h2v5H3zm10 3h2v2h-2zm0 10h2v-2h-2zm-8 3h4v2H5zm4-5h2v5H9zM9 4h2v5H9zm10 3h2v2h-2zm0 10h2v-2h-2zM2 11h20v2H2z"/>
+    </svg>
+  );
+}

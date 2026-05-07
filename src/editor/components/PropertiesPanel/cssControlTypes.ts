@@ -11,6 +11,7 @@
 import type { CSSPropertyBag } from '@core/page-tree/schemas'
 import type { IconComponent } from 'pixel-art-icons/types'
 import { LayoutIcon } from 'pixel-art-icons/icons/layout'
+import { MoveIcon } from 'pixel-art-icons/icons/move'
 import { ProportionsIcon } from 'pixel-art-icons/icons/proportions'
 import { RulerDimensionIcon } from 'pixel-art-icons/icons/ruler-dimension'
 import { TextStartTIcon } from 'pixel-art-icons/icons/text-start-t'
@@ -24,6 +25,22 @@ import { PointerIcon } from 'pixel-art-icons/icons/pointer'
 // ---------------------------------------------------------------------------
 
 type CSSControlType = 'color' | 'select' | 'text'
+
+/**
+ * Which framework variable scale (if any) backs autocomplete suggestions
+ * for a CSS property. The string identifies the Token catalog the
+ * `TokenAwareInput` should pull from. Returning undefined means the
+ * property uses a plain text/select/color control with no token suggestions.
+ *
+ * The mapping is intentionally narrow — a property only earns a token source
+ * when the framework's vocabulary is genuinely the right answer for that
+ * value type. Lengths in container-only / item-only contexts that already
+ * have dedicated visual blocks (gap inside flex/grid blocks, top/right/
+ * bottom/left inside the position block, padding/margin inside
+ * SpacingBoxControl) are not in this map because their visual blocks
+ * already wire token suggestions in directly.
+ */
+export type CSSPropertyTokenSource = 'spacing' | 'typography'
 
 // ---------------------------------------------------------------------------
 // CSSPropertyBag keys whose store type is `number`, not `string`.
@@ -88,6 +105,27 @@ export function getCSSPropertyControlType(prop: keyof CSSPropertyBag): CSSContro
 /** Returns the enum option list for a select property, or undefined if not an enum. */
 export function getEnumOptions(prop: keyof CSSPropertyBag): string[] | undefined {
   return ENUM_OPTIONS.get(prop)
+}
+
+/**
+ * Per-property mapping to the framework variable scale that backs its
+ * autocomplete dropdown. Properties absent from this map render with
+ * plain text inputs (no token suggestions).
+ *
+ * Currently surfaces typography variables for `fontSize`. Other typography
+ * properties (lineHeight, letterSpacing) deliberately keep plain text
+ * inputs because they accept unitless / em / px values that don't map to
+ * a single fluid scale.
+ */
+const PROPERTY_TOKEN_SOURCES = new Map<keyof CSSPropertyBag, CSSPropertyTokenSource>([
+  ['fontSize', 'typography'],
+])
+
+/** Returns the framework token source for a property, or undefined when none applies. */
+export function getCSSPropertyTokenSource(
+  prop: keyof CSSPropertyBag,
+): CSSPropertyTokenSource | undefined {
+  return PROPERTY_TOKEN_SOURCES.get(prop)
 }
 
 /**
@@ -252,8 +290,8 @@ export interface ClassStyleSectionDefinition {
 
 export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = [
   {
-    id: 'layout-position',
-    title: 'Layout & Position',
+    id: 'layout',
+    title: 'Layout',
     icon: LayoutIcon,
     defaultOpen: true,
     properties: [
@@ -273,15 +311,22 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
       'gridTemplateRows',
       'gridColumn',
       'gridRow',
+      'overflow',
+      'overflowX',
+      'overflowY',
+    ],
+  },
+  {
+    id: 'position',
+    title: 'Position',
+    icon: MoveIcon,
+    properties: [
       'position',
       'top',
       'right',
       'bottom',
       'left',
       'zIndex',
-      'overflow',
-      'overflowX',
-      'overflowY',
     ],
   },
   {

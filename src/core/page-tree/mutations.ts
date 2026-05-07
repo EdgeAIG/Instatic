@@ -393,6 +393,256 @@ export function wrapNode(
   return wrapper.id
 }
 
+/**
+ * Wrap a multi-selection of nodes inside a single new container.
+ *
+ * Algorithm — "closest common ancestor" semantics (matches Figma):
+ *   1. Reduce `nodeIds` to its TOP-LEVEL set (drop nodes whose ancestor is also
+ *      in the set — they'd be moved with their ancestor anyway).
+ *   2. Find the closest common ancestor of every top-level id.
+ *   3. For each top-level id, walk up to its child-of-CCA — that's the
+ *      "branch" the id contributes to the CCA. The branches are the new
+ *      wrapper's children (deduped, in CCA-children order).
+ *   4. Insert the wrapper at the index of the FIRST branch within the CCA's
+ *      children, then move all branches into the wrapper preserving order.
+ *
+ * The wrapper takes the position of the first contributing branch; subsequent
+ * branches are spliced out of the CCA and into the wrapper. This handles all
+ * three cases uniformly:
+ *   - same parent contiguous → behaves like sequential `wrapNode` calls
+ *   - same parent non-contiguous → wraps every selected sibling, preserving order
+ *   - different parents → wraps the CCA-level branches that CONTAIN the selection
+ *
+ * Returns the new wrapper's id.
+ *
+ * Throws if any id is the root, missing, or if the selection set is empty.
+ */
+export function wrapNodes(
+  tree: NodeTree<PageNode>,
+  nodeIds: string[],
+  containerModuleId: string,
+  containerDefaults: Record<string, unknown> = {},
+): string {
+  if (nodeIds.length === 0) {
+    throw new Error(`[PageTree] wrapNodes requires at least one node id.`)
+  }
+  if (nodeIds.length === 1) {
+    return wrapNode(tree, nodeIds[0], containerModuleId, containerDefaults)
+  }
+
+  // Validate ids exist and are not root.
+  for (const id of nodeIds) {
+    if (id === tree.rootNodeId) {
+      throw new Error(`[PageTree] Cannot wrap the root node.`)
+    }
+    if (!tree.nodes[id]) {
+      throw new Error(`[PageTree] Node "${id}" not found in tree.`)
+    }
+  }
+
+  // ── Step 1: Reduce to top-level ids ────────────────────────────────────────
+  // A node is "top level" within the selection if none of its ancestors are
+  // also in the selection. Otherwise, wrapping it would move it twice.
+  const idSet = new Set(nodeIds)
+  const topLevel: string[] = []
+  for (const id of nodeIds) {
+    let ancestor = getParent(tree, id)
+    let dominated = false
+    while (ancestor) {
+      if (idSet.has(ancestor.id)) {
+        dominated = true
+        break
+      }
+      ancestor = getParent(tree, ancestor.id)
+    }
+    if (!dominated) topLevel.push(id)
+  }
+
+  // ── Step 2: Closest common ancestor ────────────────────────────────────────
+  const cca = findClosestCommonAncestor(tree, topLevel)
+  if (!cca) {
+    throw new Error(`[PageTree] No common ancestor for selection — cannot wrap.`)
+  }
+
+  // ── Step 3: Compute branches (each id's child-of-CCA ancestor) ─────────────
+  // Order them by their position in cca.children so the wrapper preserves the
+  // visual order of the original tree.
+  const branchSet = new Set<string>()
+  for (const id of topLevel) {
+    const branch = ancestorChildOf(tree, id, cca.id)
+    if (!branch) {
+      throw new Error(
+        `[PageTree] Could not resolve branch for "${id}" under "${cca.id}".`,
+      )
+    }
+    branchSet.add(branch)
+  }
+
+  const branchesInOrder = cca.children.filter((childId) => branchSet.has(childId))
+  if (branchesInOrder.length === 0) {
+    throw new Error(`[PageTree] Computed empty branch set — cannot wrap.`)
+  }
+
+  // ── Step 4: Insert wrapper at first-branch index, move branches in ─────────
+  const wrapper = createNode(containerModuleId, containerDefaults)
+  tree.nodes[wrapper.id] = wrapper
+
+  const firstBranchIdx = cca.children.indexOf(branchesInOrder[0])
+  // Remove every branch from cca.children, then splice the wrapper in at the
+  // first-branch slot. Wrapper's children become the removed branches in order.
+  cca.children = cca.children.filter((childId) => !branchSet.has(childId))
+  cca.children.splice(firstBranchIdx, 0, wrapper.id)
+  wrapper.children = branchesInOrder
+
+  return wrapper.id
+}
+
+/**
+ * Move a multi-selection of nodes into a new parent at a target index.
+ *
+ * Same "top-level reduction" as `wrapNodes`: nodes whose ancestor is also in
+ * the move set are dropped (they move with the ancestor automatically).
+ *
+ * Cycle guard: every top-level id must NOT be an ancestor of `newParentId`.
+ *
+ * Final placement: the moved branches end up consecutively starting at
+ * `newIndex` in `newParent.children`, preserving their selection order.
+ */
+export function moveNodes(
+  tree: NodeTree<PageNode>,
+  nodeIds: string[],
+  newParentId: string,
+  newIndex: number,
+): void {
+  if (nodeIds.length === 0) return
+  if (nodeIds.length === 1) {
+    moveNode(tree, nodeIds[0], newParentId, newIndex)
+    return
+  }
+  const newParent = tree.nodes[newParentId]
+  if (!newParent) throw new Error(`[PageTree] New parent "${newParentId}" not found`)
+
+  // Reduce to top-level set.
+  const idSet = new Set(nodeIds)
+  const topLevel: string[] = []
+  for (const id of nodeIds) {
+    if (id === tree.rootNodeId) {
+      throw new Error(`[PageTree] Cannot move the root node.`)
+    }
+    let ancestor = getParent(tree, id)
+    let dominated = false
+    while (ancestor) {
+      if (idSet.has(ancestor.id)) {
+        dominated = true
+        break
+      }
+      ancestor = getParent(tree, ancestor.id)
+    }
+    if (!dominated) topLevel.push(id)
+  }
+
+  // Cycle guard.
+  for (const id of topLevel) {
+    if (isAncestor(tree, id, newParentId)) {
+      throw new Error(
+        `[PageTree] Cannot move node "${id}" into its own descendant "${newParentId}".`,
+      )
+    }
+  }
+
+  // Detach each moved id from its current parent (top-down). Some moved ids
+  // may share the same parent — filtering once per parent is correct.
+  for (const id of topLevel) {
+    const oldParent = getParent(tree, id)
+    if (oldParent) {
+      oldParent.children = oldParent.children.filter((childId) => childId !== id)
+    }
+  }
+
+  // Insert into newParent at newIndex, preserving topLevel order.
+  const clamped = Math.max(0, Math.min(newIndex, newParent.children.length))
+  newParent.children.splice(clamped, 0, ...topLevel)
+}
+
+/**
+ * Find the closest common ancestor of a set of node ids.
+ *
+ * Algorithm: collect each id's ancestor chain (root → id), then intersect.
+ * The deepest id present in every chain is the CCA.
+ *
+ * Returns `null` if the ids have no common ancestor (cannot happen in a
+ * well-formed tree where root is the universal ancestor — but we guard
+ * against orphan nodes anyway).
+ */
+function findClosestCommonAncestor(
+  tree: NodeTree<PageNode>,
+  nodeIds: string[],
+): PageNode | null {
+  if (nodeIds.length === 0) return null
+
+  // Build chain for the first id, including itself.
+  const firstChain = ancestorChainInclusive(tree, nodeIds[0])
+  if (firstChain.length === 0) return null
+
+  // Intersect with each subsequent id's chain (set membership).
+  let candidate = firstChain
+  for (let i = 1; i < nodeIds.length; i++) {
+    const chain = new Set(ancestorChainInclusive(tree, nodeIds[i]).map((n) => n.id))
+    candidate = candidate.filter((n) => chain.has(n.id))
+    if (candidate.length === 0) return null
+  }
+
+  // The CCA is the DEEPEST node in the intersection — i.e. the LAST entry,
+  // since `ancestorChainInclusive` returns root → id order. But the CCA must
+  // not be one of the input ids itself (a node is not its own wrapper-parent).
+  // Walk up from the deepest survivor until we find one not in the input set.
+  const inputSet = new Set(nodeIds)
+  for (let i = candidate.length - 1; i >= 0; i--) {
+    if (!inputSet.has(candidate[i].id)) return candidate[i]
+  }
+  return null
+}
+
+/** Return [root, ..., nodeId] — inclusive ancestor chain. */
+function ancestorChainInclusive(
+  tree: NodeTree<PageNode>,
+  nodeId: string,
+): PageNode[] {
+  const chain: PageNode[] = []
+  let current: PageNode | undefined = tree.nodes[nodeId]
+  const visited = new Set<string>()
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id)
+    chain.unshift(current)
+    if (current.id === tree.rootNodeId) break
+    current = getParent(tree, current.id)
+  }
+  return chain
+}
+
+/**
+ * Walk up from `nodeId` until reaching a node whose parent is `ancestorId`.
+ * Returns that "branch" node — i.e. the descendant of `ancestorId` that
+ * contains `nodeId` in its subtree. Returns null if `ancestorId` is not an
+ * ancestor of `nodeId`.
+ */
+function ancestorChildOf(
+  tree: NodeTree<PageNode>,
+  nodeId: string,
+  ancestorId: string,
+): string | null {
+  let current = nodeId
+  const visited = new Set<string>()
+  while (!visited.has(current)) {
+    visited.add(current)
+    const parent = getParent(tree, current)
+    if (!parent) return null
+    if (parent.id === ancestorId) return current
+    current = parent.id
+  }
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // Page-level mutations (called on SiteDocument draft)
 // ---------------------------------------------------------------------------

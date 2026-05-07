@@ -17,6 +17,7 @@ function freshStore() {
   useEditorStore.setState({
     site: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     _historyPast: [],
     _historyFuture: [],

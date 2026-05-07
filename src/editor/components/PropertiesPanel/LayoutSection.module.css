@@ -54,17 +54,16 @@
 }
 
 .displayChipKicker {
-    color: var(--editor-text-muted);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    color: var(--editor-text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: capitalize;
 }
 
 .displayChipValue {
     color: var(--editor-text);
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -129,6 +128,82 @@
 
 .labeledControl {
     min-width: 0;
+}
+
+/* ─── Position block — TRBL offsets ──────────────────────────────────────
+ * Two-column grid showing the four direction inputs in clockwise order
+ * (top, right, bottom, left). Each cell uses a small leading icon as the
+ * label so two cells fit comfortably on one row of the panel. */
+.positionDirectionsGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+/* Single direction cell: icon · input · (clear button on hover when set).
+ * Mirrors ClassPropertyRow's set/unset language via data-state so the
+ * leading icon dims for unset values just like the labels in the rest of
+ * the inspector. */
+.directionCell {
+    position: relative;
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    align-items: center;
+    gap: 4px;
+    color: var(--editor-text);
+}
+
+.directionCell[data-state="unset"] .directionIcon {
+    color: var(--editor-text-muted);
+}
+
+.directionCell[data-state="set"] .directionIcon {
+    color: var(--editor-text);
+}
+
+.directionIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    color: var(--editor-text-secondary);
+}
+
+.directionInput {
+    min-width: 0;
+}
+
+/* Clear button overlays the trailing edge of the input on hover/focus,
+ * fading in/out so the cell stays compact when idle. Mirrors the
+ * ClassPropertyRow.module.css `.removeBtn` pattern. */
+.directionClearBtn.directionClearBtn {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    background: var(--editor-surface-2);
+    border: 1px solid var(--editor-border-med);
+    color: var(--editor-text-secondary);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition:
+        opacity 100ms ease,
+        background-color 100ms ease,
+        color 100ms ease;
+}
+
+.directionCell:hover .directionClearBtn,
+.directionCell:focus-within .directionClearBtn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.directionClearBtn.directionClearBtn:hover {
+    color: var(--editor-text);
 }
 
 /* Grid-specific edit row — wraps a full-width text input that replaces

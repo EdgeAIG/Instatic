@@ -108,6 +108,7 @@ describe('generated utility classes in editor panels', () => {
     // rendered an editable ClassComposer instead of the locked state.
     useEditorStore.setState({
       selectedNodeId: null,
+    selectedNodeIds: [],
       activeClassId: GENERATED_CLASS_ID,
       selectedSelectorClassId: GENERATED_CLASS_ID,
     } as Parameters<typeof useEditorStore.setState>[0])

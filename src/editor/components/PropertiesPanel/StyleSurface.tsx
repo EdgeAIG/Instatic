@@ -15,7 +15,7 @@
  * state has editable CSS rows to search.
  *
  * Rail icons are scroll-anchor shortcuts; the active icon is derived from
- * scroll position. "All styles" (BoxStackIcon) scrolls to the top.
+ * scroll position.
  *
  * Global selector mode (definition === null):
  *   Module section and Module rail button are hidden.
@@ -30,7 +30,7 @@ import { SearchBar } from '@ui/components/SearchBar'
 import { Section } from './Section'
 import { ClassComposer } from './ClassComposer'
 import { ClassPropertyRow } from './ClassPropertyRow'
-import { StyleCategoryRail, MODULE_CATEGORY_ID, ALL_STYLE_CATEGORY_ID } from './StyleCategoryRail'
+import { StyleCategoryRail, MODULE_CATEGORY_ID } from './StyleCategoryRail'
 import {
   CLASS_STYLE_SECTIONS,
   getCSSPropertyDefaultValue,
@@ -141,7 +141,7 @@ export function StyleSurface({
 
     const behavior: ScrollBehavior = propertiesSmoothScroll ? 'smooth' : 'auto'
 
-    if (sectionId === ALL_STYLE_CATEGORY_ID || sectionId === MODULE_CATEGORY_ID) {
+    if (sectionId === MODULE_CATEGORY_ID) {
       setActiveAnchorId(MODULE_CATEGORY_ID)
       container.scrollTo({ top: 0, behavior })
       return
@@ -278,7 +278,7 @@ interface LockedStylePreviewProps {
   onFocusClassPicker: () => void
 }
 
-const TEASER_SECTION = CLASS_STYLE_SECTIONS.find((s) => s.id === 'layout-position')!
+const TEASER_SECTION = CLASS_STYLE_SECTIONS.find((s) => s.id === 'layout')!
 
 function LockedStylePreview({ onFocusClassPicker }: LockedStylePreviewProps) {
   const noopChange = useCallback(() => {}, [])

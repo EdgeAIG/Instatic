@@ -5,7 +5,10 @@ type DomDropPosition = 'before' | 'after' | 'inside'
 type DomDropZone = DomDropPosition
 
 export interface DomDropTarget {
+  /** The pivot drag id (the row the user grabbed). Used for visual feedback. */
   draggedId: string
+  /** Every dragged id when this is a multi-drag — `[draggedId]` for single. */
+  draggedIds: string[]
   parentId: string
   index: number
   position: DomDropPosition
@@ -26,7 +29,14 @@ export interface DomDropRowMeta {
 
 interface ResolveDomDropTargetInput {
   page: Page
+  /** The pivot id (the row the user grabbed). */
   draggedId: string
+  /**
+   * All ids being dragged. Optional — defaults to `[draggedId]` for
+   * single-drag callers. Cycle and no-op checks consider every id in this
+   * list; index normalization is computed against the pivot only.
+   */
+  draggedIds?: string[]
   overId: string
   zone: DomDropZone
   canHaveChildren: (moduleId: string) => boolean
@@ -58,6 +68,7 @@ export function findDomDropRow(rows: DomDropRowMeta[], pointerY: number): DomDro
 export function resolveDomDropTarget({
   page,
   draggedId,
+  draggedIds: draggedIdsInput,
   overId,
   zone,
   canHaveChildren,
@@ -65,9 +76,22 @@ export function resolveDomDropTarget({
   const dragged = page.nodes[draggedId]
   const over = page.nodes[overId]
   if (!dragged || !over) return null
-  if (draggedId === page.rootNodeId) return null
-  if (dragged.locked) return null
-  if (draggedId === overId) return null
+
+  // Default to single-drag semantics when no multi list is supplied.
+  const draggedIds = draggedIdsInput ?? [draggedId]
+
+  // Multi-drag rejections: every dragged id must be a real, non-root,
+  // non-locked node. (The slot-instance lockdown for the OVER side is
+  // checked below — locked nodes simply cannot move themselves.)
+  for (const id of draggedIds) {
+    if (id === page.rootNodeId) return null
+    const node = page.nodes[id]
+    if (!node) return null
+    if (node.locked) return null
+  }
+
+  // Drop target must not be one of the dragged ids.
+  if (draggedIds.includes(overId)) return null
 
   if (zone === 'inside') {
     if (!canHaveChildren(over.moduleId)) return null
@@ -84,13 +108,17 @@ export function resolveDomDropTarget({
     if (over.moduleId === 'base.visual-component-ref') return null
     // ─────────────────────────────────────────────────────────────────────────
 
-    if (isAncestor(page, draggedId, overId)) return null
+    // Cycle: no dragged id may be an ancestor of the new parent.
+    for (const id of draggedIds) {
+      if (isAncestor(page, id, overId)) return null
+    }
 
     const index = normalizeIndexAfterRemoval(page, draggedId, overId, over.children.length)
     return noOpTarget(page, draggedId, overId, index)
       ? null
       : {
           draggedId,
+          draggedIds,
           parentId: overId,
           index,
           position: 'inside',
@@ -111,7 +139,10 @@ export function resolveDomDropTarget({
   if (parent.moduleId === 'base.visual-component-ref') return null
   // ─────────────────────────────────────────────────────────────────────────
 
-  if (isAncestor(page, draggedId, parent.id)) return null
+  // Cycle (multi): no dragged id may be an ancestor of the new sibling-parent.
+  for (const id of draggedIds) {
+    if (isAncestor(page, id, parent.id)) return null
+  }
 
   const overIndex = parent.children.indexOf(overId)
   if (overIndex === -1) return null
@@ -123,6 +154,7 @@ export function resolveDomDropTarget({
     ? null
     : {
         draggedId,
+        draggedIds,
         parentId: parent.id,
         index,
         position: zone,

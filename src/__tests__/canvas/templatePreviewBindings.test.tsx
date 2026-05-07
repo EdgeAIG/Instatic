@@ -21,6 +21,7 @@ beforeEach(() => {
     activePageId: null,
     activeDocument: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     activeBreakpointId: 'mobile',
     _historyPast: [],

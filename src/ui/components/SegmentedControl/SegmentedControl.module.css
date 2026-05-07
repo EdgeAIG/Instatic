@@ -13,9 +13,9 @@
     display: inline-flex;
     align-items: stretch;
     gap: 2px;
-    border-radius: 10px;
-    background: var(--editor-surface);
+    border-radius: 12px;
     padding: 2px;
+    border: 1px solid var(--input-border);
 }
 
 .fullWidth {
@@ -37,11 +37,11 @@
 }
 
 .group .segment.segment:hover {
-    background: var(--editor-surface-3);
+    background: var(--editor-surface-2);
 }
 
 .group .segment.segment[aria-pressed="true"] {
-    background: var(--editor-surface-4);
+    background: var(--editor-surface-2);
     color: var(--editor-text);
 }
 

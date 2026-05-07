@@ -30,6 +30,7 @@ function freshStore() {
     site: null,
     activePageId: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     activeDocument: null,
     clipboardEntry: null,
@@ -63,7 +64,7 @@ describe('clipboardSlice.copyNode', () => {
 
     const entry = useEditorStore.getState().clipboardEntry
     expect(entry).not.toBeNull()
-    expect(entry!.rootNodeId).toBe(containerId)
+    expect(entry!.rootNodeIds).toEqual([containerId])
     expect(Object.keys(entry!.nodes)).toEqual(expect.arrayContaining([containerId, textId]))
     expect(entry!.classes[cls.id]?.name).toBe('clip-style')
   })
@@ -88,7 +89,7 @@ describe('clipboardSlice.copyNode', () => {
 
     const persisted = readClipboardPayload()
     expect(persisted).not.toBeNull()
-    expect(persisted!.rootNodeId).toBe(textId)
+    expect(persisted!.rootNodeIds).toEqual([textId])
     expect(localStorage.getItem(CLIPBOARD_STORAGE_KEY)).toBeTruthy()
   })
 })
@@ -106,7 +107,7 @@ describe('clipboardSlice.cutNode', () => {
     const state = useEditorStore.getState()
     const page = state.site!.pages[0]
     expect(page.nodes[textId]).toBeUndefined()
-    expect(state.clipboardEntry?.rootNodeId).toBe(textId)
+    expect(state.clipboardEntry?.rootNodeIds).toEqual([textId])
     // The clipboard entry preserves the captured node even though it's gone from the page.
     expect(state.clipboardEntry?.nodes[textId]).toBeDefined()
   })
@@ -132,13 +133,15 @@ describe('clipboardSlice.pasteNode — smart placement', () => {
     const target = useEditorStore.getState().insertNode('base.container', {}, rootId)
 
     useEditorStore.getState().copyNode(sourceText)
-    const newId = useEditorStore.getState().pasteNode(target)
+    const newIds = useEditorStore.getState().pasteNode(target)
 
-    expect(newId).not.toBeNull()
+    expect(newIds).not.toBeNull()
+    expect(newIds!.length).toBe(1)
+    const newId = newIds![0]
     const state = useEditorStore.getState()
     const page = state.site!.pages[0]
-    expect(page.nodes[target].children).toContain(newId!)
-    expect(page.nodes[newId!].moduleId).toBe('base.text')
+    expect(page.nodes[target].children).toContain(newId)
+    expect(page.nodes[newId].moduleId).toBe('base.text')
     // The new ID is fresh — not the source's.
     expect(newId).not.toBe(sourceText)
   })
@@ -152,13 +155,14 @@ describe('clipboardSlice.pasteNode — smart placement', () => {
     const b = useEditorStore.getState().insertNode('base.text', {}, rootId)
 
     useEditorStore.getState().copyNode(a)
-    const newId = useEditorStore.getState().pasteNode(b)
-    expect(newId).not.toBeNull()
+    const newIds = useEditorStore.getState().pasteNode(b)
+    expect(newIds).not.toBeNull()
+    expect(newIds!.length).toBe(1)
 
     const state = useEditorStore.getState()
     const root = state.site!.pages[0].nodes[rootId]
     const idxB = root.children.indexOf(b)
-    expect(root.children[idxB + 1]).toBe(newId)
+    expect(root.children[idxB + 1]).toBe(newIds![0])
   })
 
   it('returns null when the clipboard is empty', () => {
@@ -183,11 +187,12 @@ describe('clipboardSlice.pasteNode — class handling', () => {
 
     useEditorStore.getState().copyNode(text)
     const target = useEditorStore.getState().insertNode('base.container', {}, rootId)
-    const newId = useEditorStore.getState().pasteNode(target)
-    expect(newId).not.toBeNull()
+    const newIds = useEditorStore.getState().pasteNode(target)
+    expect(newIds).not.toBeNull()
+    expect(newIds!.length).toBe(1)
 
     const state = useEditorStore.getState()
-    const pasted = state.site!.pages[0].nodes[newId!]
+    const pasted = state.site!.pages[0].nodes[newIds![0]]
     expect(pasted.classIds).toContain(cls.id)
     // The class itself is reused — no duplicate added to the registry.
     const matches = Object.values(state.site!.classes).filter(
@@ -210,13 +215,14 @@ describe('clipboardSlice.pasteNode — class handling', () => {
     const target = useEditorStore.getState()
     const newRootId = target.site!.pages[0].rootNodeId
     const container = target.insertNode('base.container', {}, newRootId)
-    const pastedId = target.pasteNode(container)
-    expect(pastedId).not.toBeNull()
+    const pastedIds = target.pasteNode(container)
+    expect(pastedIds).not.toBeNull()
+    expect(pastedIds!.length).toBe(1)
 
     const state = useEditorStore.getState()
     const importedClass = state.site!.classes[cls.id]
     expect(importedClass?.name).toBe('cross-site-style')
-    expect(state.site!.pages[0].nodes[pastedId!].classIds).toContain(cls.id)
+    expect(state.site!.pages[0].nodes[pastedIds![0]].classIds).toContain(cls.id)
   })
 })
 
@@ -231,7 +237,7 @@ describe('clipboardSlice — persistence', () => {
     // Round-trip through localStorage manually to confirm the persisted shape parses.
     const reloaded = readClipboardPayload()
     expect(reloaded).not.toBeNull()
-    expect(reloaded!.version).toBe(1)
-    expect(reloaded!.rootNodeId).toBe(textId)
+    expect(reloaded!.version).toBe(2)
+    expect(reloaded!.rootNodeIds).toEqual([textId])
   })
 })

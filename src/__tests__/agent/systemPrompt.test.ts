@@ -28,6 +28,7 @@ function makeContext(overrides: Partial<PageContext> = {}): PageContext {
     nodes: [],
     availableModules: [],
     selectedNodeId: null,
+    selectedNodeIds: [],
     classes: [],
     ...overrides,
   }
@@ -187,6 +188,7 @@ describe('buildSystemPrompt — dynamic suffix (per-request, tiny)', () => {
       pageTitle: 'Untitled',
       rootNodeId: '',
       selectedNodeId: null,
+    selectedNodeIds: [],
       activeBreakpointId: '',
     }))[2]
     expect(() => suffix).not.toThrow()

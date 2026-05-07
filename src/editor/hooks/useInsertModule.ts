@@ -73,43 +73,13 @@ export function useInsertModule() {
       }
       // ─────────────────────────────────────────────────────────────────────────
 
-      // ─── canHaveChildren guard ─────────────────────────────────────────────
-      // The resolved parent MUST be able to host children. This rule is mostly
-      // enforced upstream (the smart-resolve path checks `canHaveChildren` on
-      // the selected node and walks to its parent if not), but it can still
-      // fail when:
-      //   - `explicitParentId` was passed for a non-container (e.g. right-click
-      //     "Insert here" on a Text node);
-      //   - the canvas root itself can't have children (e.g. an old VC whose
-      //     root is a single Text or Button — pre-fix data; new conversions
-      //     auto-wrap in a Container).
-      // Walk up to find the nearest ancestor that CAN have children. If none
-      // is found (the root itself can't), abort with a console.warn rather
-      // than silently corrupting the tree.
-      let resolvedParentId: string | null = parentId
-      while (resolvedParentId) {
-        const node = canvasPage.nodes[resolvedParentId]
-        if (!node) {
-          resolvedParentId = null
-          break
-        }
-        const def = registry.get(node.moduleId)
-        if (def?.canHaveChildren) break
-        // Walk up one level.
-        const ancestor = Object.values(canvasPage.nodes).find((n) =>
-          n.children.includes(resolvedParentId!),
-        )
-        resolvedParentId = ancestor ? ancestor.id : null
-      }
-      if (!resolvedParentId) {
-        console.warn(
-          '[useInsertModule] no ancestor accepts children; insertion aborted',
-          { initialParentId: parentId, canvasRootId: canvasPage.rootNodeId },
-        )
-        return null
-      }
-      parentId = resolvedParentId
-      // ─────────────────────────────────────────────────────────────────────────
+      // The canvas root is always `base.body` (canHaveChildren: true) by the
+      // always-wrap invariant — pages enforce it by construction, and
+      // `convertNodeToComponent` enforces it for VCs. Combined with the
+      // smart-resolve path above (which ascends from a non-container selection
+      // to its parent) and `LayerNodeContextMenu` hiding "Insert module here"
+      // on non-container nodes, every parentId reaching this point is a
+      // legal container. No walk-up guard is needed.
 
       for (const dependency of getMissingModuleDependencies(mod, packageJson)) {
         setDependency(dependency.name, dependency.version, dependency.dev)

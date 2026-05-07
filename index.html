@@ -19,7 +19,7 @@
         background: #000;
       }
 
-      .pb-initial-loading {
+      .loading {
         display: grid;
         min-height: 100vh;
         place-items: center;
@@ -28,13 +28,13 @@
         color: #ededed;
       }
 
-      .banter-loader {
+      .loader {
         position: relative;
         width: 72px;
         height: 72px;
       }
 
-      .banter-loader__box {
+      .box {
         float: left;
         position: relative;
         width: 20px;
@@ -42,7 +42,7 @@
         margin-right: 6px;
       }
 
-      .banter-loader__box:before {
+      .box:before {
         content: '';
         position: absolute;
         left: 0;
@@ -52,25 +52,25 @@
         background: #fff;
       }
 
-      .banter-loader__box:nth-child(3n) {
+      .box:nth-child(3n) {
         margin-right: 0;
         margin-bottom: 6px;
       }
 
-      .banter-loader__box:nth-child(1):before,
-      .banter-loader__box:nth-child(4):before {
+      .box:nth-child(1):before,
+      .box:nth-child(4):before {
         margin-left: 26px;
       }
 
-      .banter-loader__box:nth-child(3):before {
+      .box:nth-child(3):before {
         margin-top: 52px;
       }
 
-      .banter-loader__box:last-child {
+      .box:last-child {
         margin-bottom: 0;
       }
 
-      @keyframes banter-loader-moveBox-1 {
+      @keyframes move-1 {
         9.0909090909% {
           transform: translate(-26px, 0);
         }
@@ -106,11 +106,11 @@
         }
       }
 
-      .banter-loader__box:nth-child(1) {
-        animation: banter-loader-moveBox-1 4s infinite;
+      .box:nth-child(1) {
+        animation: move-1 4s infinite;
       }
 
-      @keyframes banter-loader-moveBox-2 {
+      @keyframes move-2 {
         9.0909090909% {
           transform: translate(0, 0);
         }
@@ -146,11 +146,11 @@
         }
       }
 
-      .banter-loader__box:nth-child(2) {
-        animation: banter-loader-moveBox-2 4s infinite;
+      .box:nth-child(2) {
+        animation: move-2 4s infinite;
       }
 
-      @keyframes banter-loader-moveBox-3 {
+      @keyframes move-3 {
         9.0909090909% {
           transform: translate(-26px, 0);
         }
@@ -186,11 +186,11 @@
         }
       }
 
-      .banter-loader__box:nth-child(3) {
-        animation: banter-loader-moveBox-3 4s infinite;
+      .box:nth-child(3) {
+        animation: move-3 4s infinite;
       }
 
-      @keyframes banter-loader-moveBox-4 {
+      @keyframes move-4 {
         9.0909090909% {
           transform: translate(-26px, 0);
         }
@@ -226,11 +226,11 @@
         }
       }
 
-      .banter-loader__box:nth-child(4) {
-        animation: banter-loader-moveBox-4 4s infinite;
+      .box:nth-child(4) {
+        animation: move-4 4s infinite;
       }
 
-      @keyframes banter-loader-moveBox-5 {
+      @keyframes move-5 {
         9.0909090909% {
           transform: translate(0, 0);
         }
@@ -266,11 +266,11 @@
         }
       }
 
-      .banter-loader__box:nth-child(5) {
-        animation: banter-loader-moveBox-5 4s infinite;
+      .box:nth-child(5) {
+        animation: move-5 4s infinite;
       }
 
-      @keyframes banter-loader-moveBox-6 {
+      @keyframes move-6 {
         9.0909090909% {
           transform: translate(0, 0);
         }
@@ -306,11 +306,11 @@
         }
       }
 
-      .banter-loader__box:nth-child(6) {
-        animation: banter-loader-moveBox-6 4s infinite;
+      .box:nth-child(6) {
+        animation: move-6 4s infinite;
       }
 
-      @keyframes banter-loader-moveBox-7 {
+      @keyframes move-7 {
         9.0909090909% {
           transform: translate(26px, 0);
         }
@@ -346,11 +346,11 @@
         }
       }
 
-      .banter-loader__box:nth-child(7) {
-        animation: banter-loader-moveBox-7 4s infinite;
+      .box:nth-child(7) {
+        animation: move-7 4s infinite;
       }
 
-      @keyframes banter-loader-moveBox-8 {
+      @keyframes move-8 {
         9.0909090909% {
           transform: translate(0, 0);
         }
@@ -386,11 +386,11 @@
         }
       }
 
-      .banter-loader__box:nth-child(8) {
-        animation: banter-loader-moveBox-8 4s infinite;
+      .box:nth-child(8) {
+        animation: move-8 4s infinite;
       }
 
-      @keyframes banter-loader-moveBox-9 {
+      @keyframes move-9 {
         9.0909090909% {
           transform: translate(-26px, 0);
         }
@@ -426,12 +426,12 @@
         }
       }
 
-      .banter-loader__box:nth-child(9) {
-        animation: banter-loader-moveBox-9 4s infinite;
+      .box:nth-child(9) {
+        animation: move-9 4s infinite;
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .banter-loader__box {
+        .box {
           animation: none !important;
         }
       }
@@ -439,17 +439,17 @@
   </head>
   <body>
     <div id="root">
-      <div class="pb-initial-loading" role="status" aria-busy="true" aria-label="Loading Page Builder">
-        <div class="banter-loader" data-initial-loader-spinner="true" aria-hidden="true">
-          <div class="banter-loader__box"></div>
-          <div class="banter-loader__box"></div>
-          <div class="banter-loader__box"></div>
-          <div class="banter-loader__box"></div>
-          <div class="banter-loader__box"></div>
-          <div class="banter-loader__box"></div>
-          <div class="banter-loader__box"></div>
-          <div class="banter-loader__box"></div>
-          <div class="banter-loader__box"></div>
+      <div class="loading" role="status" aria-busy="true" aria-label="Loading Page Builder">
+        <div class="loader" data-initial-loader-spinner="true" aria-hidden="true">
+          <div class="box"></div>
+          <div class="box"></div>
+          <div class="box"></div>
+          <div class="box"></div>
+          <div class="box"></div>
+          <div class="box"></div>
+          <div class="box"></div>
+          <div class="box"></div>
+          <div class="box"></div>
         </div>
       </div>
     </div>

@@ -28,6 +28,8 @@ interface UseDomPanelDndOptions {
 interface DragPreview {
   label: string
   moduleId: string
+  /** Number of nodes being dragged (1 for single-drag, >1 for multi). */
+  count: number
 }
 
 const AUTO_EXPAND_DELAY_MS = 350
@@ -47,6 +49,10 @@ export function useDomPanelDnd({
   const latestPointerRef = useRef<Point | null>(null)
   const latestTargetRef = useRef<DomDropTarget | null>(null)
   const activeIdRef = useRef<string | null>(null)
+  // Full multi-drag set (frozen at drag start). Defaults to `[activeId]` for
+  // single-drag — when the user grabs a row that's part of an existing
+  // multi-selection, the WHOLE selection is dragged.
+  const activeIdsRef = useRef<string[]>([])
   const autoExpandRef = useRef<{
     targetKey: string
     point: Point
@@ -139,9 +145,15 @@ export function useDomPanelDnd({
     }
 
     const zone = getDomDropZone(row.rect, point.y)
+    // Multi-drag: pass the full drag set so cycle / no-self-drop checks
+    // consider every dragged id, not just the pivot.
+    const draggedIds = activeIdsRef.current.length > 0
+      ? activeIdsRef.current
+      : [draggedId]
     const next = resolveDomDropTarget({
       page,
       draggedId,
+      draggedIds,
       overId: row.nodeId,
       zone,
       canHaveChildren,
@@ -201,6 +213,7 @@ export function useDomPanelDnd({
     stopAutoScroll()
     clearAutoExpand()
     activeIdRef.current = null
+    activeIdsRef.current = []
     startPointRef.current = null
     latestPointerRef.current = null
     latestTargetRef.current = null
@@ -215,7 +228,16 @@ export function useDomPanelDnd({
     const node = page?.nodes[draggedId]
     if (!node) return
 
+    // Multi-drag set: if the grabbed row is part of an existing multi-selection,
+    // the WHOLE selection is dragged; otherwise just this row. The selection set
+    // is captured at drag start and frozen for the rest of the gesture.
+    const selectedIds = useEditorStore.getState().selectedNodeIds
+    const draggedIds = selectedIds.includes(draggedId) && selectedIds.length > 1
+      ? [...selectedIds]
+      : [draggedId]
+
     activeIdRef.current = draggedId
+    activeIdsRef.current = draggedIds
     measureRows()
 
     const point = getEventPoint(event.activatorEvent) ?? getRowCenter(rowsRef.current.get(draggedId))
@@ -228,6 +250,7 @@ export function useDomPanelDnd({
     setDragPreview({
       label: getNodeDisplayName(node, def, visualComponents),
       moduleId: node.moduleId,
+      count: draggedIds.length,
     })
   }, [measureRows, page])
 
@@ -265,6 +288,8 @@ export function useDomPanelDnd({
     activeId,
     activeLabel: dragPreview?.label ?? null,
     activeModuleId: dragPreview?.moduleId ?? null,
+    /** 1 for a single-row drag, >1 when a multi-selection is being dragged. */
+    activeCount: dragPreview?.count ?? 0,
     target,
     invalidOverId,
     registerRow,

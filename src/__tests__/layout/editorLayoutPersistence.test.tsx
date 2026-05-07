@@ -24,6 +24,7 @@ function resetStore() {
     site: null,
     activePageId: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     activeBreakpointId: 'desktop',
     domTreePanel: { collapsed: false, x: 0, y: 0, width: 280 },

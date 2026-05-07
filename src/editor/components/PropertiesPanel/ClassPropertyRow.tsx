@@ -17,11 +17,19 @@ import type { CSSPropertyBag } from '@core/page-tree/schemas'
 import { TextControl } from '../PropertyControls/TextControl'
 import { ColorControl } from '../PropertyControls/ColorControl'
 import { SelectControl } from '../PropertyControls/SelectControl'
+import { ControlRow } from '../PropertyControls/ControlRow'
+import { TokenAwareInput } from '../PropertyControls/TokenAwareInput'
+import {
+  useSpacingTokens,
+  useTypographyTokens,
+  type Token,
+} from '../PropertyControls/tokenUtils'
 import { Button } from '@ui/components/Button'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { cn } from '@ui/cn'
 import {
   getCSSPropertyControlType,
+  getCSSPropertyTokenSource,
   getEnumOptions,
   cssPropertyLabel,
   NUMBER_TYPED_PROPS,
@@ -50,8 +58,21 @@ export function ClassPropertyRow({
   onRemove,
 }: ClassPropertyRowProps) {
   const type = getCSSPropertyControlType(property)
+  const tokenSource = getCSSPropertyTokenSource(property)
   const label = cssPropertyLabel(String(property))
   const placeholderText = placeholder !== undefined ? String(placeholder) : undefined
+
+  // Always read both token catalogs — hooks must run unconditionally on
+  // every render. The selected catalog is forwarded to TokenAwareInput
+  // when the property has a `tokenSource`, otherwise it's unused (no cost).
+  const spacingTokens = useSpacingTokens()
+  const typographyTokens = useTypographyTokens()
+  const tokens: ReadonlyArray<Token> =
+    tokenSource === 'typography'
+      ? typographyTokens
+      : tokenSource === 'spacing'
+        ? spacingTokens
+        : []
 
   // Translate a control's (propKey, val) onChange signature into a typed
   // CSSPropertyBag value, coercing to number when the property expects one.
@@ -68,12 +89,45 @@ export function ClassPropertyRow({
     [property, onChange],
   )
 
+  // Token-aware properties commit on blur via TokenAwareInput's `onCommit`.
+  // It already returns undefined for empty input (clears the value), so
+  // the only translation we do here is the number-typed coercion.
+  const handleTokenCommit = useCallback(
+    (resolved: string | undefined) => {
+      if (NUMBER_TYPED_PROPS.has(property)) {
+        if (resolved == null || resolved === '') {
+          onChange(property, undefined)
+          return
+        }
+        const parsed = Number(resolved)
+        onChange(property, Number.isFinite(parsed) ? parsed : resolved)
+        return
+      }
+      onChange(property, resolved)
+    },
+    [property, onChange],
+  )
+
   // ── Dispatch to the correct control ─────────────────────────────────────
   // Each control renders with its own .controlWrapper so the row is
-  // visually identical to a module property row (PP-18).
+  // visually identical to a module property row (PP-18). When the property
+  // has a framework variable scale (`tokenSource`), the token-aware input
+  // takes precedence over the generic text/select dispatch below.
   let control: React.ReactNode
 
-  switch (type) {
+  if (tokenSource) {
+    control = (
+      <ControlRow propKey={String(property)} label={label}>
+        <TokenAwareInput
+          aria-label={label}
+          value={value !== undefined ? String(value) : undefined}
+          placeholder={placeholderText}
+          tokens={tokens}
+          onCommit={handleTokenCommit}
+        />
+      </ControlRow>
+    )
+  } else switch (type) {
     case 'color':
       control = (
         <ColorControl

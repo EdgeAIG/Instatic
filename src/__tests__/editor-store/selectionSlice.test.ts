@@ -6,6 +6,7 @@ function freshStore() {
     site: null,
     activePageId: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     activeClassId: null,
     previewClassAssignment: null,

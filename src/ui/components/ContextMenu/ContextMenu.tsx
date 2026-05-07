@@ -171,6 +171,15 @@ export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function
   // via the shared floating-position helper. This mirrors the auto-flip
   // behaviour of <Tooltip> so dropdown menus never overflow off-screen.
   const [autoPosition, setAutoPosition] = useState<ContextMenuPositionState | null>(null)
+  // ── Point-anchored viewport-fit ──────────────────────────────────────
+  //
+  // In point mode (right-click `x`/`y`) the menu measures itself once after
+  // mount and shifts the click point so the panel never overflows the
+  // viewport: flip horizontally when it would cross the right edge, flip
+  // vertically when it would cross the bottom edge, then clamp to the 8 px
+  // viewport margin. Until measured, `pointPosition` is `null` and the
+  // panel renders with `visibility: hidden`.
+  const [pointPosition, setPointPosition] = useState<{ x: number; y: number } | null>(null)
   // Live anchor width, used when `matchAnchorWidth` is set. Tracked via
   // ResizeObserver so the dropdown stays glued to the trigger's width
   // even as the surrounding panel resizes.
@@ -222,6 +231,49 @@ export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function
     // floating-position math must run again to keep alignment correct.
   }, [anchorRef, anchorWidth, recomputeAutoPosition])
 
+  // Measure once after mount in point mode and flip/clamp so the panel
+  // stays inside the viewport. The "flip around the click point" behaviour
+  // is the right-click convention: when the menu would overflow the right
+  // edge, position the menu so its right edge sits at the click x (i.e.
+  // the menu opens to the LEFT of the click); same for the bottom edge.
+  const recomputePointPosition = useEvent(() => {
+    if (anchorRef) return
+    if (pointX == null || pointY == null) return
+    const menuEl = menuRef.current
+    if (!menuEl) return
+    const menuRect = menuEl.getBoundingClientRect()
+    const effectiveHeight = maxHeight != null
+      ? Math.min(menuRect.height, maxHeight)
+      : menuRect.height
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    const margin = 8
+    let x = pointX
+    let y = pointY
+    if (x + effectiveWidth > vw - margin) {
+      // Flip horizontally: align right edge of menu with click point. Then
+      // clamp to keep the left edge inside the viewport for the case where
+      // the menu is wider than the click point itself.
+      x = Math.max(margin, pointX - effectiveWidth)
+    }
+    if (y + effectiveHeight > vh - margin) {
+      y = Math.max(margin, pointY - effectiveHeight)
+    }
+    // Final clamp — covers the (rare) case where the menu is larger than
+    // the viewport in either dimension. Never push the menu past the right
+    // / bottom edge; never above / left of the margin.
+    x = Math.max(margin, Math.min(x, vw - effectiveWidth - margin))
+    y = Math.max(margin, Math.min(y, vh - effectiveHeight - margin))
+    setPointPosition({ x, y })
+  })
+
+  useLayoutEffect(() => {
+    if (anchorRef) return
+    recomputePointPosition()
+    // `pointX`/`pointY` are deps so reopening the menu at a different
+    // coordinate (the typical right-click flow) re-measures and re-flips.
+  }, [anchorRef, pointX, pointY, recomputePointPosition])
+
   // Track the anchor's measured width so `matchAnchorWidth` dropdowns
   // can render flush with their trigger and respond to panel resizes.
   useLayoutEffect(() => {
@@ -240,9 +292,9 @@ export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function
   }, [matchAnchorWidth, anchorRef])
 
   useEffect(() => {
-    if (!anchorRef) return
     function onViewportChange() {
-      recomputeAutoPosition()
+      if (anchorRef) recomputeAutoPosition()
+      else recomputePointPosition()
     }
     window.addEventListener('resize', onViewportChange)
     window.addEventListener('scroll', onViewportChange, true)
@@ -250,21 +302,23 @@ export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function
       window.removeEventListener('resize', onViewportChange)
       window.removeEventListener('scroll', onViewportChange, true)
     }
-  }, [anchorRef, recomputeAutoPosition])
+  }, [anchorRef, recomputeAutoPosition, recomputePointPosition])
 
   // Resolve the effective x/y the menu renders at:
   //   - anchor mode: use the auto-flipped position (or hide until measured)
-  //   - point mode:  use the explicit x/y from the caller
-  const resolvedX = anchorRef ? autoPosition?.x : pointX
-  const resolvedY = anchorRef ? autoPosition?.y : pointY
+  //   - point mode:  use the viewport-clamped position (or hide until measured)
+  const resolvedX = anchorRef ? autoPosition?.x : pointPosition?.x
+  const resolvedY = anchorRef ? autoPosition?.y : pointPosition?.y
   const resolvedSide: ResolvedFloatingSide | undefined = anchorRef
     ? autoPosition?.side
     : undefined
 
-  // While we measure the menu in anchor mode, render it off-screen with
+  // While we measure the menu (either mode), render it off-screen with
   // visibility:hidden so it doesn't flash at (0, 0) before the layout
   // effect runs.
-  const measuring = anchorRef && autoPosition === null
+  const measuring = anchorRef
+    ? autoPosition === null
+    : pointX != null && pointY != null && pointPosition === null
 
   const style = {
     '--context-menu-x': `${resolvedX ?? 0}px`,
@@ -446,6 +500,9 @@ interface ContextMenuSubmenuProps {
  * </ContextMenuSubmenu>
  * ```
  */
+/** Submenu side priority — prefer right, flip to left when it doesn't fit. */
+const SUBMENU_AUTO_PRIORITY = ['right', 'left'] as const
+
 export function ContextMenuSubmenu({
   label,
   icon,
@@ -458,33 +515,75 @@ export function ContextMenuSubmenu({
   closeOnItemClickOnly = false,
 }: ContextMenuSubmenuProps) {
   const [open, setOpen] = useState(false)
-  const [submenuStyle, setSubmenuStyle] = useState<CSSProperties>({})
+  // Position is `null` until the submenu has been measured (one
+  // useLayoutEffect tick after mount). While `null`, the panel renders with
+  // `visibility: hidden` so it doesn't flash at (0, 0).
+  const [position, setPosition] = useState<{
+    x: number
+    y: number
+    side: ResolvedFloatingSide
+  } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const submenuRef = useRef<HTMLDivElement>(null)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Snapshot the trigger's bounding rect and return the submenu CSS vars.
-  // Called in event handlers (never during render) so ref access is safe.
-  function snapshotSubmenuStyle(): CSSProperties {
-    const rect = triggerRef.current?.getBoundingClientRect()
-    const x = rect ? rect.right + 2 : 0
-    const y = rect ? rect.top : 0
-    const resolvedMinWidth = minWidth ?? width
-    return {
-      '--context-menu-x': `${x}px`,
-      '--context-menu-y': `${y}px`,
-      '--context-menu-z-index': zIndex + 10,
-      '--context-menu-min-width': `${resolvedMinWidth}px`,
-      '--context-menu-width': `${width}px`,
-      ...(maxHeight != null
-        ? { '--context-menu-max-height': `${maxHeight}px` }
-        : null),
-    } as CSSProperties
-  }
+  const resolvedMinWidth = minWidth ?? width
 
-  // Open submenu: snapshot position, show panel, auto-focus first item via rAF.
+  // Measure trigger + submenu and pick the side with the most space.
+  // Mirrors the ContextMenu (anchored mode) and Tooltip auto-flip strategy
+  // — `computeFloatingPosition` tries `right` first, then `left`, and
+  // clamps to the viewport so the panel never overflows the screen edge.
+  const recomputePosition = useCallback(() => {
+    const triggerEl = triggerRef.current
+    const menuEl = submenuRef.current
+    if (!triggerEl || !menuEl) return
+    const triggerRect = triggerEl.getBoundingClientRect()
+    const menuRect = menuEl.getBoundingClientRect()
+    // When `maxHeight` is set, the rendered rect already reflects the cap
+    // (CSS `max-height` is applied before getBoundingClientRect). Defensively
+    // clamp here too so position math agrees with the rendered size on the
+    // very first measurement.
+    const effectiveHeight = maxHeight != null
+      ? Math.min(menuRect.height, maxHeight)
+      : menuRect.height
+    const next = computeFloatingPosition(triggerRect, {
+      floatingWidth: width,
+      floatingHeight: effectiveHeight,
+      side: 'auto',
+      align: 'start',
+      offset: 2,
+      autoPriority: SUBMENU_AUTO_PRIORITY,
+    })
+    setPosition({ x: next.x, y: next.y, side: next.side })
+  }, [maxHeight, width])
+
+  // Measure on open. useLayoutEffect runs synchronously after the panel
+  // mounts, so the user never sees the unmeasured (0, 0) frame.
+  // No-op when closed — the panel isn't in the DOM, and `position` is
+  // inherently a property of "the open submenu", so dropping a stale value
+  // on close is unnecessary (the next open re-measures and overwrites).
+  useLayoutEffect(() => {
+    if (!open) return
+    recomputePosition()
+  }, [open, recomputePosition])
+
+  // Recompute on viewport changes while open — same pattern as ContextMenu.
+  useEffect(() => {
+    if (!open) return
+    function onViewportChange() {
+      recomputePosition()
+    }
+    window.addEventListener('resize', onViewportChange)
+    window.addEventListener('scroll', onViewportChange, true)
+    return () => {
+      window.removeEventListener('resize', onViewportChange)
+      window.removeEventListener('scroll', onViewportChange, true)
+    }
+  }, [open, recomputePosition])
+
+  // Open submenu: show panel, auto-focus first item via rAF (rAF runs AFTER
+  // the layout effect, so the panel is already positioned).
   function openSubmenu() {
-    setSubmenuStyle(snapshotSubmenuStyle())
     setOpen(true)
     requestAnimationFrame(() => {
       const first = submenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')
@@ -597,13 +696,28 @@ export function ContextMenuSubmenu({
         // between trigger and panel is unchanged for accessibility — the
         // ARIA wiring lives on attributes (aria-haspopup / role="menu"),
         // not the DOM hierarchy.
+        //
+        // While `position` is null we render with `visibility: hidden` so
+        // the panel doesn't flash at (0, 0) before the layout effect has
+        // measured it — same trick as the anchored ContextMenu mode above.
         <div
           ref={submenuRef}
           role="menu"
           aria-label={typeof label === 'string' ? label : undefined}
           className={styles.menu}
           data-scrollable={maxHeight != null ? '' : undefined}
-          style={submenuStyle}
+          data-side={position?.side}
+          style={{
+            '--context-menu-x': `${position?.x ?? 0}px`,
+            '--context-menu-y': `${position?.y ?? 0}px`,
+            '--context-menu-z-index': zIndex + 10,
+            '--context-menu-min-width': `${resolvedMinWidth}px`,
+            '--context-menu-width': `${width}px`,
+            ...(maxHeight != null
+              ? { '--context-menu-max-height': `${maxHeight}px` }
+              : null),
+            ...(position === null ? { visibility: 'hidden' as const } : null),
+          } as CSSProperties}
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
           onKeyDown={handleSubmenuKeyDown}

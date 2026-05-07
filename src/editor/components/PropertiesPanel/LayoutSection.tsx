@@ -48,18 +48,14 @@ import { AlignEndHorizontalIcon } from 'pixel-art-icons/icons/align-end-horizont
 import { AlignStartVerticalIcon } from 'pixel-art-icons/icons/align-start-vertical'
 import { AlignCenterVerticalIcon } from 'pixel-art-icons/icons/align-center-vertical'
 import { AlignEndVerticalIcon } from 'pixel-art-icons/icons/align-end-vertical'
-import { AlignHorizontalJustifyStartIcon } from 'pixel-art-icons/icons/align-horizontal-justify-start'
-import { AlignHorizontalJustifyCenterIcon } from 'pixel-art-icons/icons/align-horizontal-justify-center'
-import { AlignHorizontalJustifyEndIcon } from 'pixel-art-icons/icons/align-horizontal-justify-end'
 import { AlignHorizontalSpaceBetweenIcon } from 'pixel-art-icons/icons/align-horizontal-space-between'
 import { AlignHorizontalSpaceAroundIcon } from 'pixel-art-icons/icons/align-horizontal-space-around'
-import { AlignVerticalJustifyStartIcon } from 'pixel-art-icons/icons/align-vertical-justify-start'
-import { AlignVerticalJustifyCenterIcon } from 'pixel-art-icons/icons/align-vertical-justify-center'
-import { AlignVerticalJustifyEndIcon } from 'pixel-art-icons/icons/align-vertical-justify-end'
 import { AlignVerticalSpaceBetweenIcon } from 'pixel-art-icons/icons/align-vertical-space-between'
 import { AlignVerticalSpaceAroundIcon } from 'pixel-art-icons/icons/align-vertical-space-around'
 import { UnderlineIcon } from 'pixel-art-icons/icons/underline'
 import { ClassPropertyRow } from './ClassPropertyRow'
+import { TokenAwareInput } from '../PropertyControls/TokenAwareInput'
+import { useSpacingTokens } from '../PropertyControls/tokenUtils'
 import { getEnumOptions, getCSSPropertyDefaultValue } from './cssControlTypes'
 import styles from './LayoutSection.module.css'
 
@@ -91,51 +87,48 @@ interface LayoutSectionProps {
 
 /**
  * Properties left over after the visual switchers — rendered as generic rows
- * below the switchers. Order matches the original CLASS_STYLE_SECTIONS list
- * for the layout-position category, minus the properties owned by the flex
- * block (flexDirection, flexWrap, alignItems, justifyContent — always
- * absent), plus a runtime-conditional skip for properties owned by the grid
- * block when display is grid (see GRID_VISUAL_PROPS).
+ * below the switchers. Order follows the original Layout section list, minus
+ * the properties owned by the flex block (flexDirection, flexWrap, alignItems,
+ * justifyContent, gap — always absent) and the properties owned by the grid
+ * block (gridTemplateColumns, gridTemplateRows, justifyItems, gap — likewise
+ * never duplicated as fallback rows). The two-axis variants `rowGap` and
+ * `columnGap` stay in the fallback for advanced layouts where the user
+ * actually needs different row vs column spacing — the visual blocks only
+ * surface the unified `gap` shorthand for the common case.
  */
 const FALLBACK_PROPS: ReadonlyArray<keyof CSSPropertyBag> = [
-  'justifyItems',
   'alignSelf',
   'justifySelf',
   'flex',
-  'gap',
   'rowGap',
   'columnGap',
-  'gridTemplateColumns',
-  'gridTemplateRows',
   'gridColumn',
   'gridRow',
-  'position',
-  'top',
-  'right',
-  'bottom',
-  'left',
-  'zIndex',
   'overflow',
   'overflowX',
   'overflowY',
 ]
 
 /**
- * Properties owned by the grid block — skipped from FALLBACK_PROPS rendering
- * when display === 'grid' so the user doesn't see two controls (the visual
- * grid block + the generic fallback row) targeting the same property. The
- * generic rows reappear when display is anything else, so power users can
- * still set arbitrary track templates on non-grid containers if they need to.
+ * Properties that only have any effect when *this* element is a flex or
+ * grid container. Hidden from the fallback rows when display is anything
+ * else (block, inline, none, unset, …) so users aren't tempted to fiddle
+ * with knobs that do nothing.
  *
- * `alignItems` is NOT in this set even though the grid block writes to it,
- * because alignItems is also missing from FALLBACK_PROPS (the flex block
- * claims it unconditionally there).
+ * `gap` itself is owned by the visual flex / grid blocks (via GapInput),
+ * so it never reaches the fallback list — it's not in FALLBACK_PROPS at all.
+ *
+ * Item-level properties like `alignSelf`, `justifySelf`, `flex`,
+ * `gridColumn`, `gridRow` are NOT in this set because they depend on the
+ * *parent's* display, which we can't observe from a class-style editor.
+ * Showing them unconditionally lets users style children of flex/grid
+ * parents without flipping this element's display first.
  */
-const GRID_VISUAL_PROPS = new Set<keyof CSSPropertyBag>([
-  'gridTemplateColumns',
-  'gridTemplateRows',
-  'justifyItems',
+const CONTAINER_ONLY_PROPS = new Set<keyof CSSPropertyBag>([
+  'rowGap',
+  'columnGap',
 ])
+
 
 export function LayoutSection({
   currentStyles,
@@ -193,6 +186,11 @@ export function LayoutSection({
             onClear={() => onClearProperty('justifyContent')}
             label="Justify"
           />
+          <GapInput
+            value={readString(currentStyles, 'gap')}
+            isSet={hasStyleValue(storedStyles.gap)}
+            onChange={(v) => onChange('gap', v)}
+          />
         </div>
       )}
 
@@ -216,14 +214,6 @@ export function LayoutSection({
             onClear={() => onClearProperty('gridTemplateRows')}
           />
           <GridAxisControl
-            label="Justify"
-            axis="inline"
-            value={readString(currentStyles, 'justifyItems')}
-            isSet={hasStyleValue(storedStyles.justifyItems)}
-            onChange={(v) => onChange('justifyItems', v)}
-            onClear={() => onClearProperty('justifyItems')}
-          />
-          <GridAxisControl
             label="Align"
             axis="block"
             value={alignItems}
@@ -231,16 +221,38 @@ export function LayoutSection({
             onChange={(v) => onChange('alignItems', v)}
             onClear={() => onClearProperty('alignItems')}
           />
+          <GridAxisControl
+            label="Justify"
+            axis="inline"
+            value={readString(currentStyles, 'justifyItems')}
+            isSet={hasStyleValue(storedStyles.justifyItems)}
+            onChange={(v) => onChange('justifyItems', v)}
+            onClear={() => onClearProperty('justifyItems')}
+          />
+          <GapInput
+            value={readString(currentStyles, 'gap')}
+            isSet={hasStyleValue(storedStyles.gap)}
+            onChange={(v) => onChange('gap', v)}
+          />
         </div>
       )}
 
-      {/* Fallback rows — every property in the layout-position section that
-          isn't already handled by an active visual block. When display=grid,
-          the grid block owns gridTemplate* and justifyItems so they're
-          skipped here to avoid duplicate controls; alignItems is already
-          absent from FALLBACK_PROPS because the flex block claims it. */}
+      {/* Fallback rows — every property in the layout section that isn't
+          already handled by a visual block. The grid block owns
+          gridTemplateColumns / gridTemplateRows / justifyItems (so those
+          never appear as fallback rows) and the flex block owns
+          flexDirection / flexWrap / alignItems / justifyContent (likewise
+          absent from FALLBACK_PROPS). Container-only properties (gap,
+          rowGap, columnGap) are skipped when this element isn't a flex
+          or grid container — they have no effect on `display: block` etc. */}
       {FALLBACK_PROPS.map((prop) => {
-        if (display === 'grid' && GRID_VISUAL_PROPS.has(prop)) return null
+        if (
+          CONTAINER_ONLY_PROPS.has(prop) &&
+          display !== 'flex' &&
+          display !== 'grid'
+        ) {
+          return null
+        }
         const storedValue = storedStyles[prop]
         const isSet = hasStyleValue(storedValue)
         const currentValue = currentStyles[prop]
@@ -538,12 +550,15 @@ function AlignmentControl({
   onClear,
   label,
 }: AlignmentControlProps) {
-  const isRowMain =
-    axis === 'main'
-      ? flexDirection === 'row' || flexDirection === 'row-reverse'
-      : flexDirection === 'column' || flexDirection === 'column-reverse'
+  // The icon set is keyed off the *main-axis* orientation:
+  //   - direction: row | row-reverse        → main is horizontal, cross is vertical
+  //   - direction: column | column-reverse  → main is vertical,   cross is horizontal
+  // Both MAIN and CROSS arrays are named after the direction items flow
+  // (i.e. the main axis), so we just pick the matching pair.
+  const isMainHorizontal =
+    flexDirection === 'row' || flexDirection === 'row-reverse'
 
-  const options = isRowMain
+  const options = isMainHorizontal
     ? axis === 'main'
       ? MAIN_HORIZONTAL_OPTIONS
       : CROSS_HORIZONTAL_OPTIONS
@@ -560,6 +575,37 @@ function AlignmentControl({
         onChange={onChange}
         onClear={onClear}
         options={options}
+      />
+    </LabeledControl>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// GapInput — token-aware text input for `gap` (writes the unified shorthand)
+// ---------------------------------------------------------------------------
+
+interface GapInputProps {
+  value: string | undefined
+  isSet: boolean
+  onChange: (value: string | undefined) => void
+}
+
+/**
+ * Promotes the `gap` row out of the fallback list and into the flex / grid
+ * blocks where it belongs (right below Justify). Backed by `TokenAwareInput`
+ * so users get framework spacing variable autocomplete as they type — same
+ * vocabulary as the SpacingBoxControl side inputs.
+ */
+function GapInput({ value, isSet, onChange }: GapInputProps) {
+  const tokens = useSpacingTokens()
+  return (
+    <LabeledControl label="Gap" isSet={isSet}>
+      <TokenAwareInput
+        aria-label="Gap"
+        value={value}
+        placeholder="0px"
+        tokens={tokens}
+        onCommit={onChange}
       />
     </LabeledControl>
   )
@@ -640,23 +686,30 @@ const CROSS_VERTICAL_OPTIONS = [
 /**
  * Main-axis (justifyContent) icon set when items flow horizontally — they
  * justify along the horizontal axis.
+ *
+ * The first three values (flex-start / center / flex-end) reuse the same
+ * alignment-line icons that Grid's Justify control uses for its
+ * `justify-items` segments, so the visual language stays consistent across
+ * Flex and Grid for the values both layouts share. The flex-only
+ * `space-between` / `space-around` keep the distribution-style icons since
+ * Grid's `justify-items` has no equivalent.
  */
 const MAIN_HORIZONTAL_OPTIONS = [
   {
     value: 'flex-start',
-    icon: <AlignHorizontalJustifyStartIcon size={14} />,
+    icon: <AlignStartVerticalIcon size={14} />,
     ariaLabel: 'Justify start',
     tooltip: 'justify-content: flex-start',
   },
   {
     value: 'center',
-    icon: <AlignHorizontalJustifyCenterIcon size={14} />,
+    icon: <AlignCenterVerticalIcon size={14} />,
     ariaLabel: 'Justify center',
     tooltip: 'justify-content: center',
   },
   {
     value: 'flex-end',
-    icon: <AlignHorizontalJustifyEndIcon size={14} />,
+    icon: <AlignEndVerticalIcon size={14} />,
     ariaLabel: 'Justify end',
     tooltip: 'justify-content: flex-end',
   },
@@ -678,19 +731,19 @@ const MAIN_HORIZONTAL_OPTIONS = [
 const MAIN_VERTICAL_OPTIONS = [
   {
     value: 'flex-start',
-    icon: <AlignVerticalJustifyStartIcon size={14} />,
+    icon: <AlignStartHorizontalIcon size={14} />,
     ariaLabel: 'Justify start',
     tooltip: 'justify-content: flex-start',
   },
   {
     value: 'center',
-    icon: <AlignVerticalJustifyCenterIcon size={14} />,
+    icon: <AlignCenterHorizontalIcon size={14} />,
     ariaLabel: 'Justify center',
     tooltip: 'justify-content: center',
   },
   {
     value: 'flex-end',
-    icon: <AlignVerticalJustifyEndIcon size={14} />,
+    icon: <AlignEndHorizontalIcon size={14} />,
     ariaLabel: 'Justify end',
     tooltip: 'justify-content: flex-end',
   },

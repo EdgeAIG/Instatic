@@ -30,6 +30,7 @@ beforeEach(() => {
     activePageId: null,
     activeDocument: null,
     selectedNodeId: null,
+    selectedNodeIds: [],
     selectedSelectorClassId: null,
     hoveredNodeId: null,
     activeBreakpointId: 'desktop',

@@ -1,0 +1,64 @@
+/* TokenAwareInput — single Input + autocomplete dropdown for framework
+ * variables (spacing scale, typography scale, etc).
+ *
+ * Visual model is intentionally minimal: the Input keeps its own chrome
+ * (handled by Input.module.css) and we just add the dropdown menu styles
+ * here. The wrapper exists for layout flexibility — callers can place
+ * the input in any grid cell and the dropdown still anchors to it via
+ * portal + matchAnchorWidth.
+ */
+
+.wrapper {
+    position: relative;
+    display: block;
+    width: 100%;
+    min-width: 0;
+}
+
+.input {
+    width: 100%;
+    min-width: 0;
+}
+
+/* ── Dropdown menu — section headers + token rows ──────────────────────── */
+.menuHeader {
+    padding: 6px 10px 4px;
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    user-select: none;
+}
+
+/* Grid: token name (identifier, e.g. "4xs") is the row's primary label — it
+   takes its natural content width and does NOT truncate when there is
+   space. The CSS variable name (descriptor, e.g. "--space-1-4xs") is
+   secondary and uses 1fr + ellipsis so a very long var name can shrink
+   without crowding the identifier. Don't flip these — truncating the
+   identifier loses meaning; truncating the var name only loses a
+   redundant detail. Mirrors SpacingBoxControl's `.sideMenuItem` exactly
+   so the two token pickers stay visually consistent. */
+.menuItem {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    gap: 8px;
+    align-items: baseline;
+    padding: 6px 10px;
+}
+
+.menuToken {
+    color: var(--editor-text);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.menuVar {
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

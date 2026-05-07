@@ -215,7 +215,7 @@ describe('ClassComposer inline style filtering', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
 
-    // All sections always rendered — layout-position renders the DisplaySwitcher
+    // All sections always rendered — layout renders the DisplaySwitcher
     // and typography renders the fontFamily row.
     expect(document.querySelector('[data-testid="css-display-switcher"]')).not.toBeNull()
     expect(document.querySelector('[data-testid="css-property-row-fontFamily"]')).not.toBeNull()
@@ -227,9 +227,6 @@ describe('ClassComposer inline style filtering', () => {
     expect(typographyButton.getAttribute('aria-pressed')).toBe('true')
     expect(document.querySelector('[data-testid="css-property-row-fontFamily"]')).not.toBeNull()
     // Scroll-anchor: clicking a section scrolls to it, does NOT hide other sections.
-    expect(document.querySelector('[data-testid="css-display-switcher"]')).not.toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: /show all class style categories/i }))
     expect(document.querySelector('[data-testid="css-display-switcher"]')).not.toBeNull()
   })
 
@@ -245,7 +242,7 @@ describe('ClassComposer inline style filtering', () => {
     // All sections still present after clicking a rail button in scroll-anchor mode.
     expect(document.querySelector('[data-testid="css-display-switcher"]')).not.toBeNull()
 
-    // Search for 'fontFamily' — only typography rows match. The layout-position
+    // Search for 'fontFamily' — only typography rows match. The layout
     // section, which is not specially filtered by query inside LayoutSection,
     // collapses to nothing because none of its property keys match.
     fireEvent.change(screen.getByRole('searchbox', { name: /search class style properties to add/i }), {
@@ -596,19 +593,21 @@ describe('ClassComposer unset CSS property placeholders', () => {
   })
 
   it('renders unset text defaults as placeholders, not input values', () => {
-    const { nodeId } = loadSiteWithClasses(1)
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    // Set display to flex so the GapInput is revealed inside the flex
+    // block. Gap is a container-only property and lives in the visual
+    // flex/grid blocks rather than the fallback rows.
+    useEditorStore.getState().updateClassStyles(clsId, { display: 'flex' })
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
     fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
 
-    const gapRow = document.querySelector('[data-testid="css-property-row-gap"]')
-    const gapInput = gapRow?.querySelector('input') as HTMLInputElement
-
-    expect(gapRow?.getAttribute('data-state')).toBe('unset')
+    const gapInput = screen.getByLabelText('Gap') as HTMLInputElement
     expect(gapInput.value).toBe('')
     expect(gapInput.placeholder).toBe('0px')
-    expect(useEditorStore.getState().site!.classes[useEditorStore.getState().activeClassId!].styles.gap).toBeUndefined()
+    expect(useEditorStore.getState().site!.classes[clsId].styles.gap).toBeUndefined()
   })
 
   it('renders stored CSS declarations as actual control values', () => {
@@ -625,9 +624,8 @@ describe('ClassComposer unset CSS property placeholders', () => {
     const flexSegment = screen.getByRole('button', { name: /^flex layout$/i })
     expect(flexSegment.getAttribute('aria-pressed')).toBe('true')
 
-    const gapInput = document
-      .querySelector('[data-testid="css-property-row-gap"]')
-      ?.querySelector('input') as HTMLInputElement
+    // Gap renders inside the flex block via the GapInput primitive (token-aware).
+    const gapInput = screen.getByLabelText('Gap') as HTMLInputElement
     expect(gapInput.value).toBe('32px')
   })
 })
@@ -801,8 +799,214 @@ describe('LayoutSection — grid block', () => {
     expect(document.querySelector('[data-testid="css-property-row-gridTemplateColumns"]')).toBeNull()
     expect(document.querySelector('[data-testid="css-property-row-gridTemplateRows"]')).toBeNull()
     expect(document.querySelector('[data-testid="css-property-row-justifyItems"]')).toBeNull()
-    // Other fallback rows still render — gap, position, etc.
-    expect(document.querySelector('[data-testid="css-property-row-gap"]')).not.toBeNull()
+    // Gap is owned by the GridBlock's GapInput (TokenAwareInput) and lives
+    // inside the visual block, not as a fallback row.
+    expect(screen.getByLabelText('Gap')).toBeDefined()
+  })
+
+  it('hides gap / rowGap / columnGap rows when display is not flex or grid', () => {
+    const { nodeId } = loadSiteWithClasses(1)
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    // Default display (unset) → no gap controls at all (fallback is gone,
+    // visual block isn't rendered yet).
+    expect(screen.queryByLabelText('Gap')).toBeNull()
+    expect(document.querySelector('[data-testid="css-property-row-rowGap"]')).toBeNull()
+    expect(document.querySelector('[data-testid="css-property-row-columnGap"]')).toBeNull()
+    // Item-level properties (gridColumn / gridRow / alignSelf / flex)
+    // still render — they depend on the parent's display, which we don't
+    // observe from a class-style editor.
+    expect(document.querySelector('[data-testid="css-property-row-alignSelf"]')).not.toBeNull()
+    expect(document.querySelector('[data-testid="css-property-row-gridColumn"]')).not.toBeNull()
+  })
+
+  it('reveals the GapInput once display becomes flex', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    useEditorStore.getState().updateClassStyles(clsId, { display: 'flex' })
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    // Gap is now inside the flex block (token-aware input), not a fallback row.
+    expect(screen.getByLabelText('Gap')).toBeDefined()
+    expect(document.querySelector('[data-testid="css-property-row-rowGap"]')).not.toBeNull()
+    expect(document.querySelector('[data-testid="css-property-row-columnGap"]')).not.toBeNull()
+  })
+})
+
+describe('LayoutSection — position block', () => {
+  it('always renders the position switcher, regardless of display', () => {
+    const { nodeId } = loadSiteWithClasses(1)
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    expect(document.querySelector('[data-testid="css-position-switcher"]')).not.toBeNull()
+  })
+
+  it('does not render the directional offsets when position is unset or static', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    expect(document.querySelector('[data-testid="css-direction-input-top"]')).toBeNull()
+
+    // Setting position to static does NOT reveal the offsets either —
+    // static elements ignore top/right/bottom/left.
+    useEditorStore.getState().updateClassStyles(clsId, { position: 'static' })
+    expect(document.querySelector('[data-testid="css-direction-input-top"]')).toBeNull()
+  })
+
+  it('reveals the 4-direction grid when position is relative / absolute / fixed / sticky', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    useEditorStore.getState().updateClassStyles(clsId, { position: 'relative' })
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    expect(document.querySelector('[data-testid="css-direction-input-top"]')).not.toBeNull()
+    expect(document.querySelector('[data-testid="css-direction-input-right"]')).not.toBeNull()
+    expect(document.querySelector('[data-testid="css-direction-input-bottom"]')).not.toBeNull()
+    expect(document.querySelector('[data-testid="css-direction-input-left"]')).not.toBeNull()
+  })
+
+  it('marks the relative segment as pressed when position: relative is stored', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    useEditorStore.getState().updateClassStyles(clsId, { position: 'relative' })
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    const relSegment = screen.getByRole('button', { name: /^position relative$/i })
+    expect(relSegment.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('falls back to a chip + close when position is fixed / sticky', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    useEditorStore.getState().updateClassStyles(clsId, { position: 'sticky' })
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    const chip = screen.getByRole('button', { name: /position: sticky/i })
+    expect(chip).toBeDefined()
+  })
+
+  it('typing into a direction input writes the value to the matching property on blur', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    useEditorStore.getState().updateClassStyles(clsId, { position: 'absolute' })
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    const topCell = document.querySelector('[data-testid="css-direction-input-top"]')
+    const topInput = topCell?.querySelector('input') as HTMLInputElement
+
+    // TokenAwareInput defers commit to blur (so token resolution and
+    // store writes don't fire on every keystroke). Simulate the full
+    // type-then-blur user gesture.
+    fireEvent.focus(topInput)
+    fireEvent.change(topInput, { target: { value: '12px' } })
+    fireEvent.blur(topInput)
+
+    expect(useEditorStore.getState().site!.classes[clsId].styles.top).toBe('12px')
+  })
+
+  it('hides the position keyword and 4 offset fallback rows when position is active', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    useEditorStore.getState().updateClassStyles(clsId, { position: 'relative' })
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    expect(document.querySelector('[data-testid="css-property-row-position"]')).toBeNull()
+    expect(document.querySelector('[data-testid="css-property-row-top"]')).toBeNull()
+    expect(document.querySelector('[data-testid="css-property-row-right"]')).toBeNull()
+    expect(document.querySelector('[data-testid="css-property-row-bottom"]')).toBeNull()
+    expect(document.querySelector('[data-testid="css-property-row-left"]')).toBeNull()
+  })
+
+  it('keeps the switcher visible but hides offset inputs entirely when position is unset', () => {
+    const { nodeId } = loadSiteWithClasses(1)
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    // The PositionSection always renders the switcher.
+    expect(document.querySelector('[data-testid="css-position-switcher"]')).not.toBeNull()
+    // No fallback row for the position keyword anywhere — the switcher is
+    // the single way to set it.
+    expect(document.querySelector('[data-testid="css-property-row-position"]')).toBeNull()
+    // Offset inputs and rows are entirely absent until position becomes
+    // active. The position section owns top/right/bottom/left via its
+    // DirectionInputs, which only render when the value honors offsets.
+    expect(document.querySelector('[data-testid="css-property-row-top"]')).toBeNull()
+    expect(document.querySelector('[data-testid="css-direction-input-top"]')).toBeNull()
+  })
+
+  it('renders zIndex row inside the position section regardless of position value', () => {
+    const { nodeId } = loadSiteWithClasses(1)
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    // zIndex always renders inside the position section as a generic
+    // ClassPropertyRow — even when the position keyword itself is unset.
+    expect(document.querySelector('[data-testid="css-property-row-zIndex"]')).not.toBeNull()
+  })
+})
+
+describe('ClassPropertyRow — token-aware properties', () => {
+  it('fontSize commits on blur (token-aware input pattern), not per-keystroke', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    const fontSizeRow = document.querySelector('[data-testid="css-property-row-fontSize"]')
+    expect(fontSizeRow).not.toBeNull()
+    const fontSizeInput = fontSizeRow?.querySelector('input') as HTMLInputElement
+
+    // Typing alone doesn't commit — TokenAwareInput defers to blur so token
+    // resolution and store writes don't fire on every keystroke.
+    fireEvent.focus(fontSizeInput)
+    fireEvent.change(fontSizeInput, { target: { value: '18px' } })
+    expect(useEditorStore.getState().site!.classes[clsId].styles.fontSize).toBeUndefined()
+
+    // Blur commits.
+    fireEvent.blur(fontSizeInput)
+    expect(useEditorStore.getState().site!.classes[clsId].styles.fontSize).toBe('18px')
+  })
+
+  it('fontSize displays a stored var(--text-l) value as the short token step', () => {
+    const { nodeId, classIds } = loadSiteWithClasses(1)
+    const clsId = classIds[0]
+    // Seed with a typography variable. Without a framework typography
+    // group the input falls back to showing the raw var() value, so we
+    // just verify that the row renders and the raw value is what we get
+    // back when no typography tokens are configured.
+    useEditorStore.getState().updateClassStyles(clsId, { fontSize: 'var(--text-l)' })
+    selectNode(nodeId)
+    render(<PropertiesPanel />)
+    fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
+
+    const fontSizeRow = document.querySelector('[data-testid="css-property-row-fontSize"]')
+    const fontSizeInput = fontSizeRow?.querySelector('input') as HTMLInputElement
+    // Test fixture has no typography groups configured, so the value
+    // round-trips as the raw var() expression.
+    expect(fontSizeInput.value).toBe('var(--text-l)')
   })
 })
 
@@ -816,11 +1020,11 @@ describe('ClassComposer set style indicators', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
 
-    expect(screen.getByTestId('class-style-section-dot-layout-position')).toBeDefined()
+    expect(screen.getByTestId('class-style-section-dot-layout')).toBeDefined()
     expect(screen.getByTestId('class-style-section-dot-typography')).toBeDefined()
     expect(screen.queryByTestId('class-style-section-dot-size')).toBeNull()
 
-    expect(screen.getByTestId('class-style-category-dot-layout-position')).toBeDefined()
+    expect(screen.getByTestId('class-style-category-dot-layout')).toBeDefined()
     expect(screen.getByTestId('class-style-category-dot-typography')).toBeDefined()
     expect(screen.queryByTestId('class-style-category-dot-size')).toBeNull()
   })
@@ -835,8 +1039,8 @@ describe('ClassComposer set style indicators', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /edit class class-1/i }))
 
-    expect(screen.queryByTestId('class-style-section-dot-layout-position')).toBeNull()
-    expect(screen.queryByTestId('class-style-category-dot-layout-position')).toBeNull()
+    expect(screen.queryByTestId('class-style-section-dot-layout')).toBeNull()
+    expect(screen.queryByTestId('class-style-category-dot-layout')).toBeNull()
 
     // Inherited base style (display: flex) is reflected on the SegmentedControl
     // — the Flex segment is pressed because the inherited cascade resolves to

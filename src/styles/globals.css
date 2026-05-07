@@ -12,7 +12,7 @@
 
     /* ─── Editor Surface Hierarchy (Vercel/Linear pure-black) ─────────────── */
     --editor-bg: #000000;
-    --editor-bg-subtle: #323232;  /* subtle element bg — chips, badges inside nested surfaces */
+    --editor-bg-subtle: #323232; /* subtle element bg — chips, badges inside nested surfaces */
     --editor-surface: #1b1b1b;
     --editor-surface-2: #282828;
     --editor-surface-3: #323232;
@@ -27,7 +27,7 @@
     --editor-text-bright: #f4f4f5; /* zinc-100 — brightest text level (titles) */
     --editor-text: #ededed; /* primary text */
     --editor-text-secondary: #a1a1aa; /* labels, secondary UI text */
-    --editor-text-muted: #71717a; /* muted / placeholder */
+    --editor-text-muted: #787878; /* muted / placeholder */
     --editor-text-subtle: #52525b; /* disabled / very subtle */
 
     /* ─── Code Syntax — GitHub Dark inspired ─────────────────────────────── */
@@ -135,7 +135,8 @@
     --tooltip-bg: #0a0a0c;
     --tooltip-fg: #f4f4f5;
     --tooltip-border: rgba(255, 255, 255, 0.06);
-    --tooltip-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    --tooltip-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
     --tooltip-radius: 6px;
     --tooltip-z-index: 2000;
 }

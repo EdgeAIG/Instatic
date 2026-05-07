@@ -13,6 +13,7 @@ import { ClassPropertyRow } from './ClassPropertyRow'
 import { Section } from './Section'
 import { SpacingBoxControl } from './SpacingBoxControl/SpacingBoxControl'
 import { LayoutSection } from './LayoutSection'
+import { PositionSection } from './PositionSection'
 import {
   CLASS_STYLE_SECTIONS,
   cssPropertyLabel,
@@ -24,7 +25,8 @@ import styles from './ClassComposer.module.css'
 import sectionStyles from './Section.module.css'
 
 const SPACING_SECTION_ID = 'spacing'
-const LAYOUT_SECTION_ID = 'layout-position'
+const LAYOUT_SECTION_ID = 'layout'
+const POSITION_SECTION_ID = 'position'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -194,11 +196,25 @@ function ClassStyleSection({
             onClearPreview={onClearPreview}
           />
         ) : section.id === LAYOUT_SECTION_ID ? (
-          // Layout & Position uses a task-shaped editor: an unlabeled
-          // segmented Display switcher with a dropdown trail, plus icon
-          // switchers for flex direction / wrap / alignment. Generic rows
-          // for the long-tail layout properties still appear below.
+          // Layout uses a task-shaped editor: an unlabeled segmented
+          // Display switcher with a dropdown trail, plus icon switchers
+          // for flex direction / wrap / alignment. Generic rows for the
+          // long-tail layout properties still appear below.
           <LayoutSection
+            key={activeTab}
+            storedStyles={storedStyles}
+            currentStyles={currentStyles}
+            activeTab={activeTab}
+            onChange={onChange}
+            onRemove={onRemove}
+            onClearProperty={onClearProperty}
+          />
+        ) : section.id === POSITION_SECTION_ID ? (
+          // Position uses a task-shaped editor: a segmented Position
+          // switcher with the four directional offsets revealed when the
+          // value actually honors them, plus a z-index row that always
+          // stays available inside the section.
+          <PositionSection
             key={activeTab}
             storedStyles={storedStyles}
             currentStyles={currentStyles}

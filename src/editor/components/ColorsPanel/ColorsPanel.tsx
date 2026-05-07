@@ -641,16 +641,20 @@ function ColorTokenEditor({
             onPatch({ generateShades: { enabled: checked } })
           }
         />
-        <VariantCountStepper
-          label="Shade"
-          count={clampVariantCountInput(shadeCount)}
-          onCountChange={(count) => commitVariantCount("shade", String(count))}
-        />
-        <ColorVariantPreview
-          kind="Shade"
-          tokenSlug={token.slug}
-          variables={shadeVariables}
-        />
+        {token.generateShades.enabled && (
+          <>
+            <VariantCountStepper
+              label="Shade"
+              count={clampVariantCountInput(shadeCount)}
+              onCountChange={(count) => commitVariantCount("shade", String(count))}
+            />
+            <ColorVariantPreview
+              kind="Shade"
+              tokenSlug={token.slug}
+              variables={shadeVariables}
+            />
+          </>
+        )}
       </div>
 
       <div className={styles.variantControl}>
@@ -661,16 +665,20 @@ function ColorTokenEditor({
             onPatch({ generateTints: { enabled: checked } })
           }
         />
-        <VariantCountStepper
-          label="Tint"
-          count={clampVariantCountInput(tintCount)}
-          onCountChange={(count) => commitVariantCount("tint", String(count))}
-        />
-        <ColorVariantPreview
-          kind="Tint"
-          tokenSlug={token.slug}
-          variables={tintVariables}
-        />
+        {token.generateTints.enabled && (
+          <>
+            <VariantCountStepper
+              label="Tint"
+              count={clampVariantCountInput(tintCount)}
+              onCountChange={(count) => commitVariantCount("tint", String(count))}
+            />
+            <ColorVariantPreview
+              kind="Tint"
+              tokenSlug={token.slug}
+              variables={tintVariables}
+            />
+          </>
+        )}
       </div>
     </div>
   );
@@ -907,7 +915,7 @@ function VariantCountStepper({
           {count}
         </span>
         <Button
-          variant="secondary"
+          variant="ghost"
           size="xs"
           iconOnly
           aria-label={`Increase ${lowerLabel} variants`}

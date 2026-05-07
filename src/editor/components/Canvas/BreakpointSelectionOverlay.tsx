@@ -38,6 +38,7 @@
 
 import { useEffect, useRef } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
+import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@ui/cn'
 import styles from './BreakpointSelectionOverlay.module.css'
 
@@ -61,18 +62,28 @@ export function BreakpointSelectionOverlay({
   breakpointId,
   viewportRef,
 }: BreakpointSelectionOverlayProps) {
-  const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
+  // Multi-select: render one ring per selected node. `useShallow` keeps the
+  // subscription stable when the array reference changes but its contents
+  // are equal (matters because selectedNodeIds is a new array every set call).
+  const selectedNodeIds = useEditorStore(useShallow((s) => s.selectedNodeIds))
   const hoveredNodeId = useEditorStore((s) =>
     s.hoveredBreakpointId === breakpointId ? s.hoveredNodeId : null,
   )
 
-  const selectionRef = useRef<HTMLDivElement>(null)
+  // One ref per selected node, keyed by id. Stable across renders while the
+  // id stays in the selection — when an id is removed, its ring entry is
+  // dropped from the map; when added, a fresh ref is allocated.
+  const ringRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
   const hoverRef = useRef<HTMLDivElement>(null)
 
-  // Track whichever rings are currently visible. Hover only renders when the
-  // hovered node differs from the selected one — otherwise the two rings
-  // would stack and the hover ring would mask the selection ring.
-  const showHover = Boolean(hoveredNodeId) && hoveredNodeId !== selectedNodeId
+  // Hover only renders when the hovered node isn't already part of the
+  // selection — otherwise the two rings would stack and the hover ring
+  // would mask the selection ring.
+  const showHover = Boolean(hoveredNodeId) && !selectedNodeIds.includes(hoveredNodeId ?? '')
+
+  // Stable string for the deps array — re-runs the RAF loop only when the
+  // selection identity actually changes (not on every store mutation).
+  const selectionKey = selectedNodeIds.join(',')
 
   useEffect(() => {
     const viewport = viewportRef.current
@@ -83,7 +94,9 @@ export function BreakpointSelectionOverlay({
 
     const tick = () => {
       if (cancelled) return
-      positionRing(selectionRef.current, selectedNodeId, viewport)
+      for (const id of selectedNodeIds) {
+        positionRing(ringRefs.current.get(id) ?? null, id, viewport)
+      }
       positionRing(hoverRef.current, showHover ? hoveredNodeId : null, viewport)
       frame = requestAnimationFrame(tick)
     }
@@ -93,18 +106,23 @@ export function BreakpointSelectionOverlay({
       cancelled = true
       cancelAnimationFrame(frame)
     }
-  }, [selectedNodeId, hoveredNodeId, showHover, viewportRef])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionKey, hoveredNodeId, showHover, viewportRef])
 
   return (
     <div className={styles.overlayLayer} aria-hidden="true">
-      {selectedNodeId && (
+      {selectedNodeIds.map((id) => (
         <div
-          ref={selectionRef}
+          key={id}
+          ref={(el) => {
+            if (el) ringRefs.current.set(id, el)
+            else ringRefs.current.delete(id)
+          }}
           className={cn(styles.ring, styles.selection)}
           data-canvas-selection-ring="true"
-          data-node-id={selectedNodeId}
+          data-node-id={id}
         />
-      )}
+      ))}
       {showHover && hoveredNodeId && (
         <div
           ref={hoverRef}

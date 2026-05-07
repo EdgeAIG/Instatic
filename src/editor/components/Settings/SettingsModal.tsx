@@ -163,16 +163,6 @@ export function SettingsModal() {
           <p id="settings-modal-desc" className={s.srOnly}>
             Site-level configuration. Press Escape to close.
           </p>
-          {/* WCAG 2.4.7 — visible focus ring on inputs inside the modal */}
-          <style>{`
-            [data-testid="settings-modal"] input:focus-visible,
-            [data-testid="settings-modal"] select:focus-visible,
-            [data-testid="settings-modal"] textarea:focus-visible {
-              outline: none;
-              box-shadow: inset 0 0 0 2px rgba(255,255,255,0.3);
-              border-color: rgba(255,255,255,0.2);
-            }
-          `}</style>
 
           {/* ── Left sidebar ──────────────────────────────────────────────── */}
           <div className={s.sidebar}>

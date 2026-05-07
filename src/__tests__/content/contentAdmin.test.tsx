@@ -90,6 +90,7 @@ beforeEach(() => {
     site,
     activePageId: site.pages[0].id,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     activeBreakpointId: 'desktop',
     domTreePanel: { collapsed: false, x: 0, y: 0, width: 280 },
