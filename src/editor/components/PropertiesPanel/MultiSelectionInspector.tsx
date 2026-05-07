@@ -37,9 +37,17 @@ import { registry } from '@core/module-engine/registry'
 import {
   getNodeDisplayName,
   getNodeHtmlTag,
+  getNodeClassNames,
 } from '@core/page-tree/nodeDisplayName'
 import { Button } from '@ui/components/Button'
 import { useConfirmDelete } from '../shared/ConfirmDeleteDialog'
+import {
+  TreeRow,
+  TreeLabel,
+  TreeLabelGroup,
+  TreeMeta,
+} from '../../ui/Tree'
+import { pillAccent } from '@ui/pillAccent'
 import { CopyIcon } from 'pixel-art-icons/icons/copy'
 import { Copy2Icon } from 'pixel-art-icons/icons/copy-2'
 import { EraserIcon } from 'pixel-art-icons/icons/eraser'
@@ -71,26 +79,39 @@ export function MultiSelectionInspector({
   const pasteNode = useEditorStore((s) => s.pasteNode)
   const canPaste = useEditorStore((s) => s.clipboardEntry !== null)
 
-  // Resolve display names against the active canvas page. The selectors
-  // subscribe to STABLE references (page + visualComponents) and the
-  // expensive per-row mapping happens via `useMemo` so we don't return a
-  // freshly-built array from the store selector on every render — `useShallow`
-  // can't equate freshly-built objects element-by-element, which would loop.
+  // Resolve display names / tags / class chips against the active canvas page.
+  // The selectors subscribe to STABLE references (page + visualComponents +
+  // class registry) and the per-row mapping happens via `useMemo` so we don't
+  // return a freshly-built array from the store selector on every render —
+  // `useShallow` can't equate freshly-built objects element-by-element, which
+  // would loop.
   const tree = useEditorStore(selectActiveCanvasPage)
   const visualComponents = useEditorStore((s) => s.site?.visualComponents)
+  const classes = useEditorStore((s) => s.site?.classes)
   const layers = useMemo(() => {
     if (!tree) return []
     return selectedNodeIds.map((id) => {
       const node = tree.nodes[id]
-      if (!node) return { id, label: '(missing)', tag: null as string | null }
+      if (!node) {
+        return {
+          id,
+          label: '(missing)',
+          tag: null as string | null,
+          classChip: null as string | null,
+        }
+      }
       const def = registry.get(node.moduleId)
+      const classNames = getNodeClassNames(node, classes)
       return {
         id,
         label: getNodeDisplayName(node, def, visualComponents),
         tag: getNodeHtmlTag(node, def),
+        // Chained-dot CSS selector style — matches the DOM panel's class chip
+        // formatting (".header.padding-m").
+        classChip: classNames.length > 0 ? `.${classNames.join('.')}` : null,
       }
     })
-  }, [tree, visualComponents, selectedNodeIds])
+  }, [tree, visualComponents, classes, selectedNodeIds])
 
   const confirmDelete = useConfirmDelete()
   const handleDelete = useCallback(() => {
@@ -199,13 +220,42 @@ export function MultiSelectionInspector({
       <div className={styles.layerListHeader}>
         Selected layers ({selectedNodeIds.length})
       </div>
-      <div className={styles.layerList}>
+      <div className={styles.layerList} role="list">
+        {/*
+          Each row uses the same primitives + chip styles as TreeNode in the
+          DOM panel: TreeRow as the visual contract, TreeMeta with
+          `data-accent={pillAccent(tag)}` for the gradient-tinted HTML tag
+          pill, and the chained-dot class chip after the label. The styles
+          object below picks up the tag/class CSS that mirrors TreeNode.module.css.
+        */}
         {layers.map((layer) => (
-          <div key={layer.id} className={styles.layerRow}>
-            {layer.tag && <span className={styles.layerTag}>{layer.tag}</span>}
-            <span className={styles.layerLabel} title={layer.label}>
-              {layer.label}
-            </span>
+          <TreeRow
+            key={layer.id}
+            depth={0}
+            role="listitem"
+            className={styles.layerRow}
+          >
+            <TreeLabelGroup>
+              {layer.tag && (
+                <TreeMeta
+                  aria-hidden="true"
+                  data-accent={pillAccent(layer.tag)}
+                  className={styles.tagPill}
+                >
+                  {layer.tag}
+                </TreeMeta>
+              )}
+              <TreeLabel>{layer.label}</TreeLabel>
+              {layer.classChip && (
+                <TreeMeta
+                  aria-hidden="true"
+                  title={layer.classChip}
+                  className={styles.classChip}
+                >
+                  {layer.classChip}
+                </TreeMeta>
+              )}
+            </TreeLabelGroup>
             <Button
               variant="ghost"
               size="xs"
@@ -216,7 +266,7 @@ export function MultiSelectionInspector({
             >
               <CloseIcon size={11} aria-hidden="true" />
             </Button>
-          </div>
+          </TreeRow>
         ))}
       </div>
 
