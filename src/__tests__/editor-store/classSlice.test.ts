@@ -636,3 +636,132 @@ describe('classSlice — undo / redo', () => {
     expect(historyLength()).toBe(beforeUnassignedRemove)
   })
 })
+
+// ---------------------------------------------------------------------------
+// node↔class assignment in Visual Component canvas mode
+//
+// Regression for the bug where applying a class to an element selected inside
+// a VC canvas silently no-opped: addNodeClass / removeNodeClass /
+// reorderNodeClass(es) only searched site.pages, missing nodes that live in
+// the VC's tree (site.visualComponents[].tree.nodes). Hover preview kept
+// working because it doesn't touch the tree at all.
+// ---------------------------------------------------------------------------
+
+describe('classSlice — node class assignment in VC canvas', () => {
+  /**
+   * Set up a site that already contains one Visual Component with a root
+   * node and a child node. Returns the relevant ids so tests can drive
+   * mutations through the public store API.
+   */
+  function setupVc() {
+    freshStore()
+    const s = getStore()
+    s.createSite('Test')
+
+    const vcId = 'vc-1'
+    const vcRootId = 'vc-root'
+    const vcChildId = 'vc-child'
+
+    useEditorStore.setState((state) => ({
+      ...state,
+      site: state.site
+        ? {
+            ...state.site,
+            visualComponents: [
+              {
+                id: vcId,
+                name: 'Hero',
+                tree: {
+                  rootNodeId: vcRootId,
+                  nodes: {
+                    [vcRootId]: {
+                      id: vcRootId,
+                      moduleId: 'base.body',
+                      props: {},
+                      children: [vcChildId],
+                      breakpointOverrides: {},
+                      classIds: [],
+                    },
+                    [vcChildId]: {
+                      id: vcChildId,
+                      moduleId: 'base.text',
+                      props: { text: 'Hi' },
+                      children: [],
+                      breakpointOverrides: {},
+                      classIds: [],
+                    },
+                  },
+                },
+                params: [],
+                breakpoints: [],
+                classIds: [],
+                createdAt: Date.now(),
+              },
+            ],
+          }
+        : null,
+    }))
+
+    // Enter the VC canvas — same state the editor sets when the user
+    // double-clicks a VC in the layers panel.
+    s.setActiveDocument({ kind: 'visualComponent', vcId })
+
+    return { vcId, vcRootId, vcChildId }
+  }
+
+  it('addNodeClass writes onto a node inside the active VC tree', () => {
+    const { vcId, vcChildId } = setupVc()
+    const cls = getStore().createClass('hero-text')
+
+    getStore().addNodeClass(vcChildId, cls.id)
+
+    const vc = useEditorStore
+      .getState()
+      .site!.visualComponents.find((v) => v.id === vcId)!
+    expect(vc.tree.nodes[vcChildId].classIds).toContain(cls.id)
+  })
+
+  it('removeNodeClass clears the assignment from a VC tree node', () => {
+    const { vcId, vcChildId } = setupVc()
+    const cls = getStore().createClass('hero-text')
+
+    getStore().addNodeClass(vcChildId, cls.id)
+    getStore().removeNodeClass(vcChildId, cls.id)
+
+    const vc = useEditorStore
+      .getState()
+      .site!.visualComponents.find((v) => v.id === vcId)!
+    expect(vc.tree.nodes[vcChildId].classIds ?? []).not.toContain(cls.id)
+  })
+
+  it('reorderNodeClass moves a class up/down inside a VC tree node', () => {
+    const { vcId, vcChildId } = setupVc()
+    const a = getStore().createClass('a')
+    const b = getStore().createClass('b')
+    const c = getStore().createClass('c')
+
+    getStore().addNodeClass(vcChildId, a.id)
+    getStore().addNodeClass(vcChildId, b.id)
+    getStore().addNodeClass(vcChildId, c.id)
+    // [a, b, c] → move c up → [a, c, b]
+    getStore().reorderNodeClass(vcChildId, c.id, 'up')
+
+    const vc = useEditorStore
+      .getState()
+      .site!.visualComponents.find((v) => v.id === vcId)!
+    expect(vc.tree.nodes[vcChildId].classIds).toEqual([a.id, c.id, b.id])
+  })
+
+  it('deleteClass removes the classId from VC tree nodes too', () => {
+    const { vcId, vcChildId } = setupVc()
+    const cls = getStore().createClass('chrome')
+    getStore().addNodeClass(vcChildId, cls.id)
+
+    getStore().deleteClass(cls.id)
+
+    const vc = useEditorStore
+      .getState()
+      .site!.visualComponents.find((v) => v.id === vcId)!
+    expect(vc.tree.nodes[vcChildId].classIds ?? []).not.toContain(cls.id)
+  })
+})

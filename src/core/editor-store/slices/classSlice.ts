@@ -15,7 +15,9 @@
  */
 
 import { nanoid } from 'nanoid'
-import type { EditorStoreSliceCreator } from '../types'
+import type { Draft } from 'immer'
+import type { EditorStore, EditorStoreSliceCreator } from '../types'
+import type { BaseNode, SiteDocument } from '@core/page-tree'
 import type { CSSClass, CSSPropertyBag } from '@core/page-tree/schemas'
 import { isGeneratedClassLocked, isUserVisibleClass } from '@core/page-tree/classUtils'
 import { assertValidCssClassName } from '@core/page-tree/classNames'
@@ -157,6 +159,69 @@ function cloneBreakpointStyles(
       { ...styles },
     ]),
   )
+}
+
+/**
+ * Find a node by id anywhere in the site — pages **and** Visual Component
+ * trees. Returns null when the node doesn't exist anywhere.
+ *
+ * Node↔class mutations need this because the user can be editing either a
+ * page or a VC; the canvas selection lives in whichever document is active.
+ * Searching only `site.pages` (the original implementation) silently
+ * no-ops every class assignment when the user is in VC canvas mode.
+ *
+ * VCNode = BaseNode (structurally identical), so a single `BaseNode`-shaped
+ * helper covers both tree kinds.
+ */
+function findNodeWithClassIds(
+  site: SiteDocument | null,
+  nodeId: string,
+): BaseNode | null {
+  if (!site) return null
+  for (const page of site.pages) {
+    const node = page.nodes[nodeId]
+    if (node) return node
+  }
+  for (const vc of site.visualComponents) {
+    const node = vc.tree.nodes[nodeId]
+    if (node) return node
+  }
+  return null
+}
+
+/**
+ * Apply a mutation to a node's `classIds` array inside an Immer producer,
+ * looking up the node in pages first and falling back to Visual Component
+ * trees. The recipe receives the live (draft) `classIds` array — mutate it
+ * in place. Initialises `classIds` to `[]` when missing.
+ *
+ * Returns `true` when the node was found and the recipe ran, `false`
+ * otherwise (used by callers to skip post-mutation bookkeeping when the
+ * node has been removed concurrently).
+ */
+function mutateNodeClassIds(
+  state: Draft<EditorStore>,
+  nodeId: string,
+  recipe: (classIds: string[]) => void,
+): boolean {
+  if (!state.site) return false
+  for (const page of state.site.pages) {
+    const node = page.nodes[nodeId]
+    if (node) {
+      if (!node.classIds) node.classIds = []
+      recipe(node.classIds)
+      return true
+    }
+  }
+  for (const vc of state.site.visualComponents) {
+    const node = vc.tree.nodes[nodeId]
+    if (node) {
+      if (!node.classIds) node.classIds = []
+      recipe(node.classIds)
+      return true
+    }
+  }
+  return false
 }
 
 function uniqueClassCopyName(classes: Record<string, CSSClass>, originalName: string): string {
@@ -344,8 +409,7 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
     const { site } = get()
     if (!site) return null
 
-    const page = site.pages.find((p) => p.nodes[nodeId])
-    const node = page?.nodes[nodeId]
+    const node = findNodeWithClassIds(site, nodeId)
     if (!node) return null
 
     const existingId = node.classIds?.find((id) => {
@@ -373,17 +437,23 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
     set((state) => {
         if (!state.site) return
         state.site.classes[newClass.id] = newClass
-        for (const p of state.site.pages) {
-          const target = p.nodes[nodeId]
-          if (!target) continue
-          if (!target.classIds) target.classIds = []
-          target.classIds = target.classIds.filter((id) => {
-            const cls = state.site?.classes[id]
-            return !(cls?.scope?.type === 'node' && cls.scope.nodeId === nodeId && cls.scope.role === 'module-style')
-          })
-          target.classIds.push(newClass.id)
-          break
-        }
+        const mutated = mutateNodeClassIds(state, nodeId, (classIds) => {
+          // Drop any prior module-style class scoped to this node before
+          // appending the freshly created one. The filter is in-place via
+          // splice so we don't reassign `node.classIds` inside the recipe.
+          for (let i = classIds.length - 1; i >= 0; i--) {
+            const cls = state.site?.classes[classIds[i]]
+            if (
+              cls?.scope?.type === 'node' &&
+              cls.scope.nodeId === nodeId &&
+              cls.scope.role === 'module-style'
+            ) {
+              classIds.splice(i, 1)
+            }
+          }
+          classIds.push(newClass.id)
+        })
+        if (!mutated) return
         state.site.updatedAt = Date.now()
         state.hasUnsavedChanges = true
       })
@@ -455,9 +525,18 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
         if (!state.site) return
         // Remove from registry
         delete state.site.classes[classId]
-        // Remove from all nodes on all pages
+        // Remove from every node on every page AND every Visual Component
+        // tree — class IDs are global, so a deleted class must disappear
+        // from both surfaces or a VC keeps a dangling reference.
         for (const page of state.site.pages) {
           for (const node of Object.values(page.nodes)) {
+            if (node.classIds && node.classIds.includes(classId)) {
+              node.classIds = node.classIds.filter((id) => id !== classId)
+            }
+          }
+        }
+        for (const vc of state.site.visualComponents) {
+          for (const node of Object.values(vc.tree.nodes)) {
             if (node.classIds && node.classIds.includes(classId)) {
               node.classIds = node.classIds.filter((id) => id !== classId)
             }
@@ -479,23 +558,18 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
 
   addNodeClass(nodeId, classId) {
     const { site } = get()
-    if (!site) return
-    // Find the node across pages
-    const page = site.pages.find((p) => p.nodes[nodeId])
-    if (!page?.nodes[nodeId]) return
+    const node = findNodeWithClassIds(site, nodeId)
+    if (!node) return
     // No-op if already assigned
-    if (page.nodes[nodeId].classIds?.includes(classId)) return
+    if (node.classIds?.includes(classId)) return
 
     get().pushHistory()
     set((state) => {
         if (!state.site) return
-        for (const p of state.site.pages) {
-          if (p.nodes[nodeId]) {
-            if (!p.nodes[nodeId].classIds) p.nodes[nodeId].classIds = []
-            p.nodes[nodeId].classIds!.push(classId)
-            break
-          }
-        }
+        const mutated = mutateNodeClassIds(state, nodeId, (classIds) => {
+          if (!classIds.includes(classId)) classIds.push(classId)
+        })
+        if (!mutated) return
         state.site.updatedAt = Date.now()
         state.hasUnsavedChanges = true
       })
@@ -503,20 +577,17 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
 
   removeNodeClass(nodeId, classId) {
     const { site } = get()
-    if (!site) return
-    const page = site.pages.find((p) => p.nodes[nodeId])
-    const classIds = page?.nodes[nodeId]?.classIds
-    if (!classIds?.includes(classId)) return
+    const node = findNodeWithClassIds(site, nodeId)
+    if (!node?.classIds?.includes(classId)) return
 
     get().pushHistory()
     set((state) => {
         if (!state.site) return
-        for (const p of state.site.pages) {
-          if (p.nodes[nodeId] && p.nodes[nodeId].classIds) {
-            p.nodes[nodeId].classIds = p.nodes[nodeId].classIds!.filter((id) => id !== classId)
-            break
-          }
-        }
+        const mutated = mutateNodeClassIds(state, nodeId, (classIds) => {
+          const idx = classIds.indexOf(classId)
+          if (idx >= 0) classIds.splice(idx, 1)
+        })
+        if (!mutated) return
         state.site.updatedAt = Date.now()
         state.hasUnsavedChanges = true
       })
@@ -527,22 +598,19 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
     if (!site) return
     if (fromIndex === toIndex) return
     if (fromIndex < 0 || toIndex < 0) return
-    const page = site.pages.find((p) => p.nodes[nodeId])
-    const classIds = page?.nodes[nodeId]?.classIds
+    const node = findNodeWithClassIds(site, nodeId)
+    const classIds = node?.classIds
     if (!classIds || classIds.length <= Math.max(fromIndex, toIndex)) return
 
     get().pushHistory()
     set((state) => {
         if (!state.site) return
-        for (const p of state.site.pages) {
-          const node = p.nodes[nodeId]
-          if (node?.classIds && node.classIds.length > Math.max(fromIndex, toIndex)) {
-            const arr = node.classIds
-            const [moved] = arr.splice(fromIndex, 1)
-            arr.splice(toIndex, 0, moved)
-            break
-          }
-        }
+        const mutated = mutateNodeClassIds(state, nodeId, (arr) => {
+          if (arr.length <= Math.max(fromIndex, toIndex)) return
+          const [moved] = arr.splice(fromIndex, 1)
+          arr.splice(toIndex, 0, moved)
+        })
+        if (!mutated) return
         state.site.updatedAt = Date.now()
         state.hasUnsavedChanges = true
       })
@@ -551,8 +619,8 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
   reorderNodeClass(nodeId, classId, direction) {
     const { site } = get()
     if (!site) return
-    const page = site.pages.find((p) => p.nodes[nodeId])
-    const classIds = page?.nodes[nodeId]?.classIds
+    const node = findNodeWithClassIds(site, nodeId)
+    const classIds = node?.classIds
     if (!classIds || classIds.length < 2) return
     const idx = classIds.indexOf(classId)
     if (idx === -1) return
@@ -563,15 +631,15 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
     get().pushHistory()
     set((state) => {
         if (!state.site) return
-        for (const p of state.site.pages) {
-          const node = p.nodes[nodeId]
-          if (node?.classIds) {
-            const arr = node.classIds
-            const [moved] = arr.splice(idx, 1)
-            arr.splice(newIdx, 0, moved)
-            break
-          }
-        }
+        const mutated = mutateNodeClassIds(state, nodeId, (arr) => {
+          const i = arr.indexOf(classId)
+          if (i === -1) return
+          const target = direction === 'up' ? i - 1 : i + 1
+          if (target < 0 || target >= arr.length) return
+          const [moved] = arr.splice(i, 1)
+          arr.splice(target, 0, moved)
+        })
+        if (!mutated) return
         state.site.updatedAt = Date.now()
         state.hasUnsavedChanges = true
       })
