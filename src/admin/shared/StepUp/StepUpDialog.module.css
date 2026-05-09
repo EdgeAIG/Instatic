@@ -1,0 +1,64 @@
+.backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 200;
+    display: grid;
+    place-items: center;
+}
+
+.dialog {
+    width: min(420px, calc(100vw - 32px));
+    max-width: 100%;
+    background: var(--editor-surface);
+    border: 1px solid var(--editor-border);
+    border-radius: var(--panel-radius);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+    color: var(--editor-text);
+    padding: 20px;
+    display: grid;
+    gap: 14px;
+}
+
+.title {
+    margin: 0;
+    color: var(--editor-text-bright);
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.body {
+    margin: 0;
+    color: var(--editor-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.field {
+    display: grid;
+    gap: 6px;
+}
+
+.label {
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.error {
+    margin: 0;
+    color: var(--editor-danger);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
