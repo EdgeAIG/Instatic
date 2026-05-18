@@ -9,6 +9,7 @@ import { CloudUploadSolidIcon } from 'pixel-art-icons/icons/cloud-upload-solid'
 import { ExternalLinkSolidIcon } from 'pixel-art-icons/icons/external-link-solid'
 import { EyeSolidIcon } from 'pixel-art-icons/icons/eye-solid'
 import { SaveSolidIcon } from 'pixel-art-icons/icons/save-solid'
+import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
 import type { PersistenceSaveStatus } from '@site/hooks/usePersistence'
 import { PublishActionGroup, type PublishActionMenuItem } from './PublishActionGroup'
 
@@ -26,6 +27,7 @@ export function PublishButton({ enabled = true, onSave, saveStatus }: PublishBut
   const activePage = useEditorStore(selectActivePage)
   const openPreview = useEditorStore((s) => s.openPreview)
   const hasUnsavedChanges = useEditorStore((s) => s.hasUnsavedChanges)
+  const { runStepUp } = useStepUp()
   const [state, setState] = useState<PublishState>('idle')
   const [message, setMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -101,7 +103,13 @@ export function PublishButton({ enabled = true, onSave, saveStatus }: PublishBut
 
     try {
       await onSave?.()
-      const result = await publishCmsDraft()
+      // Wrap the publish call in `runStepUp` so the StepUpProvider can
+      // intercept the server's `step_up_required` 401, prompt the user
+      // to re-enter their password, then retry. Publish is the highest-
+      // blast-radius site action (one click replaces every public page),
+      // which is why the server gates it behind a fresh step-up window
+      // in addition to the `pages.publish` capability check.
+      const result = await runStepUp(() => publishCmsDraft())
       setState('published')
       setMessage(
         result.publishedPages === 1
@@ -110,11 +118,19 @@ export function PublishButton({ enabled = true, onSave, saveStatus }: PublishBut
       )
       clearMessageLater()
     } catch (err) {
+      if (err instanceof Error && err.message === StepUpCancelledMessage) {
+        // User dismissed the step-up dialog — return the button to its
+        // resting state without surfacing an error message; this is the
+        // same UX every other step-up-gated action uses.
+        setState('idle')
+        setMessage(null)
+        return
+      }
       setState('error')
       setMessage(err instanceof Error ? err.message : 'Unknown publish error')
       resetErrorLater()
     }
-  }, [clearMessageLater, enabled, onSave, site, resetErrorLater, state])
+  }, [clearMessageLater, enabled, onSave, runStepUp, site, resetErrorLater, state])
 
   const handleManualSave = useCallback(async () => {
     if (!onSave || isSaving || isStatusSaving) return

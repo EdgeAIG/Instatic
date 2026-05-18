@@ -344,14 +344,15 @@ function AuthenticatedAdmin({
 
   return (
     <AdminSessionProvider user={currentUser}>
-      {/* SpotlightProvider sits INSIDE AdminSessionProvider so it can read
-          the authenticated user via useCurrentAdminUser(). Without an
-          authenticated user the palette's CommandContext is null and every
-          command short-circuits — clicks become silent no-ops. It still
-          renders above StepUpProvider / the workspace switch so the palette
-          is available across every workspace. */}
-      <SpotlightProvider>
-        <StepUpProvider>
+      {/* StepUpProvider wraps SpotlightProvider so spotlight commands can
+          consume `useStepUp()` — required by step-up-gated actions invoked
+          from the palette (e.g. `editor.publish`). Both providers stay
+          inside AdminSessionProvider (the palette's CommandContext reads
+          the authenticated user) and above the workspace switch so the
+          palette and the step-up dialog are available across every
+          workspace. */}
+      <StepUpProvider>
+        <SpotlightProvider>
           <Suspense fallback={<AppLoadingScreen />}>
             {section === 'content' ? <ContentPage /> :
               section === 'data' ? <DataPage /> :
@@ -362,8 +363,8 @@ function AuthenticatedAdmin({
               section === 'account' ? <AccountPage /> :
               <SitePage />}
           </Suspense>
-        </StepUpProvider>
-      </SpotlightProvider>
+        </SpotlightProvider>
+      </StepUpProvider>
     </AdminSessionProvider>
   )
 }

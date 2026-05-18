@@ -5,9 +5,13 @@
  * All commands are gated to workspace: ['site'] only.
  * Undo/redo use useEditorStore.getState() (Zustand getState is safe outside React).
  * Save uses cmsAdapter.saveSite() directly (mirrors usePersistence logic).
- * Publish calls publishCmsDraft() from the persistence layer.
+ * Publish calls publishCmsDraft() from the persistence layer, wrapped in
+ * `ctx.runStepUp` so the StepUpProvider's password re-entry dialog opens
+ * when the server replies with `step_up_required` (publish is gated on a
+ * fresh 15-minute step-up window on top of `pages.publish`).
  */
 
+import { StepUpCancelledMessage } from '@admin/shared/StepUp'
 import { cmsAdapter, publishCmsDraft } from '@core/persistence'
 import type { Command } from '../types'
 
@@ -55,8 +59,9 @@ export function getEditorCommands(): Command[] {
       run: async (ctx) => {
         ctx.closeSpotlight()
         try {
-          await publishCmsDraft()
+          await ctx.runStepUp(() => publishCmsDraft())
         } catch (err) {
+          if (err instanceof Error && err.message === StepUpCancelledMessage) return
           console.error('[spotlight] publish failed:', err)
         }
       },

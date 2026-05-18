@@ -343,8 +343,11 @@ describe('PublishButton — publish state machine', () => {
       new URL('../../admin/pages/site/toolbar/PublishButton.tsx', import.meta.url),
       'utf-8',
     )
+    // The publish call is wrapped in `runStepUp(() => publishCmsDraft())`
+    // so the StepUpProvider can intercept `step_up_required` and re-auth.
+    // We assert that save runs before that wrapped call lands.
     const savePosition = src.indexOf('await onSave?.()')
-    const publishPosition = src.indexOf('await publishCmsDraft()')
+    const publishPosition = src.indexOf('publishCmsDraft()')
     expect(savePosition).toBeGreaterThan(-1)
     expect(publishPosition).toBeGreaterThan(savePosition)
   })

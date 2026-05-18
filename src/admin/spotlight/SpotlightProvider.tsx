@@ -43,6 +43,7 @@ import { recordTelemetryRun } from './telemetry'
 import { useLocation } from '@admin/lib/routing'
 import { useAdminNavigate } from '@admin/lib/useAdminNavigate'
 import { useCurrentAdminUser } from '@admin/sessionContext'
+import { useStepUp } from '@admin/shared/StepUp'
 import { spotlightReducer, initialState } from './state'
 import { ProviderRunner } from './providerRunner'
 import type { AdminWorkspace } from '@admin/workspace'
@@ -84,6 +85,12 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
   const navigate = useAdminNavigate()
   const user = useCurrentAdminUser()
   const { pathname } = useLocation()
+  // SpotlightProvider sits inside StepUpProvider (see AdminEntry.tsx) so
+  // it can hand `runStepUp` to every command via CommandRunContext.
+  // Without this, palette-invoked actions hitting step-up-gated endpoints
+  // would surface a raw `step_up_required` error instead of opening the
+  // re-auth dialog.
+  const { runStepUp } = useStepUp()
 
   // ─── Derived state (declared once, used throughout) ───────────────────────
 
@@ -127,6 +134,10 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
   // Stable ref so runCommand doesn't stale-close over the navigate function.
   const navigateRef = useRef(navigate)
   useEffect(() => { navigateRef.current = navigate }, [navigate])
+  // Same pattern for `runStepUp` — captured here once and re-read at command
+  // invocation time so the CommandRunContext stays callback-stable.
+  const runStepUpRef = useRef(runStepUp)
+  useEffect(() => { runStepUpRef.current = runStepUp }, [runStepUp])
 
   // ─── ProviderRunner (Phase 3) ─────────────────────────────────────────────
   // The react-hooks/refs rule forbids reading/writing ref.current during the
@@ -277,6 +288,7 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
       pushScope: (scopeId, pendingArgs) =>
         dispatch({ type: 'PUSH_SCOPE', scopeId, pendingArgs }),
       popScope: () => dispatch({ type: 'POP_SCOPE' }),
+      runStepUp: <T,>(action: () => Promise<T>) => runStepUpRef.current(action),
     }
 
     // Run the command FIRST, then close. Commands that navigate (e.g. "Go to
