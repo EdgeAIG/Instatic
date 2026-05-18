@@ -8,10 +8,10 @@
  */
 
 import { loopSourceRegistry } from '@core/loops/registry'
-import { ContentEntriesSource } from './contentEntries'
+import { DataRowsSource } from './dataRows'
 import { SitePagesSource } from './sitePages'
 import { SiteMediaSource } from './siteMedia'
 
-loopSourceRegistry.registerOrReplace(ContentEntriesSource)
+loopSourceRegistry.registerOrReplace(DataRowsSource)
 loopSourceRegistry.registerOrReplace(SitePagesSource)
 loopSourceRegistry.registerOrReplace(SiteMediaSource)

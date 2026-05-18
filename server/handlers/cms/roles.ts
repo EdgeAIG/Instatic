@@ -14,7 +14,7 @@ import {
   createCustomRole,
   deleteCustomRole,
   listRoles,
-  updateCustomRole,
+  updateRole,
 } from '../../repositories/roles'
 import { normalizeCapabilities } from '../../auth/capabilities'
 import { Type } from '@core/utils/typeboxHelpers'
@@ -95,7 +95,7 @@ export async function handleRolesRoutes(req: Request, db: DbClient): Promise<Res
       const body = await readValidatedBody(req, RolePatchBodySchema)
       if (!body) return badRequest('Invalid role payload')
       try {
-        const role = await updateCustomRole(db, roleId, {
+        const role = await updateRole(db, roleId, {
           name: body.name,
           slug: body.slug,
           description: body.description,

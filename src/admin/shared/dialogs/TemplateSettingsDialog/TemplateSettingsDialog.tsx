@@ -5,8 +5,8 @@ import {
   pageSlugDuplicateError,
   pageSlugError,
 } from '@core/page-tree/slugs'
-import { listCmsContentCollections } from '@core/persistence/cmsContent'
-import type { ContentCollection } from '@core/content/schemas'
+import { listCmsDataTables } from '@core/persistence/cmsData'
+import type { DataTable } from '@core/data/schemas'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { Input } from '@ui/components/Input'
@@ -26,13 +26,18 @@ interface TemplateSettingsDialogProps {
   onSave: (payload: TemplateSettingsPayload) => void
 }
 
-const FALLBACK_COLLECTIONS: ContentCollection[] = [{
+const FALLBACK_COLLECTIONS: DataTable[] = [{
   id: 'posts',
   name: 'Posts',
   slug: 'posts',
+  kind: 'postType',
   routeBase: '/posts',
   singularLabel: 'Post',
   pluralLabel: 'Posts',
+  primaryFieldId: 'title',
+  fields: [],
+  createdByUserId: null,
+  updatedByUserId: null,
   createdAt: '',
   updatedAt: '',
 }]
@@ -47,9 +52,9 @@ export const TemplateSettingsDialog = memo(function TemplateSettingsDialog({
 }: TemplateSettingsDialogProps) {
   const [title, setTitle] = useState(page.title)
   const [slug, setSlug] = useState(page.slug)
-  const [collectionId, setCollectionId] = useState(page.template?.collectionId ?? 'posts')
+  const [tableSlug, setTableSlug] = useState(page.template?.tableSlug ?? 'posts')
   const [priority, setPriority] = useState(String(page.template?.priority ?? 100))
-  const [collections, setCollections] = useState<ContentCollection[]>(FALLBACK_COLLECTIONS)
+  const [collections, setCollections] = useState<DataTable[]>(FALLBACK_COLLECTIONS)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const trimmedTitle = title.trim()
@@ -64,8 +69,9 @@ export const TemplateSettingsDialog = memo(function TemplateSettingsDialog({
 
   useEffect(() => {
     let cancelled = false
-    listCmsContentCollections()
-      .then((nextCollections) => {
+    listCmsDataTables()
+      .then((allTables) => {
+        const nextCollections = allTables.filter((t) => t.kind === 'postType')
         if (!cancelled && nextCollections.length > 0) setCollections(nextCollections)
       })
       .catch(() => {
@@ -86,7 +92,7 @@ export const TemplateSettingsDialog = memo(function TemplateSettingsDialog({
       template: {
         enabled: true,
         context: 'entry',
-        collectionId,
+        tableSlug,
         priority: priorityNumber,
         conditions: page.template?.conditions ?? [],
       },
@@ -146,14 +152,14 @@ export const TemplateSettingsDialog = memo(function TemplateSettingsDialog({
         </label>
 
         <div className={dialogStyles.field}>
-          <span className={dialogStyles.label}>Collection</span>
+          <span className={dialogStyles.label}>Table</span>
           <Select
-            aria-label="Collection"
+            aria-label="Table"
             fieldSize="sm"
-            value={collectionId}
-            onChange={(event) => setCollectionId(event.target.value)}
+            value={tableSlug}
+            onChange={(event) => setTableSlug(event.target.value)}
             options={collections.map((collection) => ({
-              value: collection.id,
+              value: collection.slug,
               label: collection.pluralLabel || collection.name,
             }))}
           />

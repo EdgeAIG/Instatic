@@ -1,73 +1,70 @@
 .canvas {
-  /* Composes with `CanvasRoot.module.css .canvas` which owns the
+    /* Composes with `CanvasRoot.module.css .canvas` which owns the
      surface chrome (rounded top-left, --editor-surface-2 background) so the
      Media canvas matches Site / Content visually. We only add the flex
      layout the inner content needs. */
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  color: var(--editor-text);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    color: var(--editor-text);
 }
 
 .canvasDropping::after {
-  content: '';
-  position: absolute;
-  inset: 8px;
-  border: 2px dashed var(--canvas-selection-ring-color);
-  border-radius: var(--editor-radius);
-  pointer-events: none;
+    content: "";
+    position: absolute;
+    inset: 8px;
+    border: 2px dashed var(--canvas-selection-ring-color);
+    border-radius: var(--editor-radius);
+    pointer-events: none;
 }
 
 .toolbar {
-  padding: 8px;
-  border-bottom: 1px solid var(--editor-border);
+    padding: 8px;
 }
 
 .statusBar {
-  padding: 4px 12px;
-  font-size: 11px;
-  color: var(--editor-text-muted);
-  border-bottom: 1px solid var(--editor-border);
+    padding: 4px 12px;
+    font-size: 11px;
+    color: var(--editor-text-muted);
 }
 
 .body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding: 12px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
 }
 
 .viewGroup {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 /* ── Grid view ─────────────────────────────────────────────────────────── */
 .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
-  list-style: none;
-  padding: 0;
-  margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
 }
 
 .tileItem {
-  list-style: none;
-  display: block;
+    list-style: none;
+    display: block;
 }
 
 .tile {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px;
-  width: 100%;
-  height: 100%;
-  align-items: stretch;
-  justify-content: flex-start;
-  border-radius: var(--editor-radius);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    width: 100%;
+    height: 100%;
+    align-items: stretch;
+    justify-content: flex-start;
+    border-radius: var(--editor-radius);
 }
 
 /* Higher specificity (.tile.tileSelected over .tile) so the Button
@@ -77,114 +74,118 @@
    the canvas-level node ring; `--canvas-selection-ring-color` is just the
    colour and is what gets fed to `outline` / `color-mix` here. */
 .tile.tileSelected {
-  outline: 2px solid var(--canvas-selection-ring-color);
-  outline-offset: -2px;
-  box-shadow:
-    inset 0 0 0 2px var(--canvas-selection-ring-color),
-    0 0 0 4px color-mix(in srgb, var(--canvas-selection-ring-color) 35%, transparent);
+    outline: 2px solid var(--canvas-selection-ring-color);
+    outline-offset: -2px;
+    box-shadow:
+        inset 0 0 0 2px var(--canvas-selection-ring-color),
+        0 0 0 4px
+            color-mix(
+                in srgb,
+                var(--canvas-selection-ring-color) 35%,
+                transparent
+            );
 }
 
 .tilePreview {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--editor-surface-2);
-  border-radius: var(--editor-radius-sm);
-  overflow: hidden;
-  color: var(--editor-text-muted);
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--editor-surface-2);
+    border-radius: var(--editor-radius-sm);
+    overflow: hidden;
+    color: var(--editor-text-muted);
 }
 
 .tileImage,
 .tileVideo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .tileBody {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: start;
-  min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: start;
+    min-width: 0;
 }
 
 .tileLabel {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--editor-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--editor-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .tileMeta {
-  font-size: 10px;
-  color: var(--editor-text-muted);
+    font-size: 10px;
+    color: var(--editor-text-muted);
 }
 
 /* ── List view ─────────────────────────────────────────────────────────── */
 .list {
-  display: flex;
-  flex-direction: column;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  gap: 1px;
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 1px;
 }
 
 .rowItem {
-  list-style: none;
-  display: block;
+    list-style: none;
+    display: block;
 }
 
 .row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  width: 100%;
-  justify-content: flex-start;
-  border-radius: var(--editor-radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    width: 100%;
+    justify-content: flex-start;
+    border-radius: var(--editor-radius-sm);
 }
 
 .row.rowSelected {
-  background: var(--editor-selection);
-  box-shadow: inset 0 0 0 1px var(--canvas-selection-ring-color);
+    background: var(--editor-selection);
+    box-shadow: inset 0 0 0 1px var(--canvas-selection-ring-color);
 }
 
 .rowPreview {
-  display: inline-flex;
-  width: 24px;
-  height: 24px;
-  align-items: center;
-  justify-content: center;
-  background: var(--editor-surface-2);
-  border-radius: var(--editor-radius-sm);
-  color: var(--editor-text-muted);
-  overflow: hidden;
+    display: inline-flex;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    background: var(--editor-surface-2);
+    border-radius: var(--editor-radius-sm);
+    color: var(--editor-text-muted);
+    overflow: hidden;
 }
 
 .rowImage {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .rowLabel {
-  flex: 1 1 auto;
-  text-align: start;
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    flex: 1 1 auto;
+    text-align: start;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .rowMeta {
-  flex: 0 0 auto;
-  font-size: 11px;
-  color: var(--editor-text-muted);
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--editor-text-muted);
 }
-

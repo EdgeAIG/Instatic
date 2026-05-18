@@ -32,8 +32,8 @@ describe('admin feature folders', () => {
     expect(adminEntry).not.toContain('PluginPageAdmin')
   })
 
-  it('keeps reusable content domain code outside admin pages', () => {
-    expect(existsSync(join(root, 'src/core/content/schemas.ts'))).toBe(true)
-    expect(existsSync(join(root, 'src/core/content/markdown.ts'))).toBe(true)
+  it('keeps reusable markdown utilities outside admin pages', () => {
+    expect(existsSync(join(root, 'src/core/markdown/blockModel.ts'))).toBe(true)
+    expect(existsSync(join(root, 'src/core/markdown/renderMarkdown.ts'))).toBe(true)
   })
 })

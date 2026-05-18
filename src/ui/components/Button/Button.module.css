@@ -10,7 +10,10 @@
     align-items: center;
     justify-content: center;
     border: 0;
-    border-radius: 10px;
+    /* Default radius for size-sm/md/lg — matches `--input-radius` so buttons
+     * paired with Input/Select/SearchBar share corners. The smaller toolbar
+     * sizes (`.size-micro`, `.size-xs`) override this below. */
+    border-radius: var(--input-radius);
     font-family: inherit;
     font-size: 12px;
     font-weight: 700;

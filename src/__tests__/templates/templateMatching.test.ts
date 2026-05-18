@@ -16,7 +16,7 @@ describe('template matching', () => {
     firstPage.template = {
       enabled: true,
       context: 'entry',
-      collectionId: 'posts',
+      tableSlug: 'posts',
       priority: 10,
       conditions: [],
     }
@@ -29,7 +29,7 @@ describe('template matching', () => {
       template: {
         enabled: true,
         context: 'entry',
-        collectionId: 'posts',
+        tableSlug: 'posts',
         priority: 100,
         conditions: [],
       },
@@ -44,7 +44,7 @@ describe('template matching', () => {
     site.pages[0].template = {
       enabled: true,
       context: 'entry',
-      collectionId: 'posts',
+      tableSlug: 'posts',
       priority: 50,
       conditions: [],
     }

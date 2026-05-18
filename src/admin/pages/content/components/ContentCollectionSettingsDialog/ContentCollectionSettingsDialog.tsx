@@ -1,6 +1,13 @@
 import { memo, useEffect, useRef, useState, type FormEvent } from 'react'
-import { normalizeContentCollectionFields } from '@core/content/fields'
-import type { ContentCollection, UpdateContentCollectionInput } from '@core/content/schemas'
+import { buildPostTypeDefaultFields, dataTableHasField } from '@core/data/fields'
+import {
+  POST_TYPE_FIELD_BODY,
+  POST_TYPE_FIELD_FEATURED_MEDIA,
+  POST_TYPE_FIELD_SEO_TITLE,
+  POST_TYPE_FIELD_SEO_DESCRIPTION,
+  type DataTable,
+  type UpdateDataTableInput,
+} from '@core/data/schemas'
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { Dialog } from '@ui/components/Dialog'
@@ -10,9 +17,9 @@ import styles from '../../ContentPage.module.css'
 import { slugFromTitle } from '@core/utils/slug'
 
 interface ContentCollectionSettingsDialogProps {
-  collection: ContentCollection
+  collection: DataTable
   onCancel: () => void
-  onSave: (input: UpdateContentCollectionInput) => void | Promise<void>
+  onSave: (input: UpdateDataTableInput) => void | Promise<void>
 }
 
 function normalizeRouteBase(value: string): string {
@@ -31,15 +38,14 @@ export const ContentCollectionSettingsDialog = memo(function ContentCollectionSe
   onCancel,
   onSave,
 }: ContentCollectionSettingsDialogProps) {
-  const fields = normalizeContentCollectionFields(collection.fields)
   const [name, setName] = useState(collection.name)
   const [slug, setSlug] = useState(collection.slug)
   const [routeBase, setRouteBase] = useState(collection.routeBase)
   const [singularLabel, setSingularLabel] = useState(collection.singularLabel)
   const [pluralLabel, setPluralLabel] = useState(collection.pluralLabel)
-  const [bodyField, setBodyField] = useState(fields.builtIn.body)
-  const [featuredMediaField, setFeaturedMediaField] = useState(fields.builtIn.featuredMedia)
-  const [seoField, setSeoField] = useState(fields.builtIn.seo)
+  const [bodyField, setBodyField] = useState(dataTableHasField(collection, POST_TYPE_FIELD_BODY))
+  const [featuredMediaField, setFeaturedMediaField] = useState(dataTableHasField(collection, POST_TYPE_FIELD_FEATURED_MEDIA))
+  const [seoField, setSeoField] = useState(dataTableHasField(collection, POST_TYPE_FIELD_SEO_TITLE))
   const [submitError, setSubmitError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -59,20 +65,22 @@ export const ContentCollectionSettingsDialog = memo(function ContentCollectionSe
     if (!canSave) return
 
     try {
+      // Preserve custom (non-built-in) fields from the collection so they
+      // are not silently dropped when saving built-in field toggles.
+      const customFields = collection.fields.filter((f) => !f.builtIn)
+      const nextFields = buildPostTypeDefaultFields().filter((field) => {
+        if (field.id === POST_TYPE_FIELD_BODY) return bodyField
+        if (field.id === POST_TYPE_FIELD_FEATURED_MEDIA) return featuredMediaField
+        if (field.id === POST_TYPE_FIELD_SEO_TITLE || field.id === POST_TYPE_FIELD_SEO_DESCRIPTION) return seoField
+        return true
+      })
       await onSave({
         name: trimmedName,
         slug: normalizedSlug,
         routeBase: normalizedRouteBase,
         singularLabel: trimmedSingular,
         pluralLabel: trimmedPlural,
-        fields: {
-          builtIn: {
-            body: bodyField,
-            featuredMedia: featuredMediaField,
-            seo: seoField,
-          },
-          custom: [],
-        },
+        fields: [...nextFields, ...customFields],
       })
     } catch (err) {
       setSubmitError(errorMessage(err))

@@ -30,8 +30,11 @@ import styles from './MediaPickerModal.module.css'
 interface MediaPickerModalProps {
   open: boolean
   onClose: () => void
-  /** Constrain the picker to a single media kind. */
-  mediaKind: 'image' | 'video'
+  /**
+   * Constrain the picker to a single media kind, or pass `'any'` to show
+   * all asset types without filtering.
+   */
+  mediaKind: 'image' | 'video' | 'any'
   /**
    * Public path of the currently-picked asset, if any. Used to seed the
    * picker's selection so re-opening the picker for an already-picked
@@ -72,11 +75,10 @@ function MediaPickerModalBody({
   const [activePanel, setActivePanel] = useState<MediaSidebarPanelId | null>('folders')
 
   // Constrain the canvas to the requested media kind so an image control
-  // can't accidentally pick a video. The user can still see other types
-  // via the Other filter chip if they manually flip it — that's fine,
-  // the "Use selected" button below validates before committing.
+  // can't accidentally pick a video. When mediaKind is 'any', show all
+  // assets without filtering.
   useEffect(() => {
-    workspace.setFilterType(mediaKind)
+    workspace.setFilterType(mediaKind === 'any' ? 'all' : mediaKind)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaKind])
 
@@ -105,7 +107,7 @@ function MediaPickerModalBody({
 
   const picked = workspace.selectedAsset
   const pickedMatchesKind = picked
-    ? bucketForMime(picked.mimeType) === mediaKind
+    ? mediaKind === 'any' || bucketForMime(picked.mimeType) === mediaKind
     : false
   const canCommit = picked !== null && pickedMatchesKind
 
@@ -129,12 +131,18 @@ function MediaPickerModalBody({
         className={styles.dialog}
         role="dialog"
         aria-modal="true"
-        aria-label={mediaKind === 'image' ? 'Select an image' : 'Select a video'}
+        aria-label={
+          mediaKind === 'image' ? 'Select an image'
+          : mediaKind === 'video' ? 'Select a video'
+          : 'Select media'
+        }
         data-testid="media-picker-modal"
       >
         <header className={styles.header}>
           <h2 className={styles.title}>
-            {mediaKind === 'image' ? 'Select an image' : 'Select a video'}
+            {mediaKind === 'image' ? 'Select an image'
+              : mediaKind === 'video' ? 'Select a video'
+              : 'Select media'}
           </h2>
           <Button
             variant="ghost"
@@ -183,7 +191,7 @@ function MediaPickerModalBody({
 interface PickedSummaryProps {
   asset: CmsMediaAsset | null
   matchesKind: boolean
-  mediaKind: 'image' | 'video'
+  mediaKind: 'image' | 'video' | 'any'
 }
 
 /**
@@ -202,9 +210,10 @@ function PickedSummary({ asset, matchesKind, mediaKind }: PickedSummaryProps) {
   }, [asset])
 
   if (!asset) {
+    const kindLabel = mediaKind === 'image' ? 'image' : mediaKind === 'video' ? 'video' : 'asset'
     return (
       <p className={styles.pickedEmpty}>
-        No {mediaKind} selected — pick one from the grid.
+        No {kindLabel} selected — pick one from the grid.
       </p>
     )
   }
@@ -227,7 +236,7 @@ function PickedSummary({ asset, matchesKind, mediaKind }: PickedSummaryProps) {
       </span>
       <span className={styles.pickedMeta}>
         <span className={styles.pickedName}>{asset.filename}</span>
-        {!matchesKind && (
+        {!matchesKind && mediaKind !== 'any' && (
           <span className={styles.pickedWrongKind} role="alert">
             This is not {mediaKind === 'image' ? 'an image' : 'a video'} asset.
           </span>

@@ -27,6 +27,7 @@ export const ButtonModule: ModuleDefinition<ButtonProps> = {
   icon: CursorClickSolidIcon,
   trusted: true,
   canHaveChildren: false,
+  inlineEditable: true,
 
   schema: {
     label: { type: 'text', label: 'Label', placeholder: 'Button text...' },
@@ -34,6 +35,9 @@ export const ButtonModule: ModuleDefinition<ButtonProps> = {
     target: {
       type: 'select',
       label: 'Link target',
+      // Choosing how a button opens its link is a content decision, not a
+      // structural one — exposed to the Client role.
+      category: 'content',
       condition: { field: 'href', notEq: '' },
       options: [
         { label: 'Same tab', value: '_self' },

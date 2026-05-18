@@ -32,6 +32,7 @@ import { Dialog } from '@ui/components/Dialog'
 import { ErrorBoundary } from '@ui/components/ErrorBoundary'
 import { Input } from '@ui/components/Input'
 import { useCanvas } from '@site/hooks/useCanvas'
+import { useEditorPermissions } from '@site/editorPermissionsContext'
 import { getKeybindingForCommand } from '@admin/spotlight/keybindings'
 import { CanvasTransformLayer } from './CanvasTransformLayer'
 import { CanvasPreviewSurface } from './CanvasPreviewSurface'
@@ -129,7 +130,12 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
   const setFocusedPanel = useEditorStore((s) => s.setFocusedPanel)
   const setActiveDocument = useEditorStore((s) => s.setActiveDocument)
   const activeDocument = useEditorStore((s) => s.activeDocument)
+  const setInlineEditing = useEditorStore((s) => s.setInlineEditing)
   const templatePreviewContext = useTemplatePreviewContext(canvasPage)
+  // Permission context — controls which double-click actions are available:
+  //   canEditStructure → enter VC canvas (structural navigation)
+  //   canEditContent   → enter inline text edit on text-like modules
+  const permissions = useEditorPermissions()
   // Auto-dim non-active breakpoints when a layer is selected and the
   // properties panel is open — gated by the `dimInactiveBreakpoints` user
   // preference so designers comparing breakpoints side-by-side can keep
@@ -227,26 +233,42 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
   )
 
   /**
-   * Double-click on a canvas node (Task #438 — Deliverable 3).
-   * When the double-clicked node is a base.visual-component-ref, enter VC canvas mode.
-   * For all other nodes, double-click is a no-op (handled by individual module components).
+   * Double-click on a canvas node.
+   *
+   * Three behaviours, in priority order:
+   *   1. `base.visual-component-ref` + caller can edit structure → enter VC canvas mode.
+   *   2. text-like module (base.text / base.button) + caller can edit content
+   *      → open inline text edit on that node.
+   *   3. Otherwise — no-op.
+   *
+   * The structural branch requires `canEditStructure`; entering the VC editor
+   * is fundamentally structural. The inline-edit branch only requires
+   * `canEditContent` — that's the whole point of the Client role.
    */
   const onNodeDoubleClick = useCallback(
     (nodeId: string, _e: React.MouseEvent) => {
-      if (!editable) return
       // Imperative store access — correct in event handlers
       const state = useEditorStore.getState()
       const node = selectActiveCanvasPage(state)?.nodes[nodeId]
       if (!node) return
 
       if (node.moduleId === 'base.visual-component-ref') {
+        if (!permissions.canEditStructure) return
         const componentId = node.props.componentId
         if (typeof componentId === 'string' && componentId) {
           setActiveDocument({ kind: 'visualComponent', vcId: componentId })
         }
+        return
+      }
+
+      // Inline text editing — opt-in per module via `inlineEditable: true`
+      // on the ModuleDefinition. Today: base.text and base.button declare it.
+      const definition = registry.get(node.moduleId)
+      if (definition?.inlineEditable && permissions.canEditContent) {
+        setInlineEditing(nodeId)
       }
     },
-    [editable, setActiveDocument],
+    [permissions.canEditContent, permissions.canEditStructure, setActiveDocument, setInlineEditing],
   )
 
   // Context carries only stable callbacks — selectedNodeId/hoveredNodeId are
@@ -469,7 +491,11 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
             this also hosts inline breakpoint switcher buttons. */}
           <CanvasModeToggle />
 
-          {!isPreview && rightSidebarExpanded && (
+          {/* The breakpoint switcher targets per-breakpoint style overrides,
+              so it's only meaningful for callers who can edit style or
+              structure. Content-only Clients and pure Viewers get the
+              same plain frames without this affordance. */}
+          {!isPreview && rightSidebarExpanded && (permissions.canEditStyle || permissions.canEditStructure) && (
             <CanvasBreakpointSelector
               breakpoints={breakpoints}
               activeBreakpointId={activeBreakpointId}

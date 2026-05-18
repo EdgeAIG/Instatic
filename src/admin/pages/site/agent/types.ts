@@ -70,7 +70,7 @@ interface TextEvent {
 /**
  * Bridge handshake: the server has accepted the request and assigned a bridge
  * id. The browser uses this id when POSTing tool-result responses to
- * /api/agent/tool-result so the server can correlate the response with the
+ * /admin/api/agent/tool-result so the server can correlate the response with the
  * pending MCP tool call.
  */
 interface BridgeReadyEvent {
@@ -81,7 +81,7 @@ interface BridgeReadyEvent {
 /**
  * The server-side MCP write tool needs the browser to apply a mutation
  * against the live editor store. The browser executes it, then POSTs the
- * result to /api/agent/tool-result with `{ bridgeId, requestId, result }`.
+ * result to /admin/api/agent/tool-result with `{ bridgeId, requestId, result }`.
  *
  * `name` is the tool name without the `mcp__page_builder__` prefix
  * (e.g. `insertNode`, `insertTree`, `createClass`). `input` is the tool's

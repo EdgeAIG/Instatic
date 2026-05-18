@@ -9,7 +9,8 @@
  * The fonts library itself lives inside `site.settings.fonts`, so this REST
  * surface is intentionally narrow: install + uninstall perform on-disk
  * work; the metadata is persisted with the rest of the site settings via
- * `PUT /admin/api/cms/site`. All endpoints are gated by `site.edit`.
+ * `PUT /admin/api/cms/site`. All endpoints are gated by `site.style.edit`
+ * — fonts are typography / visual setup, not content edits.
  */
 import type { DbClient } from '../../db/client'
 import { requireCapability } from '../../auth/authz'
@@ -56,14 +57,14 @@ export async function handleFontsRoutes(
   const url = new URL(req.url)
 
   if (url.pathname === '/admin/api/cms/fonts/google') {
-    const user = await requireCapability(req, db, 'site.edit')
+    const user = await requireCapability(req, db, 'site.style.edit')
     if (user instanceof Response) return user
     if (req.method !== 'GET') return methodNotAllowed()
     return jsonResponse({ families: listGoogleFonts() })
   }
 
   if (url.pathname === '/admin/api/cms/fonts/estimate') {
-    const user = await requireCapability(req, db, 'site.edit')
+    const user = await requireCapability(req, db, 'site.style.edit')
     if (user instanceof Response) return user
     if (req.method !== 'POST') return methodNotAllowed()
 
@@ -81,7 +82,7 @@ export async function handleFontsRoutes(
   }
 
   if (url.pathname === '/admin/api/cms/fonts/install') {
-    const user = await requireCapability(req, db, 'site.edit')
+    const user = await requireCapability(req, db, 'site.style.edit')
     if (user instanceof Response) return user
     if (req.method !== 'POST') return methodNotAllowed()
     if (!options.uploadsDir) {
@@ -103,7 +104,7 @@ export async function handleFontsRoutes(
 
   const fontFamilyMatch = url.pathname.match(/^\/admin\/api\/cms\/fonts\/family\/([^/]+)$/)
   if (fontFamilyMatch) {
-    const user = await requireCapability(req, db, 'site.edit')
+    const user = await requireCapability(req, db, 'site.style.edit')
     if (user instanceof Response) return user
     if (req.method !== 'DELETE') return methodNotAllowed()
     if (!options.uploadsDir) {

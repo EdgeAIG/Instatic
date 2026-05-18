@@ -20,8 +20,10 @@ import type {
   PropertyControlLayout,
   PropertySchema,
 } from '@core/module-engine/types'
+import { resolvePropertyControlCategory } from '@core/module-engine/propertySchema'
 import type { DynamicPropBinding } from '@core/page-tree'
 import { sanitizeRichtext } from '@core/sanitize'
+import { useEditorPermissions } from '@site/editorPermissionsContext'
 import { ChevronRightIcon } from 'pixel-art-icons/icons/chevron-right'
 import { TextControl } from './TextControl'
 import { TextareaControl } from './TextareaControl'
@@ -106,13 +108,24 @@ export function PropertyControlRenderer({
 }: RenderControlOptions) {
   const layout = resolveControlLayout(control)
 
+  // Caller-permission gate: a "Client / copy editor" with only
+  // `site.content.edit` can modify content-category controls; everything else
+  // is presented read-only. A user with neither structure nor content rights
+  // can't edit any prop. A user with structure rights can edit everything.
+  const permissions = useEditorPermissions()
+  const category = resolvePropertyControlCategory(control)
+  const allowedByCategory = category === 'content'
+    ? permissions.canEditContent || permissions.canEditStructure
+    : permissions.canEditStructure
+  const effectiveDisabled = disabled || !allowedByCategory
+
   const shared = {
     propKey,
     value,
     onChange,
     label: control.label,
     isOverride,
-    disabled,
+    disabled: effectiveDisabled,
     layout,
   }
 
@@ -232,6 +245,10 @@ export function PropertyControlRenderer({
     )
   }
 
+  // Bake the resolved disabled flag into the inner-content for the
+  // DynamicBindingControl branch below.
+  const isDisabled = effectiveDisabled
+
   // String-typed controls use the token-insertion flow (Phase 4): picking
   // a field appends `{source.field}` to the prop's text value. Non-string
   // controls (number, toggle) keep the legacy "replace whole prop" flow
@@ -247,7 +264,7 @@ export function PropertyControlRenderer({
     control.type === 'select' ||
     control.type === 'spacing'
 
-  const content = dynamicBinding && !disabled ? (
+  const content = dynamicBinding && !isDisabled ? (
     <DynamicBindingControl
       propKey={propKey}
       label={control.label ?? propKey}
@@ -276,7 +293,8 @@ export function PropertyControlRenderer({
   return (
     <div
       data-testid={`property-control-${propKey}`}
-      data-disabled={disabled ? 'true' : undefined}
+      data-disabled={isDisabled ? 'true' : undefined}
+      data-category={category}
       data-override={isOverride ? 'true' : undefined}
       data-layout={layout}
     >

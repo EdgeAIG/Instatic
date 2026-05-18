@@ -165,6 +165,7 @@ export const createSelectionSlice: EditorStoreSliceCreator<SelectionSlice> = (se
     hoveredNodeId: null,
     hoveredBreakpointId: null,
     activeClassId: null,
+    inlineEditingNodeId: null,
   }),
 })
 
@@ -193,6 +194,10 @@ export function clearCanvasSelectionDraft(state: EditorStore): void {
   state.hoveredNodeId = null
   state.hoveredBreakpointId = null
   state.activeClassId = null
+  // Inline-edit mode is scoped to the currently-selected node; dropping the
+  // selection (page swap, VC mode entry/exit, site reload, node deletion)
+  // must drop the edit too so the next render is back to static.
+  state.inlineEditingNodeId = null
 }
 
 // ---------------------------------------------------------------------------
@@ -229,7 +234,13 @@ function applySelection(
   )
   const activeClassChanged = !Object.is(current.activeClassId, nextActiveClassId)
 
-  if (!idsChanged && !anchorChanged && !panelChanged && !activeClassChanged) return
+  // Inline edit follows the anchor — selecting a different node (or empty
+  // selection) means we exit any active inline edit. Same-node re-selects
+  // leave the edit running.
+  const inlineNeedsClear =
+    current.inlineEditingNodeId !== null && current.inlineEditingNodeId !== nextAnchor
+
+  if (!idsChanged && !anchorChanged && !panelChanged && !activeClassChanged && !inlineNeedsClear) return
 
   set((state) => ({
     selectedNodeIds: nextIds,
@@ -239,6 +250,7 @@ function applySelection(
     propertiesPanel: panelChanged
       ? { ...state.propertiesPanel, collapsed: shouldCollapseProperties }
       : state.propertiesPanel,
+    inlineEditingNodeId: inlineNeedsClear ? null : state.inlineEditingNodeId,
   }))
 }
 

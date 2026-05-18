@@ -1,0 +1,10 @@
+/**
+ * DataPage — top-level Data workspace styles.
+ * Tokens from globals.css; no hardcoded colours.
+ */
+
+.toolbarSlot {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}

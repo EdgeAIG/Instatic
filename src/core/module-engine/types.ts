@@ -77,6 +77,29 @@ export interface ModuleComponentProps<
    * Task #401 Bug 1 fix.
    */
   mcClassName?: string
+  /**
+   * When true, the canvas has placed this node into inline-edit mode (a user
+   * with `site.content.edit` double-clicked it). The module's component
+   * should swap its primary content prop for a `contentEditable` element so
+   * the user can type directly on the canvas. Commit on blur / Enter, cancel
+   * on Escape, via `onCommitInlineEdit` / `onCancelInlineEdit`.
+   *
+   * Modules that don't opt in simply ignore this prop — falling back to
+   * static rendering. Inline editing is opt-in per module type.
+   */
+  isInlineEditing?: boolean
+  /**
+   * Commit the inline edit. Modules call this with the new prop bag —
+   * partial; only the keys that changed need to be present. The store
+   * action `updateNodeProps` is wired up by the canvas / NodeRenderer.
+   */
+  onCommitInlineEdit?: (partialProps: Record<string, unknown>) => void
+  /**
+   * Cancel the inline edit (Escape). The module's content should revert to
+   * the underlying prop value and exit edit mode. The canvas also clears
+   * `inlineEditingNodeId` so the next render is back to static.
+   */
+  onCancelInlineEdit?: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +155,19 @@ export interface ModuleDefinition<
    * All children go into a single default slot.
    */
   canHaveChildren: boolean
+
+  /**
+   * When true, the canvas allows the user to double-click the rendered node
+   * to enter inline-edit mode. The module's `component` is then re-rendered
+   * with `isInlineEditing: true` and is expected to swap its primary content
+   * prop (label / text / …) for a `contentEditable` element.
+   *
+   * Inline editing is gated on the caller's `site.content.edit` capability;
+   * structural edits (drag, add child, etc.) remain blocked. Modules that
+   * opt in MUST implement the `isInlineEditing` / `onCommitInlineEdit` /
+   * `onCancelInlineEdit` props in `ModuleComponentProps`.
+   */
+  inlineEditable?: boolean
 
   /**
    * Declarative property schema — maps prop key → PropertyControl.

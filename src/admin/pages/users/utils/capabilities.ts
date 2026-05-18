@@ -9,7 +9,15 @@
 import type { CapabilityGroup } from '../types'
 
 export const CAPABILITY_GROUPS: CapabilityGroup[] = [
-  { title: 'Site', capabilities: ['site.read', 'site.edit'] },
+  {
+    title: 'Site',
+    capabilities: [
+      'site.read',
+      'site.structure.edit',
+      'site.content.edit',
+      'site.style.edit',
+    ],
+  },
   { title: 'Pages', capabilities: ['pages.edit', 'pages.publish'] },
   {
     title: 'Content',

@@ -18,8 +18,8 @@ import { DragAndDropSolidIcon } from 'pixel-art-icons/icons/drag-and-drop-solid'
 import { HeadingIcon } from 'pixel-art-icons/icons/heading'
 import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
 import { TextStartTIcon } from 'pixel-art-icons/icons/text-start-t'
-import { autoformatMarkdownShortcut, createMediaBlock, createParagraphBlock } from '@core/content/markdown'
-import type { ContentBlock, ContentMediaType } from '@core/content/schemas'
+import { autoformatMarkdownShortcut, createMediaBlock, createParagraphBlock } from '@core/markdown/blockModel'
+import type { ContentBlock, ContentMediaType } from '@core/markdown/blockModel'
 import styles from './RichMarkdownEditor.module.css'
 
 type BodyHeadingLevel = 2 | 3 | 4

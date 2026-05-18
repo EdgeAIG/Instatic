@@ -186,7 +186,7 @@ describe('AccountPage', () => {
 
   it('canAccessWorkspace allows account for any authenticated user', () => {
     const viewer = makeUser({
-      role: { id: 'viewer', slug: 'viewer', name: 'Viewer', description: '', isSystem: true, capabilities: ['site.read'] },
+      role: { id: 'member', slug: 'member', name: 'Member', description: '', isSystem: true, capabilities: ['site.read'] },
       capabilities: ['site.read'],
     })
     expect(canAccessWorkspace(viewer, 'account')).toBe(true)

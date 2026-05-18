@@ -47,6 +47,7 @@
 import { useContext, useEffect, useRef, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditorStore } from '@site/store/store'
+import { useEditorPermissions } from '@site/editorPermissionsContext'
 import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
@@ -119,7 +120,22 @@ export function BreakpointSelectionOverlay({
   // Stable string for the deps array — re-runs the RAF loop only when the
   // selection identity actually changes (not on every store mutation).
   const selectionKey = selectedNodeIds.join(',')
-  const showToolbar = selectedNodeIds.length > 0 && activeBreakpointId === breakpointId
+  // Selection toolbar (drag / duplicate / delete) is purely structural —
+  // hidden for callers without `site.structure.edit`. Content-only Clients
+  // still get the selection ring (they click to select for content edit),
+  // but no action chrome.
+  //
+  // Pure Viewers (no edit caps at all) see neither rings nor toolbar — the
+  // canvas is a read-only inspection surface for them; selection ribbons
+  // would just be visual clutter with no follow-on action available.
+  const permissions = useEditorPermissions()
+  const anyEditCap =
+    permissions.canEditStructure || permissions.canEditContent || permissions.canEditStyle
+  const showRings = anyEditCap
+  const showToolbar =
+    permissions.canEditStructure &&
+    selectedNodeIds.length > 0 &&
+    activeBreakpointId === breakpointId
   const reorderDrag = useCanvasReorderDrag({
     viewportRef,
     selectedNodeIds,
@@ -231,7 +247,7 @@ export function BreakpointSelectionOverlay({
     <>
       <div className={styles.overlayLayer}>
         <div className={styles.ringLayer} aria-hidden="true">
-          {selectedNodeIds.map((id) => (
+          {showRings && selectedNodeIds.map((id) => (
             <div
               key={id}
               ref={(el) => {
@@ -243,7 +259,7 @@ export function BreakpointSelectionOverlay({
               data-node-id={id}
             />
           ))}
-          {showHover && hoveredNodeId && (
+          {showRings && showHover && hoveredNodeId && (
             <div
               ref={hoverRef}
               className={cn(styles.ring, styles.hover)}

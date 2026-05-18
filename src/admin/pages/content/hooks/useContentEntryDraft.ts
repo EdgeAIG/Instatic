@@ -1,22 +1,31 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import {
-  publishCmsContentEntry,
-  saveCmsContentEntryDraft,
-  updateCmsContentEntryStatus,
+  publishCmsDataRow,
+  saveCmsDataRowDraft,
+  updateCmsDataRowStatus,
 } from '@core/persistence'
 import {
   createParagraphBlock,
   parseMarkdownBlocks,
   serializeMarkdownBlocks,
-} from '@core/content/markdown'
-import type { ContentBlock, ContentEntry, ContentEntryStatus } from '@core/content/schemas'
+} from '@core/markdown/blockModel'
+import type { ContentBlock } from '@core/markdown/blockModel'
+import type { DataRow, DataRowStatus } from '@core/data/schemas'
+import {
+  readBodyCell,
+  readFeaturedMediaCell,
+  readSeoDescriptionCell,
+  readSeoTitleCell,
+  readSlugCell,
+  readTitleCell,
+} from '@core/data/cells'
 import { slugFromTitle } from '@core/utils/slug'
 
 export type SaveMessage = 'idle' | 'saving' | 'saved' | 'publishing' | 'published' | 'error'
 
 interface UseContentEntryDraftOptions {
-  selectedEntry: ContentEntry | null
-  updateSelectedEntry: (entry: ContentEntry) => void
+  selectedEntry: DataRow | null
+  updateSelectedEntry: (entry: DataRow) => void
   setError: (message: string | null) => void
 }
 
@@ -33,13 +42,13 @@ export function useContentEntryDraft({
   const [blocks, setBlocks] = useState<ContentBlock[]>([createParagraphBlock()])
   const [saveMessage, setSaveMessage] = useState<SaveMessage>('idle')
 
-  const applySelectedEntry = useCallback((entry: ContentEntry | null) => {
-    setTitle(entry?.title ?? '')
-    setSlug(entry?.slug ?? '')
-    setSeoTitle(entry?.seoTitle ?? '')
-    setSeoDescription(entry?.seoDescription ?? '')
-    setFeaturedMediaId(entry?.featuredMediaId ?? null)
-    setBlocks(entry ? parseMarkdownBlocks(entry.bodyMarkdown) : [createParagraphBlock()])
+  const applySelectedEntry = useCallback((entry: DataRow | null) => {
+    setTitle(entry ? readTitleCell(entry.cells) : '')
+    setSlug(entry ? readSlugCell(entry.cells) : '')
+    setSeoTitle(entry ? readSeoTitleCell(entry.cells) : '')
+    setSeoDescription(entry ? readSeoDescriptionCell(entry.cells) : '')
+    setFeaturedMediaId(entry ? readFeaturedMediaCell(entry.cells) : null)
+    setBlocks(entry ? parseMarkdownBlocks(readBodyCell(entry.cells)) : [createParagraphBlock()])
     setSaveMessage('idle')
   }, [])
 
@@ -49,39 +58,42 @@ export function useContentEntryDraft({
   }, [applySelectedEntry, selectedEntry?.id])
   /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
-  const applyEntryFields = useCallback((entry: ContentEntry) => {
-    setTitle(entry.title)
-    setSlug(entry.slug)
-    setSeoTitle(entry.seoTitle)
-    setSeoDescription(entry.seoDescription)
-    setFeaturedMediaId(entry.featuredMediaId)
+  const applyEntryFields = useCallback((entry: DataRow) => {
+    setTitle(readTitleCell(entry.cells))
+    setSlug(readSlugCell(entry.cells))
+    setSeoTitle(readSeoTitleCell(entry.cells))
+    setSeoDescription(readSeoDescriptionCell(entry.cells))
+    setFeaturedMediaId(readFeaturedMediaCell(entry.cells))
   }, [])
 
   const isDirty = useMemo(() => {
     if (!selectedEntry) return false
-    return title !== selectedEntry.title ||
-      slug !== selectedEntry.slug ||
-      seoTitle !== selectedEntry.seoTitle ||
-      seoDescription !== selectedEntry.seoDescription ||
-      featuredMediaId !== selectedEntry.featuredMediaId ||
-      serializeMarkdownBlocks(blocks) !== selectedEntry.bodyMarkdown
+    return title !== readTitleCell(selectedEntry.cells) ||
+      slug !== readSlugCell(selectedEntry.cells) ||
+      seoTitle !== readSeoTitleCell(selectedEntry.cells) ||
+      seoDescription !== readSeoDescriptionCell(selectedEntry.cells) ||
+      featuredMediaId !== readFeaturedMediaCell(selectedEntry.cells) ||
+      serializeMarkdownBlocks(blocks) !== readBodyCell(selectedEntry.cells)
   }, [blocks, featuredMediaId, selectedEntry, seoDescription, seoTitle, slug, title])
 
-  const saveDraft = useCallback(async (): Promise<ContentEntry | null> => {
+  const saveDraft = useCallback(async (): Promise<DataRow | null> => {
     if (!selectedEntry) return null
     const nextTitle = title.trim() || 'Untitled'
     const nextSlug = slugFromTitle(slug || nextTitle)
-    const entry = await saveCmsContentEntryDraft(selectedEntry.id, {
-      title: nextTitle,
-      slug: nextSlug,
-      bodyMarkdown: serializeMarkdownBlocks(blocks),
-      featuredMediaId,
-      seoTitle: seoTitle.trim(),
-      seoDescription: seoDescription.trim(),
+    const row = await saveCmsDataRowDraft(selectedEntry.id, {
+      cells: {
+        ...selectedEntry.cells,
+        title: nextTitle,
+        slug: nextSlug,
+        body: serializeMarkdownBlocks(blocks),
+        featuredMedia: featuredMediaId,
+        seoTitle: seoTitle.trim(),
+        seoDescription: seoDescription.trim(),
+      },
     })
-    updateSelectedEntry(entry)
-    applyEntryFields(entry)
-    return entry
+    updateSelectedEntry(row)
+    applyEntryFields(row)
+    return row
   }, [
     applyEntryFields,
     blocks,
@@ -111,15 +123,15 @@ export function useContentEntryDraft({
     setSaveMessage('publishing')
     setError(null)
     try {
-      const savedEntry = await saveDraft()
-      if (!savedEntry) return
-      const publishedEntry = await publishCmsContentEntry(savedEntry.id)
+      const savedRow = await saveDraft()
+      if (!savedRow) return
+      const publishedRow = await publishCmsDataRow(savedRow.id)
       updateSelectedEntry({
-        ...savedEntry,
-        status: publishedEntry.status,
-        updatedAt: publishedEntry.updatedAt,
-        publishedAt: publishedEntry.publishedAt,
-        deletedAt: publishedEntry.deletedAt,
+        ...savedRow,
+        status: publishedRow.status,
+        updatedAt: publishedRow.updatedAt,
+        publishedAt: publishedRow.publishedAt,
+        deletedAt: publishedRow.deletedAt,
       })
       setSaveMessage('published')
     } catch (err) {
@@ -128,7 +140,7 @@ export function useContentEntryDraft({
     }
   }, [saveDraft, selectedEntry, setError, updateSelectedEntry])
 
-  const handleStatusChange = useCallback(async (nextStatus: ContentEntryStatus) => {
+  const handleStatusChange = useCallback(async (nextStatus: DataRowStatus) => {
     if (!selectedEntry || nextStatus === selectedEntry.status) return
 
     if (nextStatus === 'published') {
@@ -139,11 +151,11 @@ export function useContentEntryDraft({
     setSaveMessage('saving')
     setError(null)
     try {
-      const savedEntry = await saveDraft()
-      if (!savedEntry) return
-      const updatedEntry = await updateCmsContentEntryStatus(savedEntry.id, nextStatus)
-      updateSelectedEntry(updatedEntry)
-      applyEntryFields(updatedEntry)
+      const savedRow = await saveDraft()
+      if (!savedRow) return
+      const updatedRow = await updateCmsDataRowStatus(savedRow.id, nextStatus)
+      updateSelectedEntry(updatedRow)
+      applyEntryFields(updatedRow)
       setSaveMessage('idle')
     } catch (err) {
       setSaveMessage('error')

@@ -53,6 +53,19 @@ function makeFakeDb() {
     if (normalized.includes('insert into audit_events')) {
       return { rows: [], rowCount: 1 }
     }
+    // `requireStepUp` lookup — JSON plugin install (and other sensitive
+    // plugin admin endpoints) now require a fresh step-up window. The
+    // record CRUD calls themselves don't trigger this, but the test
+    // installs the plugin via POST /admin/api/cms/plugins first, which
+    // does. `createCookie` stamps a far-future expiry.
+    if (normalized.includes('select step_up_expires_at') && normalized.includes('from sessions')) {
+      const session = sessions.find((s) => String(s.id_hash) === String(values[0]))
+      if (!session) return { rows: [], rowCount: 0 }
+      return {
+        rows: [{ step_up_expires_at: session.step_up_expires_at ?? null } as Row],
+        rowCount: 1,
+      }
+    }
     // getInstalledPlugin — values[0]=id (check with id = $1 to distinguish from list)
     if (normalized.includes('select id, name, version, enabled') && normalized.includes('where id = $1')) {
       const plugin = plugins.find((candidate) => candidate.id === values[0])
@@ -163,6 +176,10 @@ async function createCookie(db: ReturnType<typeof makeFakeDb>): Promise<string> 
     id_hash: await hashSessionToken(token),
     user_id: 'admin_1',
     expires_at: new Date('2030-01-01').toISOString(),
+    // Fresh step-up window — the JSON plugin install path the test calls
+    // now requires one. Pinned far in the future so existing tests behave
+    // as before.
+    step_up_expires_at: new Date('2030-01-01').toISOString(),
   })
   return `${SESSION_COOKIE_NAME}=${token}`
 }

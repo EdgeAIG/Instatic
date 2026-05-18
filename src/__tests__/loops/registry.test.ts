@@ -53,7 +53,7 @@ describe('LoopSourceRegistry', () => {
 
   it('built-in sources self-register on import', async () => {
     await import('@core/loops/sources')
-    expect(loopSourceRegistry.has('content.entries')).toBe(true)
+    expect(loopSourceRegistry.has('data.rows')).toBe(true)
     expect(loopSourceRegistry.has('site.pages')).toBe(true)
     expect(loopSourceRegistry.has('site.media')).toBe(true)
   })

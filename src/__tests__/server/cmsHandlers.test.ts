@@ -16,7 +16,9 @@ function makeFakeDb() {
       is_system: true,
       capabilities_json: [
         'site.read',
-        'site.edit',
+        'site.structure.edit',
+        'site.content.edit',
+        'site.style.edit',
         'pages.edit',
         'pages.publish',
         'content.create',
@@ -41,7 +43,9 @@ function makeFakeDb() {
       is_system: true,
       capabilities_json: [
         'site.read',
-        'site.edit',
+        'site.structure.edit',
+        'site.content.edit',
+        'site.style.edit',
         'pages.edit',
         'pages.publish',
         'content.create',
@@ -59,12 +63,12 @@ function makeFakeDb() {
       ],
     },
     {
-      id: 'viewer',
-      slug: 'viewer',
-      name: 'Viewer',
+      id: 'member',
+      slug: 'member',
+      name: 'Member',
       description: '',
       is_system: true,
-      capabilities_json: ['site.read'],
+      capabilities_json: [],
     },
   ]
   const sessions: Record<string, unknown>[] = []

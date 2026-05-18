@@ -1,174 +1,160 @@
 import { describe, expect, it } from 'bun:test'
-import type { ContentEntry } from '@core/content/schemas'
-import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
+import type { DataTable } from '@core/data/schemas'
 import {
-  contentEntryToLoopItem,
-  selectLatestTemplatePreviewEntry,
+  buildPreviewCells,
+  dataTablePreviewToLoopItem,
 } from '@core/templates/templatePreviewData'
 
-function entry(overrides: Partial<ContentEntry>): ContentEntry {
+function makeTable(overrides: Partial<DataTable> = {}): DataTable {
   return {
-    id: overrides.id ?? 'entry_1',
-    collectionId: overrides.collectionId ?? 'posts',
-    title: overrides.title ?? 'Post',
-    slug: overrides.slug ?? 'post',
-    status: overrides.status ?? 'draft',
-    bodyMarkdown: overrides.bodyMarkdown ?? '',
-    featuredMediaId: overrides.featuredMediaId ?? null,
-    seoTitle: overrides.seoTitle ?? '',
-    seoDescription: overrides.seoDescription ?? '',
-    authorUserId: overrides.authorUserId ?? null,
-    createdByUserId: overrides.createdByUserId ?? null,
-    updatedByUserId: overrides.updatedByUserId ?? null,
-    publishedByUserId: overrides.publishedByUserId ?? null,
-    author: overrides.author ?? null,
-    createdBy: overrides.createdBy ?? null,
-    updatedBy: overrides.updatedBy ?? null,
-    publishedBy: overrides.publishedBy ?? null,
-    createdAt: overrides.createdAt ?? '2026-05-01T10:00:00.000Z',
-    updatedAt: overrides.updatedAt ?? '2026-05-01T10:00:00.000Z',
-    publishedAt: overrides.publishedAt ?? null,
-    deletedAt: overrides.deletedAt ?? null,
-  }
-}
-
-function mediaAsset(overrides: Partial<CmsMediaAsset>): CmsMediaAsset {
-  return {
-    id: overrides.id ?? 'media_1',
-    filename: overrides.filename ?? 'cover.png',
-    mimeType: overrides.mimeType ?? 'image/png',
-    sizeBytes: overrides.sizeBytes ?? 1024,
-    publicPath: overrides.publicPath ?? '/uploads/cover.png',
-    uploadedByUserId: overrides.uploadedByUserId ?? null,
-    createdAt: overrides.createdAt ?? '2026-05-01T10:00:00.000Z',
+    id: overrides.id ?? 'posts',
+    name: overrides.name ?? 'Posts',
+    slug: overrides.slug ?? 'posts',
+    kind: overrides.kind ?? 'postType',
+    singularLabel: overrides.singularLabel ?? 'Post',
+    pluralLabel: overrides.pluralLabel ?? 'Posts',
+    routeBase: overrides.routeBase ?? '/posts',
+    primaryFieldId: overrides.primaryFieldId ?? 'title',
+    fields: overrides.fields ?? [
+      { type: 'text', id: 'title', label: 'Title', required: true, builtIn: true },
+      { type: 'text', id: 'slug', label: 'Slug', required: true, builtIn: true },
+      {
+        type: 'richText',
+        id: 'body',
+        label: 'Body',
+        format: 'markdown',
+        builtIn: true,
+      },
+      { type: 'media', id: 'featuredMedia', label: 'Featured media', builtIn: true },
+      { type: 'text', id: 'seoTitle', label: 'SEO title', builtIn: true },
+      {
+        type: 'longText',
+        id: 'seoDescription',
+        label: 'SEO description',
+        builtIn: true,
+      },
+    ],
+    createdByUserId: null,
+    updatedByUserId: null,
+    createdAt: '2026-05-01T10:00:00.000Z',
+    updatedAt: '2026-05-01T10:00:00.000Z',
   }
 }
 
 describe('template preview data', () => {
-  it('uses the latest content entry as the template preview entry', () => {
-    const older = entry({
-      id: 'older',
-      title: 'Older Post',
-      updatedAt: '2026-05-01T09:00:00.000Z',
-    })
-    const latest = entry({
-      id: 'latest',
-      title: 'Latest Post',
-      updatedAt: '2026-05-01T11:00:00.000Z',
-    })
-
-    expect(selectLatestTemplatePreviewEntry([older, latest])?.id).toBe('latest')
-  })
-
-  it('maps an editable content entry into a LoopItem', () => {
-    const item = contentEntryToLoopItem(entry({
-      id: 'entry_2',
-      title: 'Mapped Post',
-      bodyMarkdown: 'Body',
-    }))
-
-    expect(item.id).toBe('entry_2')
-    expect(item.fields).toMatchObject({
-      id: 'entry_2',
-      entryId: 'entry_2',
-      collectionId: 'posts',
-      collectionSlug: 'posts',
-      collectionRouteBase: '/posts',
-      title: 'Mapped Post',
-      bodyMarkdown: 'Body',
-    })
-  })
-
-  it('maps editable entry authorship into public template fields', () => {
-    const item = contentEntryToLoopItem(entry({
-      authorUserId: 'user_author',
-      updatedByUserId: 'user_editor',
-      publishedByUserId: 'user_publisher',
-      author: {
-        id: 'user_author',
-        email: 'author@example.com',
-        displayName: 'Author Name',
-        roleSlug: 'editor',
-        roleName: 'Editor',
-      },
-      updatedBy: {
-        id: 'user_editor',
-        email: 'editor@example.com',
-        displayName: 'Editor Name',
-        roleSlug: 'admin',
-        roleName: 'Admin',
-      },
-      publishedBy: {
-        id: 'user_publisher',
-        email: 'publisher@example.com',
-        displayName: 'Publisher Name',
-        roleSlug: 'admin',
-        roleName: 'Admin',
-      },
-    }))
-
-    expect(item.fields).toMatchObject({
-      author: {
-        displayName: 'Author Name',
-        roleSlug: 'editor',
-        roleName: 'Editor',
-      },
-      authorName: 'Author Name',
-      authorRoleName: 'Editor',
-      authorRoleSlug: 'editor',
-      updatedBy: {
-        displayName: 'Editor Name',
-        roleSlug: 'admin',
-        roleName: 'Admin',
-      },
-      updatedByName: 'Editor Name',
-      updatedByRoleName: 'Admin',
-      publishedBy: {
-        displayName: 'Publisher Name',
-        roleSlug: 'admin',
-        roleName: 'Admin',
-      },
-      publishedByName: 'Publisher Name',
-      publishedByRoleName: 'Admin',
-    })
-    expect('authorUserId' in item.fields).toBe(false)
-    expect('authorId' in item.fields).toBe(false)
-    expect('updatedByUserId' in item.fields).toBe(false)
-    expect('publishedByUserId' in item.fields).toBe(false)
-    expect(JSON.stringify(item.fields)).not.toContain('@example.com')
-  })
-
-  it('resolves an editable entry featured media id to a preview media path', () => {
-    const item = contentEntryToLoopItem(
-      entry({
-        featuredMediaId: 'media_cover',
-      }),
-      [
-        mediaAsset({
-          id: 'media_cover',
-          publicPath: '/uploads/post-cover.png',
-        }),
+  it('buildPreviewCells produces a cell for every field in the table', () => {
+    const table = makeTable({
+      fields: [
+        { type: 'text', id: 'title', label: 'Title' },
+        { type: 'number', id: 'price', label: 'Price' },
+        { type: 'boolean', id: 'active', label: 'Active' },
       ],
-    )
-
-    expect(item.fields.featuredMediaPath).toBe('/uploads/post-cover.png')
-    // Aliases all resolve to the same path
-    expect(item.fields.featuredMedia).toBe('/uploads/post-cover.png')
-    expect(item.fields.featuredMediaUrl).toBe('/uploads/post-cover.png')
+    })
+    const cells = buildPreviewCells(table)
+    expect(Object.keys(cells)).toEqual(['title', 'price', 'active'])
   })
 
-  it('extracts the first inline body image as a preview field', () => {
-    const item = contentEntryToLoopItem(entry({
-      bodyMarkdown: [
-        'Intro paragraph',
-        '',
-        '![Inline hero](/uploads/body-hero.png)',
-        '',
-        '![Second image](/uploads/second.png)',
-      ].join('\n'),
-    }))
+  it('buildPreviewCells uses contextual defaults for post-type built-in fields', () => {
+    const table = makeTable()
+    const cells = buildPreviewCells(table)
 
-    expect(item.fields.firstImagePath).toBe('/uploads/body-hero.png')
-    expect(item.fields.firstImage).toBe('/uploads/body-hero.png')
+    expect(typeof cells['title']).toBe('string')
+    expect(cells['title']).toContain('Example')
+    expect(typeof cells['slug']).toBe('string')
+    expect(cells['slug']).toBeTruthy()
+    expect(typeof cells['body']).toBe('string')
+    expect(typeof cells['seoTitle']).toBe('string')
+  })
+
+  it('buildPreviewCells produces sensible defaults per field type', () => {
+    const table = makeTable({
+      fields: [
+        { type: 'text', id: 'name', label: 'Name' },
+        { type: 'longText', id: 'bio', label: 'Bio' },
+        { type: 'richText', id: 'content', label: 'Content', format: 'markdown' },
+        { type: 'number', id: 'count', label: 'Count' },
+        { type: 'boolean', id: 'active', label: 'Active' },
+        { type: 'url', id: 'website', label: 'Website' },
+        { type: 'email', id: 'email', label: 'Email' },
+        { type: 'media', id: 'photo', label: 'Photo' },
+        { type: 'relation', id: 'relatedId', label: 'Related' },
+        {
+          type: 'select',
+          id: 'status',
+          label: 'Status',
+          options: [
+            { id: 'opt_draft', label: 'Draft', value: 'draft' },
+            { id: 'opt_published', label: 'Published', value: 'published' },
+          ],
+        },
+        {
+          type: 'multiSelect',
+          id: 'tags',
+          label: 'Tags',
+          options: [
+            { id: 'opt_a', label: 'Tag A', value: 'a' },
+          ],
+        },
+      ],
+    })
+    const cells = buildPreviewCells(table)
+
+    expect(typeof cells['name']).toBe('string')
+    expect(typeof cells['bio']).toBe('string')
+    expect(typeof cells['content']).toBe('string')
+    expect(cells['count']).toBe(42)
+    expect(cells['active']).toBe(false)
+    expect(cells['website']).toBe('https://example.com')
+    expect(cells['email']).toBe('hello@example.com')
+    expect(cells['photo']).toBeNull()
+    expect(cells['relatedId']).toBeNull()
+    expect(cells['status']).toBe('draft')
+    expect(cells['tags']).toEqual(['a'])
+  })
+
+  it('dataTablePreviewToLoopItem generates a LoopItem with the correct shape', () => {
+    const table = makeTable()
+    const item = dataTablePreviewToLoopItem(table)
+
+    expect(item.id).toBe('__preview__')
+    expect(item.fields).toMatchObject({
+      id: '__preview__',
+      rowId: '__preview__',
+      tableId: 'posts',
+      tableSlug: 'posts',
+      // Media aliases are null for preview
+      featuredMedia: null,
+      featuredMediaPath: null,
+      featuredMediaUrl: null,
+      // People are null for preview
+      author: null,
+      authorName: null,
+      publishedBy: null,
+      publishedByName: null,
+    })
+  })
+
+  it('dataTablePreviewToLoopItem derives permalink from routeBase + slug cell', () => {
+    const table = makeTable({
+      routeBase: '/posts',
+      fields: [
+        { type: 'text', id: 'title', label: 'Title' },
+        { type: 'text', id: 'slug', label: 'Slug', defaultValue: 'my-post' },
+      ],
+    })
+    const item = dataTablePreviewToLoopItem(table)
+    expect(item.fields.permalink).toBe('/posts/example-post-title')
+  })
+
+  it('dataTablePreviewToLoopItem spreads cell values into fields', () => {
+    const table = makeTable({
+      fields: [
+        { type: 'text', id: 'title', label: 'Title' },
+        { type: 'number', id: 'views', label: 'Views' },
+      ],
+    })
+    const item = dataTablePreviewToLoopItem(table)
+    expect(typeof item.fields['title']).toBe('string')
+    expect(item.fields['views']).toBe(42)
   })
 })

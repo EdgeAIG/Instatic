@@ -1,0 +1,113 @@
+/**
+ * NewFieldDialog — body styles only.
+ * Dialog chrome (backdrop, header, footer) lives in @ui/components/Dialog.
+ */
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.label {
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.2;
+}
+
+.optional {
+    color: var(--editor-text-subtle);
+    font-weight: 400;
+}
+
+.caption {
+    color: var(--editor-text-subtle);
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+.fieldError {
+    color: var(--editor-danger);
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+.errorText {
+    margin: 0;
+    color: var(--editor-danger);
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+/* Row of fields side-by-side (min, max, step) */
+.fieldRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+}
+
+/* Switch + label row */
+.switchRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 28px;
+}
+
+.switchLabel {
+    color: var(--editor-text-secondary);
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+/* Select/multiSelect options builder */
+.optionList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.optionRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr 26px;
+    gap: 6px;
+    align-items: center;
+}
+
+/* ── Built-in field quick-add section ── */
+
+.builtInSection {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.builtInHeading {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--editor-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+}
+
+.builtInList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.builtInDivider {
+    height: 1px;
+    background: var(--editor-border);
+    margin-top: 4px;
+}

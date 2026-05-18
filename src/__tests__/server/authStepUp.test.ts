@@ -454,7 +454,7 @@ describe('Step-up auth', () => {
         email: 'patch-target@example.com',
         displayName: 'Patch Target',
         password: PASSWORD,
-        roleId: 'viewer',
+        roleId: 'member',
       }),
     })
     createUserReq.headers.set('cookie', steppedCookie)
@@ -522,7 +522,7 @@ describe('Step-up auth', () => {
         email: 'reset-target@example.com',
         displayName: 'Reset Target',
         password: PASSWORD,
-        roleId: 'viewer',
+        roleId: 'member',
       }),
     })
     createUserReq.headers.set('cookie', steppedOwnerCookie)

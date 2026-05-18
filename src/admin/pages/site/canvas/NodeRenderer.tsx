@@ -76,6 +76,24 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       return getCanvasNodeClassName(canvasNode?.classIds, preview, nodeId, s.site?.classes)
     }, [nodeId]),
   )
+  // Inline-edit gate — when the editor's inlineEditingNodeId matches this
+  // node, the module's component renders contentEditable for its primary
+  // content prop. Set by the canvas double-click handler.
+  const isInlineEditing = useEditorStore(
+    useCallback((s) => s.inlineEditingNodeId === nodeId, [nodeId]),
+  )
+  const updateNodeProps = useEditorStore((s) => s.updateNodeProps)
+  const setInlineEditing = useEditorStore((s) => s.setInlineEditing)
+  const commitInlineEdit = useCallback(
+    (partial: Record<string, unknown>) => {
+      updateNodeProps(nodeId, partial)
+      setInlineEditing(null)
+    },
+    [nodeId, updateNodeProps, setInlineEditing],
+  )
+  const cancelInlineEdit = useCallback(() => {
+    setInlineEditing(null)
+  }, [setInlineEditing])
 
   const { onNodeClick, onNodeHover, onNodeContextMenu, onNodeDoubleClick } = useContext(CanvasSelectionContext)
 
@@ -226,7 +244,15 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
             classIds={effectiveClassIds}
           />
         ) : (
-          <ComponentType props={effectiveProps as never} nodeId={nodeId} isSelected={isSelected} mcClassName={mcClassName}>
+          <ComponentType
+            props={effectiveProps as never}
+            nodeId={nodeId}
+            isSelected={isSelected}
+            mcClassName={mcClassName}
+            isInlineEditing={isInlineEditing}
+            onCommitInlineEdit={commitInlineEdit}
+            onCancelInlineEdit={cancelInlineEdit}
+          >
             {children}
           </ComponentType>
         )}

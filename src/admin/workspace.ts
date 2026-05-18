@@ -14,6 +14,7 @@
 export type AdminWorkspace =
   | 'site'
   | 'content'
+  | 'data'
   | 'media'
   | 'plugins'
   | 'users'

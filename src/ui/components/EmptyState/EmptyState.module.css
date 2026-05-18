@@ -32,7 +32,7 @@
     gap: 8px;
     padding: 24px 16px;
     text-align: center;
-    color: var(--editor-text-subtle);
+    color: var(--editor-text-secondary);
 }
 
 /* ── compact modifier ─────────────────────────────────────────────────────────
@@ -70,7 +70,6 @@
 /* ── content slots ──────────────────────────────────────────────────────────── */
 
 .icon {
-    opacity: 0.4;
     color: var(--editor-text-subtle);
 }
 
@@ -85,7 +84,8 @@
 /* In centered mode the title reads as the primary label and the description
  * is the supporting hint underneath. */
 .variant-centered .title {
-    color: var(--editor-text-subtle);
+    color: var(--editor-text-secondary);
+    font-weight: 600;
 }
 
 .description {

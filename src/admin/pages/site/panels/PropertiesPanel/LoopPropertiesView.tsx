@@ -18,21 +18,12 @@ import { useEditorStore } from '@site/store/store'
 import { loopSourceRegistry } from '@core/loops/registry'
 import type { LoopEntitySource } from '@core/loops/types'
 import type { PropertyControl, PropertySchema } from '@core/module-engine/types'
-import {
-  listCmsContentCollections,
-  listCmsContentEntries,
-} from '@core/persistence/cmsContent'
+import { listCmsDataTables } from '@core/persistence/cmsData'
 import { PropertyControlRenderer } from '@site/property-controls/PropertyControlRenderer'
 
 interface LoopPropertiesViewProps {
   nodeId: string
   props: Record<string, unknown>
-}
-
-interface CmsContentCollection {
-  id: string
-  name: string
-  slug: string
 }
 
 export function LoopPropertiesView({ nodeId, props }: LoopPropertiesViewProps) {
@@ -47,44 +38,44 @@ export function LoopPropertiesView({ nodeId, props }: LoopPropertiesViewProps) {
       ? (props.filters as Record<string, unknown>)
       : {}
 
-  // Content collection list — fetched lazily for the content.entries source's
-  // collectionId picker. Other sources don't need this.
-  const [collections, setCollections] = useState<CmsContentCollection[] | null>(null)
+  // Data table list — fetched lazily for the data.rows source's tableId picker.
+  // Other sources don't need this.
+  const [tables, setTables] = useState<Array<{ id: string; name: string }> | null>(null)
   useEffect(() => {
-    if (sourceId !== 'content.entries' || collections !== null) return
+    if (sourceId !== 'data.rows' || tables !== null) return
     let cancelled = false
-    listCmsContentCollections()
+    listCmsDataTables()
       .then((list) => {
-        if (!cancelled) setCollections(list)
+        if (!cancelled) setTables(list)
       })
       .catch(() => {
-        if (!cancelled) setCollections([])
+        if (!cancelled) setTables([])
       })
     return () => {
       cancelled = true
     }
-  }, [sourceId, collections])
+  }, [sourceId, tables])
 
   // Build the per-source filter schema with dynamic options patched in.
   const filterSchema: PropertySchema = useMemo(() => {
     if (!source) return {}
-    if (source.id === 'content.entries' && collections) {
-      const collectionField = source.filterSchema.collectionId
-      if (collectionField && collectionField.type === 'select') {
+    if (source.id === 'data.rows' && tables) {
+      const tableField = source.filterSchema.tableId
+      if (tableField && tableField.type === 'select') {
         return {
           ...source.filterSchema,
-          collectionId: {
-            ...collectionField,
+          tableId: {
+            ...tableField,
             options: [
-              { label: '— Choose a collection —', value: '' },
-              ...collections.map((c) => ({ label: c.name, value: c.id })),
+              { label: '— Choose a table —', value: '' },
+              ...tables.map((t) => ({ label: t.name, value: t.id })),
             ],
           },
         }
       }
     }
     return source.filterSchema
-  }, [source, collections])
+  }, [source, tables])
 
   // Order options reactive to source change.
   const orderOptions: PropertyControl = useMemo(() => {
@@ -117,17 +108,6 @@ export function LoopPropertiesView({ nodeId, props }: LoopPropertiesViewProps) {
   function handleScalarChange(key: string, value: unknown) {
     updateNodeProps(nodeId, { [key]: value })
   }
-
-  // Eager-load entries for the selected collection so the data is hot in
-  // the persistence cache when the canvas/preview hooks read it.
-  useEffect(() => {
-    if (sourceId !== 'content.entries') return
-    const collectionId = typeof filters.collectionId === 'string' ? filters.collectionId : ''
-    if (!collectionId) return
-    listCmsContentEntries(collectionId).catch(() => {
-      // silenced — not blocking the panel UI
-    })
-  }, [sourceId, filters.collectionId])
 
   return (
     <>

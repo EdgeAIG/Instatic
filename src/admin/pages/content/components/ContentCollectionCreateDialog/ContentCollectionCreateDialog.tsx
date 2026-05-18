@@ -3,14 +3,21 @@ import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { Dialog } from '@ui/components/Dialog'
 import { Input } from '@ui/components/Input'
-import type { CreateContentCollectionInput } from '@core/content/schemas'
+import { buildPostTypeDefaultFields } from '@core/data/fields'
+import {
+  POST_TYPE_FIELD_BODY,
+  POST_TYPE_FIELD_FEATURED_MEDIA,
+  POST_TYPE_FIELD_SEO_TITLE,
+  POST_TYPE_FIELD_SEO_DESCRIPTION,
+  type CreateDataTableInput,
+} from '@core/data/schemas'
 import dialogStyles from '../../../../shared/dialogs/SiteCreateDialog/SiteCreateDialog.module.css'
 import styles from '../../ContentPage.module.css'
 import { slugFromTitle } from '@core/utils/slug'
 
 interface ContentCollectionCreateDialogProps {
   onCancel: () => void
-  onCreate: (input: CreateContentCollectionInput) => void | Promise<void>
+  onCreate: (input: CreateDataTableInput) => void | Promise<void>
 }
 
 function singularFromPlural(value: string): string {
@@ -74,14 +81,12 @@ export const ContentCollectionCreateDialog = memo(function ContentCollectionCrea
         routeBase: effectiveRouteBase,
         singularLabel: trimmedSingularLabel,
         pluralLabel: trimmedPluralLabel,
-        fields: {
-          builtIn: {
-            body: bodyField,
-            featuredMedia: featuredMediaField,
-            seo: seoField,
-          },
-          custom: [],
-        },
+        fields: buildPostTypeDefaultFields().filter((field) => {
+          if (field.id === POST_TYPE_FIELD_BODY) return bodyField
+          if (field.id === POST_TYPE_FIELD_FEATURED_MEDIA) return featuredMediaField
+          if (field.id === POST_TYPE_FIELD_SEO_TITLE || field.id === POST_TYPE_FIELD_SEO_DESCRIPTION) return seoField
+          return true
+        }),
       })
     } catch (err) {
       setSubmitError(errorMessage(err))

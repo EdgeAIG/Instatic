@@ -5,7 +5,7 @@ import { LoaderIcon } from 'pixel-art-icons/icons/loader'
 import { SaveSolidIcon } from 'pixel-art-icons/icons/save-solid'
 import { SendSolidIcon } from 'pixel-art-icons/icons/send-solid'
 import type { IconComponent } from 'pixel-art-icons/types'
-import type { ContentCollection, ContentEntry } from '@core/content/schemas'
+import type { DataTable, DataRow } from '@core/data/schemas'
 import {
   PublishActionGroup,
   type PublishActionMenuItem,
@@ -18,8 +18,8 @@ interface ContentToolbarProps {
   contentLoading: boolean
   saveMessage: SaveMessage
   isDirty: boolean
-  selectedEntry: ContentEntry | null
-  selectedCollection: ContentCollection | null
+  selectedEntry: DataRow | null
+  selectedCollection: DataTable | null
   publicPath: string
   canSaveDraft: boolean
   canPublish: boolean
@@ -48,7 +48,7 @@ interface ToolbarViewState {
 }
 
 function isCleanPublishedEntry(
-  selectedEntry: ContentEntry | null,
+  selectedEntry: DataRow | null,
   isDirty: boolean,
   saveMessage: SaveMessage,
 ): boolean {
@@ -61,7 +61,7 @@ function deriveStatusText(args: {
   contentLoading: boolean
   saveMessage: SaveMessage
   isDirty: boolean
-  selectedEntry: ContentEntry | null
+  selectedEntry: DataRow | null
   isCleanPublished: boolean
 }): string {
   const { contentLoading, saveMessage, isDirty, selectedEntry, isCleanPublished } = args
@@ -129,7 +129,7 @@ function deriveToolbarViewState(args: {
   contentLoading: boolean
   saveMessage: SaveMessage
   isDirty: boolean
-  selectedEntry: ContentEntry | null
+  selectedEntry: DataRow | null
 }): ToolbarViewState {
   const { contentLoading, saveMessage, isDirty, selectedEntry } = args
   const isCleanPublished = isCleanPublishedEntry(selectedEntry, isDirty, saveMessage)

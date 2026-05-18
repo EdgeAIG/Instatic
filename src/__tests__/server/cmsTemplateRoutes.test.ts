@@ -23,7 +23,7 @@ function rowDate(value: string) {
 }
 
 describe('CMS dynamic template routes', () => {
-  it('renders a published content entry through the highest priority page template', async () => {
+  it('renders a published data row through the highest priority page template', async () => {
     const page = makePage({
       root: { moduleId: 'base.body', props: {}, children: ['title'] },
       title: {
@@ -38,7 +38,7 @@ describe('CMS dynamic template routes', () => {
     page.template = {
       enabled: true,
       context: 'entry',
-      collectionId: 'posts',
+      tableSlug: 'posts',
       priority: 100,
       conditions: [],
     }
@@ -66,23 +66,26 @@ describe('CMS dynamic template routes', () => {
         return { rows: [{ snapshot_json: snapshot }], rowCount: 1 }
       },
       (sql, params) => {
-        if (!sql.startsWith('select content_entry_versions.id')) return undefined
+        if (!sql.startsWith('select data_row_versions.id')) return undefined
         expect(params).toEqual(['/posts', 'dynamic-post'])
         return {
           rows: [{
             id: 'version_1',
-            entry_id: 'entry_1',
-            collection_id: 'posts',
-            collection_slug: 'posts',
-            collection_route_base: '/posts',
+            row_id: 'row_1',
+            table_id: 'posts',
+            table_slug: 'posts',
+            table_kind: 'postType',
+            table_route_base: '/posts',
             version_number: 1,
-            title: 'Dynamic Post',
+            cells_json: {
+              title: 'Dynamic Post',
+              slug: 'dynamic-post',
+              body: 'Body',
+              featuredMedia: null,
+              seoTitle: '',
+              seoDescription: '',
+            },
             slug: 'dynamic-post',
-            body_markdown: 'Body',
-            featured_media_id: null,
-            featured_media_path: null,
-            seo_title: '',
-            seo_description: '',
             published_at: rowDate('2026-05-01T10:00:00Z'),
             created_at: rowDate('2026-05-01T10:00:00Z'),
           }],
@@ -100,7 +103,7 @@ describe('CMS dynamic template routes', () => {
     expect(html).not.toContain('Static title')
   })
 
-  it('redirects an old published content slug to the active published slug', async () => {
+  it('redirects an old published data row slug to the active published slug', async () => {
     const db = makeTemplateRouteFakeDb([
       (sql, params) => {
         if (!sql.startsWith('select page_versions.snapshot_json')) return undefined
@@ -111,12 +114,12 @@ describe('CMS dynamic template routes', () => {
         return { rows: [], rowCount: 0 }
       },
       (sql, params) => {
-        if (!sql.startsWith('select content_entry_versions.id')) return undefined
+        if (!sql.startsWith('select data_row_versions.id')) return undefined
         expect(params).toEqual(['/posts', 'untitled'])
         return { rows: [], rowCount: 0 }
       },
       (sql, params) => {
-        if (!sql.startsWith('select content_entry_redirects.id')) return undefined
+        if (!sql.startsWith('select data_row_redirects.id')) return undefined
         expect(params).toEqual(['/posts', 'untitled'])
         return {
           rows: [{

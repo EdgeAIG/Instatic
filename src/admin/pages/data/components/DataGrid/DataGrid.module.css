@@ -24,7 +24,7 @@
     flex: 1;
     overflow: hidden;
     position: relative;
-    background: var(--editor-bg);
+    background: var(--editor-surface);
     border: 1px solid var(--editor-border);
     border-bottom: 0;
     border-top-left-radius: 16px;
@@ -306,7 +306,7 @@
 }
 
 .resizeHandle::after {
-    content: '';
+    content: "";
     position: absolute;
     top: 6px;
     right: 0;
@@ -314,7 +314,9 @@
     width: 1px;
     background: var(--editor-surface-3);
     opacity: 0;
-    transition: opacity 0.1s, background-color 0.1s;
+    transition:
+        opacity 0.1s,
+        background-color 0.1s;
 }
 
 .resizeHandle:hover::after,

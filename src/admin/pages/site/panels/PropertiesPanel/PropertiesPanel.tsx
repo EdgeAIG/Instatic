@@ -65,6 +65,7 @@ import { useDraggablePanel } from '@site/hooks/useDraggablePanel'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
+import { useEditorPermissions } from '@site/editorPermissionsContext'
 import { Input } from '@ui/components/Input'
 import { OpenSolidIcon } from 'pixel-art-icons/icons/open-solid'
 import { DockSolidIcon } from 'pixel-art-icons/icons/dock-solid'
@@ -432,6 +433,7 @@ function PropertiesPanelBody(props: PropertiesPanelBodyProps): React.ReactNode {
     classPickerRef,
     onFocusClassPicker,
   } = props
+  const permissions = useEditorPermissions()
 
   if (selectedSelectorClass) {
     return (
@@ -472,28 +474,36 @@ function PropertiesPanelBody(props: PropertiesPanelBodyProps): React.ReactNode {
   }
 
   // Default node surface — ClassPicker above StyleSurface.
+  //
+  // ClassPicker mutates the classes registry, so it is style-editing. Hide it
+  // from callers without `site.style.edit` — a content-only Client can't add
+  // or remove classes regardless.
+  //
+  // ConvertToComponentButton is structural (it adds a new VC to the registry
+  // and replaces the selected subtree with a ref) — gate on structure.
   const showConvertToComponent =
+    permissions.canEditStructure &&
     activeDocument?.kind !== 'visualComponent' &&
     selectedNode.moduleId !== 'base.body' &&
     selectedNode.moduleId !== 'base.visual-component-ref'
 
   return (
     <div className={styles.nodeArea}>
-      {/* ClassPicker — always visible, manages class assignment. On regular
-          page nodes we render the Convert-to-component button as the input
-          row's trailing action so the two share a 2-column layout with
-          matching heights, and the suggestions dropdown spans the full row. */}
-      <div className={styles.headerClassPicker}>
-        <ClassPicker
-          ref={classPickerRef}
-          nodeId={selectedNodeId!}
-          trailingAction={
-            showConvertToComponent
-              ? <ConvertToComponentButton nodeId={selectedNodeId!} />
-              : undefined
-          }
-        />
-      </div>
+      {/* ClassPicker — always visible to style-edit-capable callers. Hidden
+          for content-only Clients. */}
+      {permissions.canEditStyle && (
+        <div className={styles.headerClassPicker}>
+          <ClassPicker
+            ref={classPickerRef}
+            nodeId={selectedNodeId!}
+            trailingAction={
+              showConvertToComponent
+                ? <ConvertToComponentButton nodeId={selectedNodeId!} />
+                : undefined
+            }
+          />
+        </div>
+      )}
 
       {/* Unified StyleSurface: Module section + CSS sections (scroll-anchor) */}
       <StyleSurface
@@ -524,6 +534,8 @@ function NodeHeader({ nodeId, label, moduleName, onRename }: NodeHeaderProps) {
   const [isEditing, setIsEditing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const displayName = label ?? moduleName
+  // Renaming a node mutates `node.label` — a structural change, not content.
+  const canRename = useEditorPermissions().canEditStructure
 
   useEffect(() => {
     if (inputRef.current) {
@@ -579,16 +591,18 @@ function NodeHeader({ nodeId, label, moduleName, onRename }: NodeHeaderProps) {
   return (
     <div className={styles.headerNodeTitle}>
       <span className={styles.headerNodeLabel} title={displayName}>{displayName}</span>
-      <Button
-        variant="ghost"
-        size="xs"
-        iconOnly
-        onClick={() => setIsEditing(true)}
-        aria-label={`Rename ${displayName}`}
-        tooltip="Rename element"
-      >
-        <EditSolidIcon size={12} aria-hidden="true" />
-      </Button>
+      {canRename && (
+        <Button
+          variant="ghost"
+          size="xs"
+          iconOnly
+          onClick={() => setIsEditing(true)}
+          aria-label={`Rename ${displayName}`}
+          tooltip="Rename element"
+        >
+          <EditSolidIcon size={12} aria-hidden="true" />
+        </Button>
+      )}
     </div>
   )
 }
@@ -606,6 +620,8 @@ function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
   const [isEditing, setIsEditing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const selectorLabel = `.${cls.name}`
+  // Renaming a class is a style edit — gate on `site.style.edit`.
+  const canRename = useEditorPermissions().canEditStyle
 
   useEffect(() => {
     if (inputRef.current) {
@@ -666,16 +682,18 @@ function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
   return (
     <div className={styles.headerNodeTitle}>
       <span className={styles.headerNodeLabel} title={selectorLabel} role="heading" aria-level={2}>{selectorLabel}</span>
-      <Button
-        variant="ghost"
-        size="xs"
-        iconOnly
-        onClick={() => setIsEditing(true)}
-        aria-label={`Rename selector ${selectorLabel}`}
-        tooltip="Rename selector"
-      >
-        <EditSolidIcon size={12} aria-hidden="true" />
-      </Button>
+      {canRename && (
+        <Button
+          variant="ghost"
+          size="xs"
+          iconOnly
+          onClick={() => setIsEditing(true)}
+          aria-label={`Rename selector ${selectorLabel}`}
+          tooltip="Rename selector"
+        >
+          <EditSolidIcon size={12} aria-hidden="true" />
+        </Button>
+      )}
     </div>
   )
 }

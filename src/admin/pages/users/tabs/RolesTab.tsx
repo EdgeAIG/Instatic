@@ -100,7 +100,11 @@ export function RolesTab({ data, canManageRoles }: RolesTabProps) {
   }
 
   function openEdit(role: CmsRole) {
-    if (!canManageRoles || role.isSystem) return
+    // Owner is the only role whose capabilities are managed by the server
+    // (synced from `CORE_CAPABILITIES` at boot). Every other role — including
+    // the built-in `admin`, `client`, `member` — is editable by anyone with
+    // `roles.manage`. System roles still can't be *deleted* (see `remove`).
+    if (!canManageRoles || role.slug === 'owner') return
     setEditingRoleId(role.id)
     setRoleForm({
       name: role.name,
@@ -138,6 +142,9 @@ export function RolesTab({ data, canManageRoles }: RolesTabProps) {
   }
 
   async function remove(role: CmsRole) {
+    // System roles are never deletable — only their content (name, caps) can
+    // be edited. Custom roles can be deleted when no users reference them
+    // (server-side enforced).
     if (!canManageRoles || role.isSystem) return
     setBusy(true)
     setError(null)
@@ -231,19 +238,26 @@ export function RolesTab({ data, canManageRoles }: RolesTabProps) {
                           icon: <EyeSolidIcon size={12} aria-hidden="true" />,
                           onSelect: () => openView(role),
                         },
-                        ...(!role.isSystem
+                        // Owner is locked entirely (capabilities are managed
+                        // by the server). Other system roles can be edited
+                        // but not deleted — they're part of the installation's
+                        // expected role registry. Custom roles can be edited
+                        // and deleted.
+                        ...(role.slug !== 'owner'
                           ? [
                               {
                                 label: 'Edit',
                                 icon: <EditSolidIcon size={12} aria-hidden="true" />,
                                 onSelect: () => openEdit(role),
                               },
-                              {
-                                label: 'Delete',
-                                icon: <TrashSolidIcon size={12} aria-hidden="true" />,
-                                danger: true,
-                                onSelect: () => void remove(role),
-                              },
+                              ...(!role.isSystem
+                                ? [{
+                                    label: 'Delete',
+                                    icon: <TrashSolidIcon size={12} aria-hidden="true" />,
+                                    danger: true,
+                                    onSelect: () => void remove(role),
+                                  }] satisfies RowActionMenuItem[]
+                                : []),
                             ] satisfies RowActionMenuItem[]
                           : []),
                       ]}

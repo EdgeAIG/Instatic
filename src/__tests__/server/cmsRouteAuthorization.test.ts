@@ -141,48 +141,102 @@ describe('CMS route authorization', () => {
     }
   })
 
-  it('requires both site and page edit rights to replace the broad draft site document', async () => {
+  it('requires any of the three site-write capabilities to PUT the draft site document', async () => {
     const { db, cleanup } = await createTestDb()
     try {
       const ownerCookie = await setupOwner(db)
-      const siteEditorRoleId = await createRole(db, ownerCookie, {
-        name: 'Site Settings Editor',
-        slug: 'site-settings-editor',
-        capabilities: ['site.read', 'site.edit'],
+      const readOnlyRoleId = await createRole(db, ownerCookie, {
+        name: 'Site Viewer',
+        slug: 'site-viewer-only',
+        capabilities: ['site.read'],
       })
-      const fullEditorRoleId = await createRole(db, ownerCookie, {
-        name: 'Draft Site Writer',
-        slug: 'draft-site-writer',
-        capabilities: ['site.read', 'site.edit', 'pages.edit'],
-      })
-      await createUser(db, ownerCookie, {
-        email: 'settings-editor@example.com',
-        displayName: 'Settings Editor',
-        roleId: siteEditorRoleId,
+      const styleRoleId = await createRole(db, ownerCookie, {
+        name: 'Site Stylist',
+        slug: 'site-stylist',
+        capabilities: ['site.read', 'site.style.edit'],
       })
       await createUser(db, ownerCookie, {
-        email: 'draft-writer@example.com',
-        displayName: 'Draft Writer',
-        roleId: fullEditorRoleId,
+        email: 'reader@example.com',
+        displayName: 'Reader',
+        roleId: readOnlyRoleId,
+      })
+      await createUser(db, ownerCookie, {
+        email: 'stylist@example.com',
+        displayName: 'Stylist',
+        roleId: styleRoleId,
       })
 
-      const settingsEditorCookie = await sessionCookieForUser(db, 'settings-editor@example.com')
-      const draftWriterCookie = await sessionCookieForUser(db, 'draft-writer@example.com')
+      const readerCookie = await sessionCookieForUser(db, 'reader@example.com')
+      const stylistCookie = await sessionCookieForUser(db, 'stylist@example.com')
 
       const site = await currentSiteDocument(db, ownerCookie)
-      const settingsOnlyWrite = await request(db, '/admin/api/cms/site', {
+      // site.read alone is not enough — write is forbidden.
+      const readOnlyWrite = await request(db, '/admin/api/cms/site', {
         method: 'PUT',
-        cookie: settingsEditorCookie,
+        cookie: readerCookie,
         body: JSON.stringify({ site }),
       })
-      expect(settingsOnlyWrite.status).toBe(403)
+      expect(readOnlyWrite.status).toBe(403)
 
-      const fullWrite = await request(db, '/admin/api/cms/site', {
+      // A no-op save (the document is byte-identical) is allowed for any
+      // caller that holds at least one site-write capability — the diff
+      // walk finds no changes at all.
+      const stylistNoop = await request(db, '/admin/api/cms/site', {
         method: 'PUT',
-        cookie: draftWriterCookie,
+        cookie: stylistCookie,
         body: JSON.stringify({ site }),
       })
-      expect(fullWrite.status).toBe(200)
+      expect(stylistNoop.status).toBe(200)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it('rejects a Client role attempting structural changes', async () => {
+    const { db, cleanup } = await createTestDb()
+    try {
+      const ownerCookie = await setupOwner(db)
+      const clientRoleId = await createRole(db, ownerCookie, {
+        name: 'Test Client',
+        slug: 'test-client-role',
+        capabilities: ['site.read', 'site.content.edit'],
+      })
+      await createUser(db, ownerCookie, {
+        email: 'client@example.com',
+        displayName: 'Client',
+        roleId: clientRoleId,
+      })
+      const clientCookie = await sessionCookieForUser(db, 'client@example.com')
+      const site = await currentSiteDocument(db, ownerCookie)
+      // Mutate the page title — that's content category, so a content-only
+      // client is allowed.
+      const titleEdit = structuredClone(site)
+      titleEdit.pages[0].title = `${titleEdit.pages[0].title} (edited)`
+      const allowed = await request(db, '/admin/api/cms/site', {
+        method: 'PUT',
+        cookie: clientCookie,
+        body: JSON.stringify({ site: titleEdit }),
+      })
+      expect(allowed.status).toBe(200)
+
+      // Now mutate a class — that's a style change, which the client may not
+      // make. The server rejects with 403.
+      const refreshed = await currentSiteDocument(db, ownerCookie)
+      const styleEdit = structuredClone(refreshed)
+      styleEdit.classes['__forbidden__'] = {
+        id: '__forbidden__',
+        name: 'forbidden',
+        styles: {},
+        breakpointStyles: {},
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+      const denied = await request(db, '/admin/api/cms/site', {
+        method: 'PUT',
+        cookie: clientCookie,
+        body: JSON.stringify({ site: styleEdit }),
+      })
+      expect(denied.status).toBe(403)
     } finally {
       await cleanup()
     }

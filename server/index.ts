@@ -1,5 +1,6 @@
 import { createDbClient } from './db'
 import { runMigrations } from './db/runMigrations'
+import { syncSystemRoles } from './repositories/roles'
 import { readServerConfig } from './config'
 import { DEV_ORIGIN_ALLOWLIST, stampSocketIp } from './auth/security'
 
@@ -10,15 +11,38 @@ const { activateInstalledServerPlugins } = await import('./plugins/runtime')
 const config = readServerConfig()
 const { db, migrations } = createDbClient(config.databaseUrl)
 await runMigrations(db, migrations)
+// System role sync runs after migrations on every boot — the Owner row's
+// capabilities are force-reset to `CORE_CAPABILITIES` so existing
+// installations don't strand owners on a stale grant list when new
+// capabilities are added in code. See `syncSystemRoles` for the policy.
+await syncSystemRoles(db)
 await activateInstalledServerPlugins(db, config.uploadsDir)
 
+/**
+ * Build the CORS response headers for an incoming request.
+ *
+ * Returns headers ONLY when the request's `Origin` is on the dev allowlist
+ * (the production admin shell is same-origin behind Caddy, so no ACAO is
+ * needed). Anything else gets an empty header set — the browser then blocks
+ * cross-origin reads naturally instead of us "allow"-ing a wrong value.
+ *
+ * Echoing an unrelated allowlist entry with `Access-Control-Allow-Credentials: true`
+ * (the previous behaviour) was harmless in practice — browsers reject the
+ * response when ACAO doesn't match the requesting Origin — but it was the
+ * same shape as classic broken-CORS bugs and made misconfigured
+ * `VITE_ALLOWED_ORIGIN` values silently open the API up.
+ */
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allow = origin && DEV_ORIGIN_ALLOWLIST.includes(origin) ? origin : DEV_ORIGIN_ALLOWLIST[0]
+  if (!origin || !DEV_ORIGIN_ALLOWLIST.includes(origin)) return {}
   return {
-    'Access-Control-Allow-Origin': allow,
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    // The response body varies by Origin (we either include ACAO or don't),
+    // so caches must key on Origin to avoid serving a permissive response to
+    // a non-allowlisted origin.
+    'Vary': 'Origin',
   }
 }
 
@@ -59,8 +83,13 @@ Bun.serve({
       }
       return res
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Internal server error'
-      return new Response(JSON.stringify({ error: message }), {
+      // Never echo `err.message` to the client — inner handlers already return
+      // structured error bodies for the failure modes they expect; anything
+      // that escapes to here is an unexpected crash whose message can leak
+      // SQL fragments, absolute paths, spawn() arguments, etc. Log fully,
+      // respond generically.
+      console.error('[server] Unhandled request error:', err)
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...cors },
       })

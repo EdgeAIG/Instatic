@@ -383,7 +383,12 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
       })
   }, [searchQuery, page, classes, visualComponents])
 
-  const collapsed = panelState.collapsed
+  // Read-only callers (Viewer / Client) never see a toggle to expand the
+  // layers panel — the toolbar LayersButton (and the toggleable rail) is
+  // editor-only. If we honour the persisted `collapsed` flag in their UI,
+  // they'd get an always-empty sidebar slot. Force the panel open for
+  // non-editors; structural editors keep the persisted toggle.
+  const collapsed = editable ? panelState.collapsed : false
   const width = panelState.width || DEFAULT_WIDTH
 
   // Fully hidden when collapsed — toolbar LayersButton is the toggle to reopen

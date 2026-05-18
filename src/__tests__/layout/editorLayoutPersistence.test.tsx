@@ -138,7 +138,9 @@ function renderEditorLayout({
   // view (e.g. read-only) pass an explicit `user`.
   const sessionUser = user ?? currentUser([
     'site.read',
-    'site.edit',
+    'site.structure.edit',
+    'site.content.edit',
+    'site.style.edit',
     'pages.edit',
     'pages.publish',
     'media.manage',
@@ -309,9 +311,17 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
 
     const sidebar = screen.getByTestId('left-sidebar')
     const rail = within(sidebar).getByRole('navigation', { name: /panel dock/i })
+    // Read-only callers see the navigation-style panels — Layers, Site
+    // Explorer and Media — but none of the structural / style / agent
+    // editing panels in the rail.
     expect(within(rail).getByRole('button', { name: /close layers panel/i })).toBeDefined()
-    expect(within(rail).queryByRole('button', { name: /open site panel/i })).toBeNull()
-    expect(within(rail).queryByRole('button', { name: /open media panel/i })).toBeNull()
+    expect(within(rail).getByRole('button', { name: /open site panel/i })).toBeDefined()
+    expect(within(rail).getByRole('button', { name: /open media panel/i })).toBeDefined()
+    expect(within(rail).queryByRole('button', { name: /open selectors panel/i })).toBeNull()
+    expect(within(rail).queryByRole('button', { name: /open colors panel/i })).toBeNull()
+    expect(within(rail).queryByRole('button', { name: /open typography panel/i })).toBeNull()
+    expect(within(rail).queryByRole('button', { name: /open spacing panel/i })).toBeNull()
+    expect(within(rail).queryByRole('button', { name: /open ai assistant panel/i })).toBeNull()
 
     const tree = within(sidebar).getByRole('tree', { name: /page element tree/i })
     const treeRows = within(tree).getAllByRole('treeitem')
@@ -328,8 +338,11 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
     fireEvent.keyDown(canvas, { key: 'Backspace' })
     expect(Object.keys(useEditorStore.getState().site?.pages[0]?.nodes ?? {})).toEqual(beforeNodeIds)
 
+    // Site Explorer is a navigation panel available to read-only callers, so
+    // the rail keybinding (Ctrl+Shift+E) DOES toggle it open even without
+    // edit capabilities — they can browse the page roster but not edit it.
     fireEvent.keyDown(document, { key: 'E', ctrlKey: true, shiftKey: true })
-    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
+    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(true)
   })
 
   it('does not render the deferred timeline shell or rail button', () => {

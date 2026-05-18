@@ -49,6 +49,7 @@
     "nanoid": "^5.1.11",
     "pixel-art-icons": "file:./vendor/pixel-art-icons",
     "qrcode": "^1.5.4",
+    "quickjs-emscripten": "^0.32.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "semver": "^7.7.4",

@@ -19,11 +19,14 @@ function currentUser(capabilities: string[]): CmsCurrentUser {
     displayName: 'Editor',
     status: 'active',
     role: {
-      id: 'editor',
-      slug: 'editor',
-      name: 'Editor',
+      // Synthetic role used to wire `capabilities` into the mock user — the
+      // role's slug doesn't need to match a real system role, this test
+      // doesn't hit the role registry.
+      id: 'test-role',
+      slug: 'test-role',
+      name: 'Test Role',
       description: '',
-      isSystem: true,
+      isSystem: false,
       capabilities,
     },
     capabilities,
@@ -47,6 +50,68 @@ function json(body: unknown, status = 200) {
     status,
     headers: { 'content-type': 'application/json' },
   })
+}
+
+function makeTable(id: string, name: string, slug: string) {
+  return {
+    id,
+    name,
+    slug,
+    kind: 'postType',
+    routeBase: `/${slug}`,
+    singularLabel: name.replace(/s$/, ''),
+    pluralLabel: name,
+    primaryFieldId: 'title',
+    fields: [
+      { type: 'text', id: 'title', label: 'Title', required: true, builtIn: true },
+      { type: 'text', id: 'slug', label: 'Slug', required: true, builtIn: true },
+      { type: 'richText', id: 'body', label: 'Body', format: 'markdown', builtIn: true },
+      { type: 'media', id: 'featuredMedia', label: 'Featured media', mediaKind: 'image', builtIn: true },
+      { type: 'text', id: 'seoTitle', label: 'SEO title', builtIn: true },
+      { type: 'longText', id: 'seoDescription', label: 'SEO description', builtIn: true },
+    ],
+    createdByUserId: null,
+    updatedByUserId: null,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+function makeRow(
+  id: string,
+  tableId: string,
+  cells: Record<string, unknown> = {},
+  overrides: Record<string, unknown> = {},
+) {
+  const mergedCells: Record<string, unknown> = {
+    title: '',
+    slug: 'untitled',
+    body: '',
+    featuredMedia: null,
+    seoTitle: '',
+    seoDescription: '',
+    ...cells,
+  }
+  return {
+    id,
+    tableId,
+    cells: mergedCells,
+    slug: typeof mergedCells.slug === 'string' ? mergedCells.slug : 'untitled',
+    status: 'draft',
+    authorUserId: null as string | null,
+    createdByUserId: null as string | null,
+    updatedByUserId: null as string | null,
+    publishedByUserId: null as string | null,
+    author: null,
+    createdBy: null,
+    updatedBy: null,
+    publishedBy: null,
+    createdAt: now,
+    updatedAt: now,
+    publishedAt: null as string | null,
+    deletedAt: null as string | null,
+    ...overrides,
+  }
 }
 
 function setupEditorState() {
@@ -109,42 +174,20 @@ describe('capability-aware admin UI', () => {
       const url = String(input)
       const method = init?.method ?? 'GET'
       calls.push({ url, method })
-      if (url === '/admin/api/cms/content/collections') {
-        return json({
-          collections: [{
-            id: 'posts',
-            name: 'Posts',
-            slug: 'posts',
-            routeBase: '/posts',
-            singularLabel: 'Post',
-            pluralLabel: 'Posts',
-            createdAt: now,
-            updatedAt: now,
-          }],
-        })
+      if (url === '/admin/api/cms/data/tables') {
+        return json({ tables: [makeTable('posts', 'Posts', 'posts')] })
       }
-      if (url === '/admin/api/cms/content/collections/posts/entries' && init?.method === 'GET') {
+      if (url === '/admin/api/cms/data/tables/posts/rows' && method === 'GET') {
         return json({
-          entries: [{
-            id: 'entry_1',
-            collectionId: 'posts',
+          rows: [makeRow('entry_1', 'posts', {
             title: 'Own draft',
             slug: 'own-draft',
-            status: 'draft',
-            bodyMarkdown: '',
-            featuredMediaId: null,
-            seoTitle: '',
-            seoDescription: '',
+          }, {
             authorUserId: 'editor_1',
             author: { id: 'editor_1', email: 'editor@example.com', displayName: 'Editor', roleName: 'Editor' },
             createdByUserId: 'editor_1',
             updatedByUserId: 'editor_1',
-            publishedByUserId: null,
-            createdAt: now,
-            updatedAt: now,
-            publishedAt: null,
-            deletedAt: null,
-          }],
+          })],
         })
       }
       if (url === '/admin/api/cms/media') return json({ assets: [] })
@@ -173,7 +216,7 @@ describe('capability-aware admin UI', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Publish' })).toBeDefined()
     expect(within(menu).queryByRole('menuitem', { name: 'Move to collection' })).toBeNull()
     expect(calls).not.toContainEqual({
-      url: '/admin/api/cms/content/authors',
+      url: '/admin/api/cms/data/authors',
       method: 'GET',
     })
   })
@@ -186,72 +229,43 @@ describe('capability-aware admin UI', () => {
       const method = init?.method ?? 'GET'
       calls.push({ url, method })
 
-      if (url === '/admin/api/cms/content/collections') {
-        return json({
-          collections: [{
-            id: 'posts',
-            name: 'Posts',
-            slug: 'posts',
-            routeBase: '/posts',
-            singularLabel: 'Post',
-            pluralLabel: 'Posts',
-            createdAt: now,
-            updatedAt: now,
-          }],
-        })
+      if (url === '/admin/api/cms/data/tables') {
+        return json({ tables: [makeTable('posts', 'Posts', 'posts')] })
       }
 
-      if (url === '/admin/api/cms/content/collections/posts/entries' && method === 'GET') {
+      if (url === '/admin/api/cms/data/tables/posts/rows' && method === 'GET') {
         return json({
-          entries: [{
-            id: 'entry_1',
-            collectionId: 'posts',
+          rows: [makeRow('entry_1', 'posts', {
             title: 'Publishable draft',
             slug: 'publishable-draft',
-            status: 'draft',
-            bodyMarkdown: '',
-            featuredMediaId: null,
-            seoTitle: '',
-            seoDescription: '',
+          }, {
             authorUserId: 'editor_1',
             author: { id: 'editor_1', email: 'editor@example.com', displayName: 'Editor', roleName: 'Editor' },
             createdByUserId: 'editor_1',
             updatedByUserId: 'editor_1',
-            publishedByUserId: null,
-            createdAt: now,
-            updatedAt: now,
-            publishedAt: null,
-            deletedAt: null,
-          }],
+          })],
         })
       }
 
-      if (url === '/admin/api/cms/content/entries/entry_1/publish' && method === 'POST') {
+      if (url === '/admin/api/cms/data/rows/entry_1/publish' && method === 'POST') {
         return json({
-          entry: {
-            id: 'entry_1',
-            collectionId: 'posts',
+          row: makeRow('entry_1', 'posts', {
             title: 'Publishable draft',
             slug: 'publishable-draft',
+          }, {
             status: 'published',
-            bodyMarkdown: '',
-            featuredMediaId: null,
-            seoTitle: '',
-            seoDescription: '',
             authorUserId: 'editor_1',
             author: { id: 'editor_1', email: 'editor@example.com', displayName: 'Editor', roleName: 'Editor' },
             createdByUserId: 'editor_1',
             updatedByUserId: 'editor_1',
             publishedByUserId: 'editor_1',
-            createdAt: now,
             updatedAt: now,
             publishedAt: now,
-            deletedAt: null,
-          },
+          }),
         })
       }
 
-      if (url === '/admin/api/cms/content/entries/entry_1' && method === 'PUT') {
+      if (url === '/admin/api/cms/data/rows/entry_1' && method === 'PATCH') {
         return json({ error: 'edit forbidden' }, 403)
       }
 
@@ -278,12 +292,12 @@ describe('capability-aware admin UI', () => {
 
     await screen.findByText('Published')
     expect(calls).toContainEqual({
-      url: '/admin/api/cms/content/entries/entry_1/publish',
+      url: '/admin/api/cms/data/rows/entry_1/publish',
       method: 'POST',
     })
     expect(calls).not.toContainEqual({
-      url: '/admin/api/cms/content/entries/entry_1',
-      method: 'PUT',
+      url: '/admin/api/cms/data/rows/entry_1',
+      method: 'PATCH',
     })
   })
 })

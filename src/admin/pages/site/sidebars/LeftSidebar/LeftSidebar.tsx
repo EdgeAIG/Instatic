@@ -13,6 +13,7 @@ import { SiteExplorerPanel } from '@site/panels/SiteExplorerPanel'
 import { TypographyPanel } from '@site/panels/TypographyPanel'
 import { SpacingPanel } from '@site/panels/SpacingPanel'
 import { FrameworkChangeConfirmProvider } from '@admin/shared/dialogs/FrameworkChangeConfirmDialog'
+import { VCDeletionConfirmProvider } from '@admin/shared/dialogs/VCDeletionConfirmDialog'
 import { SidebarResizeHandle } from '@admin/shared/SidebarResizeHandle'
 import styles from './LeftSidebar.module.css'
 
@@ -36,8 +37,27 @@ function selectActiveLeftSidebarPanel(state: ReturnType<typeof useEditorStore.ge
 interface LeftSidebarProps {
   workspace?: 'site' | 'content' | 'media'
   contentPanel?: ReactNode
+  /**
+   * Whether the caller can perform structural edits (DnD, add/remove nodes,
+   * pages, styles). Controls which side-panels are exposed in the rail.
+   *
+   * Falsy callers (Viewer / Client) still see Layers, Site Explorer and
+   * Media — they're navigation surfaces, not editing tools. The structural
+   * Selectors / Colors / Typography / Spacing / Dependencies / Agent panels
+   * stay hidden.
+   *
+   * Each panel is responsible for respecting its own read-only state for
+   * the interactions it exposes (TreeNode drag, context menus, etc.).
+   */
   editable?: boolean
 }
+
+/**
+ * Set of rail items that remain visible to read-only callers — purely
+ * navigational / view surfaces. Anything not in this set is editing-only
+ * and is dropped from the rail (and its panel mount) when `editable=false`.
+ */
+const READ_ONLY_RAIL_IDS: ReadonlySet<LeftSidebarPanelId> = new Set(['layers', 'site', 'media'])
 
 export function LeftSidebar({ workspace = 'site', contentPanel, editable = true }: LeftSidebarProps) {
   const sidebarRef = useRef<HTMLElement | null>(null)
@@ -45,7 +65,15 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
   const activePluginPanelId = useEditorStore((s) => s.activePluginPanelId)
   const leftSidebarWidth = useEditorStore((s) => s.leftSidebarWidth)
   const setLeftSidebarWidth = useEditorStore((s) => s.setLeftSidebarWidth)
-  const effectiveActivePanel = editable ? activePanel : 'layers'
+  // When the user can't edit structure, drop them onto Layers if they had a
+  // hidden-for-them panel active (selectors, colors, …). Plugin panels are
+  // editing-only by definition.
+  const effectiveActivePanel =
+    activePanel && (editable || READ_ONLY_RAIL_IDS.has(activePanel))
+      ? activePanel
+      : editable
+        ? activePanel
+        : 'layers'
   const effectivePluginPanelId = editable ? activePluginPanelId : null
   // Sidebar is "expanded" whenever a built-in OR plugin panel is showing.
   const sidebarOpen = Boolean(effectiveActivePanel) || effectivePluginPanelId !== null
@@ -69,19 +97,31 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
       <PanelRail workspace={workspace} editable={editable} />
 
       <FrameworkChangeConfirmProvider>
+      <VCDeletionConfirmProvider>
         <div
           className={styles.panelSlot}
           data-testid="left-sidebar-panel-slot"
           aria-hidden={sidebarOpen ? undefined : 'true'}
         >
+          {/* Read-only-safe panels — always rendered for any role with
+              `site.read`. These are navigation/inspection surfaces, not
+              editing tools; each respects its own read-only state internally
+              (e.g. TreeNode disables drag + context menu via `editable`). */}
           <div className={styles.panelMount} hidden={effectiveActivePanel !== 'layers'}>
             <DomPanel variant="docked" editable={editable} />
           </div>
+          <div className={styles.panelMount} hidden={effectiveActivePanel !== 'site'}>
+            {workspace === 'content' ? contentPanel : <SiteExplorerPanel variant="docked" />}
+          </div>
+          <div className={styles.panelMount} hidden={effectiveActivePanel !== 'media'}>
+            <MediaExplorerPanel variant="docked" />
+          </div>
+          {/* Editor-only panels — only mounted when the caller can perform
+              structural edits. Mounting them for non-editors would expose
+              actions (style edits, framework token changes, plugin panels)
+              they have no capability to commit. */}
           {editable && (
             <>
-              <div className={styles.panelMount} hidden={effectiveActivePanel !== 'site'}>
-                {workspace === 'content' ? contentPanel : <SiteExplorerPanel variant="docked" />}
-              </div>
               <div className={styles.panelMount} hidden={effectiveActivePanel !== 'selectors'}>
                 <SelectorsPanel variant="docked" />
               </div>
@@ -93,9 +133,6 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
               </div>
               <div className={styles.panelMount} hidden={effectiveActivePanel !== 'spacing'}>
                 <SpacingPanel />
-              </div>
-              <div className={styles.panelMount} hidden={effectiveActivePanel !== 'media'}>
-                <MediaExplorerPanel variant="docked" />
               </div>
               <div className={styles.panelMount} hidden={effectiveActivePanel !== 'dependencies'}>
                 <DependenciesPanel variant="docked" />
@@ -114,6 +151,7 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
             </>
           )}
         </div>
+      </VCDeletionConfirmProvider>
       </FrameworkChangeConfirmProvider>
 
       {sidebarOpen && (

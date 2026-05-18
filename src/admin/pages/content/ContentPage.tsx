@@ -36,9 +36,7 @@ import { useContentEntryDraft } from './hooks/useContentEntryDraft'
 import { useContentMediaPicker } from './hooks/useContentMediaPicker'
 import { useContentWorkspace } from './hooks/useContentWorkspace'
 import { publicContentPath } from './utils/contentEntryUtils'
-import { CORE_CAPABILITIES } from '@core/capabilities'
-import type { CmsCurrentUser } from '@core/persistence'
-import { useCurrentAdminUser } from '@admin/sessionContext'
+import { useAuthenticatedAdminUser } from '@admin/sessionContext'
 import {
   canCreateContent,
   canEditAnyContent,
@@ -46,34 +44,6 @@ import {
   canManageContentCollections,
   canPublishContentEntry,
 } from '@admin/access'
-
-const UNRESTRICTED_ADMIN_USER: CmsCurrentUser = {
-  id: 'admin-ui-unrestricted',
-  email: 'admin-ui-unrestricted@example.invalid',
-  displayName: 'Admin',
-  status: 'active',
-  role: {
-    id: 'admin-ui-unrestricted',
-    slug: 'admin-ui-unrestricted',
-    name: 'Admin',
-    description: '',
-    isSystem: true,
-    capabilities: [...CORE_CAPABILITIES],
-  },
-  capabilities: [...CORE_CAPABILITIES],
-  lastLoginAt: null,
-  failedLoginCount: 0,
-  lockedUntil: null,
-  passwordUpdatedAt: null,
-  mfaEnabled: false,
-  mfaEnabledAt: null,
-  mfaRecoveryCodesRemaining: 0,
-  avatarMediaId: null,
-  avatarUrl: null,
-  gravatarHash: '',
-  createdAt: '1970-01-01T00:00:00.000Z',
-  updatedAt: '1970-01-01T00:00:00.000Z',
-}
 
 export function ContentPage() {
   const [activeContentPanel, setActiveContentPanel] = useState<ContentPanelId | null>('content')
@@ -91,8 +61,14 @@ export function ContentPage() {
   const seoTitleId = useId()
   const seoDescriptionId = useId()
 
-  const currentUser = useCurrentAdminUser()
-  const permissionUser = currentUser ?? UNRESTRICTED_ADMIN_USER
+  // Strict accessor — ContentPage only renders inside `AuthenticatedAdmin`,
+  // which gates the entire tree on a non-null session user. A null here
+  // means the page rendered outside an `AdminSessionProvider`, which is a
+  // programming error, not a permission state — fail loud, don't fail
+  // open. (The previous code path silently treated null as an unrestricted
+  // sentinel, which masked tests that forgot to wire the provider and
+  // briefly painted full-admin UI in any session-rehydration race.)
+  const permissionUser = useAuthenticatedAdminUser()
   const canReassignAuthor = canEditAnyContent(permissionUser)
   const canCreateEntries = canCreateContent(permissionUser)
   const canManageCollections = canManageContentCollections(permissionUser)

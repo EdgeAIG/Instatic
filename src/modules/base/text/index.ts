@@ -57,12 +57,17 @@ export const TextModule: ModuleDefinition<TextProps> = {
   icon: TextStartTIcon,
   trusted: true,
   canHaveChildren: false,
+  inlineEditable: true,
 
   schema: {
     text: { type: 'textarea', label: 'Text', rows: 4, placeholder: 'Enter text...' },
+    // `tag` is a `select`, which defaults to category: 'layout' by the
+    // type-based heuristic. Override to 'content' — a copy editor changing
+    // a heading from h2 to h3 is editorial, not structural.
     tag: {
       type: 'select',
       label: 'Tag',
+      category: 'content',
       options: [
         { label: 'Paragraph', value: 'p' },
         { label: 'Heading 1', value: 'h1' },

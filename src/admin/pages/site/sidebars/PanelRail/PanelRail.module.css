@@ -9,7 +9,6 @@
     align-items: center;
     gap: 8px;
     padding: 8px 5px;
-    background: var(--editor-bg);
 }
 
 .itemGroup {

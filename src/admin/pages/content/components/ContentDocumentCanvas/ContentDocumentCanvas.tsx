@@ -3,17 +3,19 @@ import { Button } from '@ui/components/Button'
 import { Textarea } from '@ui/components/Input'
 import { cn } from '@ui/cn'
 import { FilePlusSolidIcon } from 'pixel-art-icons/icons/file-plus-solid'
-import { createParagraphBlock } from '@core/content/markdown'
-import { contentCollectionHasField } from '@core/content/fields'
-import type { ContentBlock, ContentCollection, ContentEntry } from '@core/content/schemas'
+import { createParagraphBlock } from '@core/markdown/blockModel'
+import { dataTableHasField } from '@core/data/fields'
+import { POST_TYPE_FIELD_BODY } from '@core/data/schemas'
+import type { ContentBlock } from '@core/markdown/blockModel'
+import type { DataTable, DataRow } from '@core/data/schemas'
 import { CanvasNotch, type CanvasNotchAction } from '@site/canvas/CanvasNotch'
 import canvasStyles from '../../../site/canvas/CanvasRoot.module.css'
 import { RichMarkdownEditor } from '@content/RichMarkdownEditor'
 import styles from '../../ContentPage.module.css'
 
 interface ContentDocumentCanvasProps {
-  selectedEntry: ContentEntry | null
-  selectedCollection: ContentCollection | null
+  selectedEntry: DataRow | null
+  selectedCollection: DataTable | null
   loading: boolean
   title: string
   blocks: ContentBlock[]
@@ -56,7 +58,7 @@ export function ContentDocumentCanvas({
   onCreateEntry,
 }: ContentDocumentCanvasProps) {
   const titleFieldRef = useRef<HTMLTextAreaElement | null>(null)
-  const bodyEnabled = contentCollectionHasField(selectedCollection, 'body')
+  const bodyEnabled = selectedCollection ? dataTableHasField(selectedCollection, POST_TYPE_FIELD_BODY) : false
   const editorEnabled = Boolean(selectedEntry && canEditEntry)
   const showInsertNotch = bodyEnabled && (editorEnabled || (!selectedEntry && canCreateEntry))
   const singularLabel = selectedCollection?.singularLabel.toLowerCase() ?? 'entry'

@@ -52,7 +52,7 @@ function loadTemplateSite() {
     template: {
       enabled: true,
       context: 'entry',
-      collectionId: 'posts',
+      tableSlug: 'posts',
       priority: 20,
       conditions: [],
     },
@@ -103,7 +103,7 @@ describe('SiteExplorerPanel templates', () => {
     expect(page?.template).toMatchObject({
       enabled: true,
       context: 'entry',
-      collectionId: 'posts',
+      tableSlug: 'posts',
       priority: 50,
     })
   })
@@ -111,17 +111,22 @@ describe('SiteExplorerPanel templates', () => {
   it('uses the shared Select dropdown for the template collection field', async () => {
     let collectionRequests = 0
     globalThis.fetch = async (input: RequestInfo | URL) => {
-      if (String(input) === '/admin/api/cms/content/collections') {
+      if (String(input) === '/admin/api/cms/data/tables') {
         collectionRequests += 1
         return new Response(JSON.stringify({
-          collections: [
+          tables: [
             {
               id: 'posts',
               name: 'Posts',
               slug: 'posts',
+              kind: 'postType',
               routeBase: '/posts',
               singularLabel: 'Post',
               pluralLabel: 'Posts',
+              primaryFieldId: 'title',
+              fields: [],
+              createdByUserId: null,
+              updatedByUserId: null,
               createdAt: '2026-05-01T10:00:00.000Z',
               updatedAt: '2026-05-01T10:00:00.000Z',
             },
@@ -129,9 +134,14 @@ describe('SiteExplorerPanel templates', () => {
               id: 'projects',
               name: 'Projects',
               slug: 'projects',
+              kind: 'postType',
               routeBase: '/projects',
               singularLabel: 'Project',
               pluralLabel: 'Projects',
+              primaryFieldId: 'title',
+              fields: [],
+              createdByUserId: null,
+              updatedByUserId: null,
               createdAt: '2026-05-01T10:00:00.000Z',
               updatedAt: '2026-05-01T10:00:00.000Z',
             },
@@ -155,17 +165,17 @@ describe('SiteExplorerPanel templates', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /use as template/i }))
 
     const dialog = screen.getByRole('dialog', { name: 'Template settings' })
-    const collectionControl = within(dialog).getByRole('combobox', { name: 'Collection' })
+    const collectionControl = within(dialog).getByRole('combobox', { name: 'Table' })
     expect(collectionControl.tagName).toBe('INPUT')
 
     await waitFor(() => expect(collectionRequests).toBe(1))
     fireEvent.click(collectionControl)
-    const collectionMenu = await screen.findByRole('listbox', { name: 'Collection' })
+    const collectionMenu = await screen.findByRole('listbox', { name: 'Table' })
     fireEvent.click(within(collectionMenu).getByRole('option', { name: 'Projects' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
 
     const page = useEditorStore.getState().site?.pages.find((candidate) => candidate.id === 'page-home')
-    expect(page?.template?.collectionId).toBe('projects')
+    expect(page?.template?.tableSlug).toBe('projects')
   })
 
   it('converts a template back to a page and drops bindings', () => {

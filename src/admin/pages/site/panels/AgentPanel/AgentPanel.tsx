@@ -7,7 +7,7 @@
  * Zustand conversation state across open/close cycles.
  *
  * Auth model (standalone editor):
- * - Agent calls `/api/agent` which Vite proxies to the local Bun server.
+ * - Agent calls `/admin/api/agent` which Vite proxies to the local Bun server.
  * - The Bun server runs the Claude Agent SDK with ambient Claude Code credentials.
  * - No API key, no configuration, no endpoint required (Constraint #385).
  *
@@ -53,7 +53,7 @@ type PanelVariant = 'floating' | 'docked'
  *
  * Always-mounted by EditorLayout — visibility is controlled via CSS display:none
  * (`.floatPanelClosed`) to preserve Zustand conversation state across open/close cycles.
- * Agent routes via Vite proxy `/api/agent` → local Bun server → Claude SDK.
+ * Agent routes via Vite proxy `/admin/api/agent` → local Bun server → Claude SDK.
  */
 export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { variant?: PanelVariant }) {
   const isOpen = useEditorStore((s) => s.isAgentOpen)

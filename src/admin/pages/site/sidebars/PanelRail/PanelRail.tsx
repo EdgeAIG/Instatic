@@ -155,13 +155,19 @@ export function PanelRail({ workspace = 'site', editable = true }: PanelRailProp
   )
 
   useEffect(() => {
-    if (!editable) return undefined
+    // Keyboard shortcuts for switching panels are wired up for every caller.
+    // Read-only viewers should still be able to press the shortcut to flip
+    // to Layers / Site Explorer / Media. The toggle handler in the store is
+    // a no-op when nothing is actually written, so this is safe; the gating
+    // of *content* (and the AI assistant) happens in the panels themselves.
+    // Agent shortcut is opt-in below — only registered for editors since the
+    // agent panel itself is editor-only.
 
     // All match predicates come from the keybindings registry — single source of truth.
     const kbSiteExplorer = getKeybindingForCommand('panels.toggleSiteExplorer')
     const kbMedia        = getKeybindingForCommand('panels.toggleMedia')
     const kbProperties   = getKeybindingForCommand('panels.toggleProperties')
-    const kbAgent        = getKeybindingForCommand('panels.toggleAgent')
+    const kbAgent        = editable ? getKeybindingForCommand('panels.toggleAgent') : null
 
     function isTypingTarget(target: EventTarget | null) {
       const element = target as HTMLElement | null
@@ -206,9 +212,13 @@ export function PanelRail({ workspace = 'site', editable = true }: PanelRailProp
     dependencies: dependenciesOpen,
   } satisfies Record<LeftSidebarPanelId, boolean>
 
+  // Read-only callers (Viewer / Client) see only the navigation/inspection
+  // panels — Layers, Site Explorer, Media. Style/runtime editing panels and
+  // the AI assistant only appear when the user can edit structure.
+  const READ_ONLY_RAIL_IDS = new Set<LeftSidebarPanelId>(['layers', 'site', 'media'])
   const visiblePrimaryItems = editable
     ? PRIMARY_RAIL_ITEMS
-    : PRIMARY_RAIL_ITEMS.filter((item) => item.id === 'layers')
+    : PRIMARY_RAIL_ITEMS.filter((item) => READ_ONLY_RAIL_IDS.has(item.id))
 
   const primaryItems: RailItem[] = visiblePrimaryItems.map((item) => {
     const label = workspace === 'content' && item.id === 'site' ? 'Content' : item.label
@@ -219,8 +229,8 @@ export function PanelRail({ workspace = 'site', editable = true }: PanelRailProp
     return {
       ...item,
       label,
-      open: editable ? panelOpenById[item.id] : item.id === 'layers',
-      onToggle: editable ? () => toggleLeftSidebarPanel(item.id) : () => undefined,
+      open: panelOpenById[item.id],
+      onToggle: () => toggleLeftSidebarPanel(item.id),
       shortcutLabel,
       ariaKeyshortcuts,
     }

@@ -39,7 +39,11 @@ describe('development workflow', () => {
   it('Vite proxies CMS API and uploaded media to the local Bun server', () => {
     const viteConfig = readSiteFile('vite.config.ts')
 
-    expect(viteConfig).toContain("'/admin/api/cms'")
+    // `/admin/api` covers both the CMS endpoints (`/admin/api/cms/...`) and
+    // the agent endpoints (`/admin/api/agent`, `/admin/api/agent/tool-result`).
+    // The shared `/admin/` prefix is required so the session cookie (scoped
+    // to `Path=/admin`) is sent on every request to the Bun backend.
+    expect(viteConfig).toContain("'/admin/api'")
     expect(viteConfig).toContain("'/uploads'")
     expect(viteConfig).toContain("target: 'http://localhost:3001'")
     expect(viteConfig).toContain('changeOrigin: true')

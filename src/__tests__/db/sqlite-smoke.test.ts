@@ -63,8 +63,8 @@ describe('SQLite adapter smoke test', () => {
     const { db, cleanup } = await createTestDb()
     try {
       await db.transaction(async (tx) => {
-        await tx`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'a1'}, ${'a@example.com'}, ${'a@example.com'}, ${'A'}, ${'hash1'}, ${'viewer'})`
-        await tx`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'a2'}, ${'b@example.com'}, ${'b@example.com'}, ${'B'}, ${'hash2'}, ${'viewer'})`
+        await tx`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'a1'}, ${'a@example.com'}, ${'a@example.com'}, ${'A'}, ${'hash1'}, ${'member'})`
+        await tx`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'a2'}, ${'b@example.com'}, ${'b@example.com'}, ${'B'}, ${'hash2'}, ${'member'})`
       })
 
       const { rows } = await db<{ count: number }>`select count(*) as count from users`
@@ -78,14 +78,14 @@ describe('SQLite adapter smoke test', () => {
     const { db, cleanup } = await createTestDb()
     try {
       // Pre-existing row outside the tx so we can prove only the tx writes were rolled back.
-      await db`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'pre'}, ${'pre@example.com'}, ${'pre@example.com'}, ${'Pre'}, ${'hashp'}, ${'viewer'})`
+      await db`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'pre'}, ${'pre@example.com'}, ${'pre@example.com'}, ${'Pre'}, ${'hashp'}, ${'member'})`
 
       const sentinel = new Error('rollback this tx')
       let caught: unknown = null
       try {
         await db.transaction(async (tx) => {
-          await tx`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'tx1'}, ${'tx1@example.com'}, ${'tx1@example.com'}, ${'Tx1'}, ${'hash1'}, ${'viewer'})`
-          await tx`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'tx2'}, ${'tx2@example.com'}, ${'tx2@example.com'}, ${'Tx2'}, ${'hash2'}, ${'viewer'})`
+          await tx`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'tx1'}, ${'tx1@example.com'}, ${'tx1@example.com'}, ${'Tx1'}, ${'hash1'}, ${'member'})`
+          await tx`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'tx2'}, ${'tx2@example.com'}, ${'tx2@example.com'}, ${'Tx2'}, ${'hash2'}, ${'member'})`
           throw sentinel
         })
       } catch (err) {
@@ -130,7 +130,7 @@ describe('SQLite adapter smoke test', () => {
     const { db, cleanup } = await createTestDb()
     try {
       // Set up the FK chain: user → page → page_version → asset.
-      await db`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'user1'}, ${'a@example.com'}, ${'a@example.com'}, ${'A'}, ${'hash'}, ${'viewer'})`
+      await db`insert into users (id, email, email_normalized, display_name, password_hash, role_id) values (${'user1'}, ${'a@example.com'}, ${'a@example.com'}, ${'A'}, ${'hash'}, ${'member'})`
       await db`
         insert into pages (id, title, slug, status, draft_document_json)
         values (${'p1'}, ${'Page'}, ${'page'}, ${'published'}, ${{ kind: 'page', tree: {} }})`

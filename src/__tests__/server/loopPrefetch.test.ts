@@ -7,7 +7,7 @@ import { describe, expect, it } from 'bun:test'
 import {
   collectLoopNodes,
   prefetchLoopData,
-  publishedContentEntryToLoopItem,
+  publishedDataRowToLoopItem,
   readLoopProps,
 } from '../../../server/publish/loopPrefetch'
 import type { DbResult } from '../../../server/db'
@@ -18,21 +18,25 @@ import { makePage, makeSite } from '../publisher/helpers'
 import '@core/loops/sources'
 
 describe('loopPrefetch', () => {
-  it('maps published content authorship into public loop fields', () => {
-    const item = publishedContentEntryToLoopItem({
+  it('maps published data row authorship into public loop fields', () => {
+    const item = publishedDataRowToLoopItem({
       id: 'version_1',
-      entryId: 'entry_1',
-      collectionId: 'posts',
-      collectionSlug: 'posts',
-      collectionRouteBase: '/posts',
+      rowId: 'row_1',
+      tableId: 'posts',
+      tableSlug: 'posts',
+      tableKind: 'postType',
+      tableRouteBase: '/posts',
       versionNumber: 1,
-      title: 'Published post',
+      cells: {
+        title: 'Published post',
+        slug: 'published-post',
+        body: 'Body',
+        seoTitle: '',
+        seoDescription: '',
+      },
       slug: 'published-post',
-      bodyMarkdown: 'Body',
       featuredMediaId: null,
       featuredMediaPath: null,
-      seoTitle: '',
-      seoDescription: '',
       authorUserId: 'author_1',
       authorName: 'Author Name',
       authorRoleSlug: 'editor',
@@ -118,14 +122,14 @@ describe('loopPrefetch', () => {
     expect(result.get('loop')?.items).toEqual([])
   })
 
-  it('content.entries source returns empty when collection has no rows', async () => {
+  it('data.rows source returns empty when table has no rows', async () => {
     const page = makePage({
       root: { moduleId: 'base.body', children: ['loop'] },
       loop: {
         moduleId: 'base.loop',
         props: {
-          sourceId: 'content.entries',
-          filters: { collectionId: 'posts' },
+          sourceId: 'data.rows',
+          filters: { tableId: 'posts' },
           orderBy: 'publishedAt',
           direction: 'desc',
           limit: 5,

@@ -7,7 +7,7 @@
 import { Button } from '@ui/components/Button'
 import { Settings2SolidIcon } from 'pixel-art-icons/icons/settings-2-solid'
 import { AdminCanvasLayout } from '@admin/layouts'
-import { useCurrentAdminUser } from '@admin/sessionContext'
+import { useAuthenticatedAdminUser } from '@admin/sessionContext'
 import { useNavigate } from '@admin/lib/routing'
 import { useEditorStore } from '@site/store/store'
 import { useConfirmDelete } from '@admin/shared/dialogs/ConfirmDeleteDialog'
@@ -16,8 +16,6 @@ import {
   canEditAnyContent,
   canManageContentCollections,
 } from '@admin/access'
-import { CORE_CAPABILITIES } from '@core/capabilities'
-import type { CmsCurrentUser } from '@core/persistence'
 import type { DataRow, DataRowCells, DataRowStatus } from '@core/data/schemas'
 import { useDataWorkspace } from './hooks/useDataWorkspace'
 import { DataSidebar } from './components/DataSidebar/DataSidebar'
@@ -28,45 +26,19 @@ import { useState } from 'react'
 import styles from './DataPage.module.css'
 
 // ---------------------------------------------------------------------------
-// Unrestricted admin sentinel (mirrors ContentPage)
-// ---------------------------------------------------------------------------
-
-const UNRESTRICTED_ADMIN_USER: CmsCurrentUser = {
-  id: 'admin-ui-unrestricted',
-  email: 'admin-ui-unrestricted@example.invalid',
-  displayName: 'Admin',
-  status: 'active',
-  role: {
-    id: 'admin-ui-unrestricted',
-    slug: 'admin-ui-unrestricted',
-    name: 'Admin',
-    description: '',
-    isSystem: true,
-    capabilities: [...CORE_CAPABILITIES],
-  },
-  capabilities: [...CORE_CAPABILITIES],
-  lastLoginAt: null,
-  failedLoginCount: 0,
-  lockedUntil: null,
-  passwordUpdatedAt: null,
-  mfaEnabled: false,
-  mfaEnabledAt: null,
-  mfaRecoveryCodesRemaining: 0,
-  avatarMediaId: null,
-  avatarUrl: null,
-  gravatarHash: '',
-  createdAt: '1970-01-01T00:00:00.000Z',
-  updatedAt: '1970-01-01T00:00:00.000Z',
-}
-
-// ---------------------------------------------------------------------------
 // DataPage
 // ---------------------------------------------------------------------------
 
 export function DataPage() {
   const navigate = useNavigate()
-  const currentUser = useCurrentAdminUser()
-  const permissionUser = currentUser ?? UNRESTRICTED_ADMIN_USER
+  // Strict accessor — DataPage only renders inside `AuthenticatedAdmin`,
+  // which gates the entire tree on a non-null session user. A null here
+  // means the page rendered outside an `AdminSessionProvider`, which is a
+  // programming error, not a permission state — fail loud, don't fail
+  // open. (The previous code path silently treated null as an unrestricted
+  // sentinel, which masked tests that forgot to wire the provider and
+  // briefly painted full-admin UI in any session-rehydration race.)
+  const permissionUser = useAuthenticatedAdminUser()
 
   const canEdit = canEditAnyContent(permissionUser)
   const canCreate = canCreateContent(permissionUser)

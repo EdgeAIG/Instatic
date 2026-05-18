@@ -1,29 +1,36 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  createCmsContentCollection,
-  createCmsContentEntry,
-  deleteCmsContentCollection,
-  deleteCmsContentEntry,
-  listCmsContentAuthors,
-  listCmsContentCollections,
-  listCmsContentEntries,
-  publishCmsContentEntry,
-  saveCmsContentEntryDraft,
-  updateCmsContentEntryAuthor,
-  updateCmsContentEntryCollection,
-  updateCmsContentCollection,
-  updateCmsContentEntryStatus,
+  createCmsDataRow,
+  createCmsDataTable,
+  deleteCmsDataRow,
+  deleteCmsDataTable,
+  listCmsDataAuthors,
+  listCmsDataRows,
+  listCmsDataTables,
+  publishCmsDataRow,
+  saveCmsDataRowDraft,
+  updateCmsDataRowAuthor,
+  updateCmsDataRowTable,
+  updateCmsDataTable,
+  updateCmsDataRowStatus,
 } from '@core/persistence'
 import { useEditorStore } from '@site/store/store'
 import type {
-  ContentCollection,
-  ContentEntry,
-  ContentEntryStatus,
-  ContentUserReference,
-  CreateContentCollectionInput,
-  UpdateContentCollectionInput,
-} from '@core/content/schemas'
-import { updateEntryList } from '@content/utils/contentEntryUtils'
+  DataTable,
+  DataRow,
+  DataRowStatus,
+  DataUserReference,
+  CreateDataTableInput,
+  UpdateDataTableInput,
+} from '@core/data/schemas'
+import {
+  readBodyCell,
+  readFeaturedMediaCell,
+  readSeoDescriptionCell,
+  readSeoTitleCell,
+} from '@core/data/cells'
+import { updateRowList } from '@content/utils/contentEntryUtils'
+import { useLocation } from '@admin/lib/routing'
 
 interface UseContentWorkspaceOptions {
   loadAuthors?: boolean
@@ -32,20 +39,30 @@ interface UseContentWorkspaceOptions {
 export function useContentWorkspace({
   loadAuthors: shouldLoadAuthors = true,
 }: UseContentWorkspaceOptions = {}) {
-  const [collections, setCollections] = useState<ContentCollection[]>([])
-  const [entries, setEntries] = useState<ContentEntry[]>([])
-  const [authors, setAuthors] = useState<ContentUserReference[]>([])
+  const [collections, setCollections] = useState<DataTable[]>([])
+  const [entries, setEntries] = useState<DataRow[]>([])
+  const [authors, setAuthors] = useState<DataUserReference[]>([])
   const [authorsLoading, setAuthorsLoading] = useState(true)
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null)
-  const [selectedEntry, setSelectedEntry] = useState<ContentEntry | null>(null)
+  const [selectedEntry, setSelectedEntry] = useState<DataRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [entriesLoading, setEntriesLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const location = useLocation()
+  // Capture the initial search string exactly once. useRef's initial-value
+  // argument is only consumed on the first render, so later replaceState calls
+  // don't overwrite it — and we don't re-read location.search after mount.
+  const initialSearchRef = useRef(location.search)
+  // Prevent the one-shot deep-link from firing more than once per mount.
+  const deepLinkAppliedRef = useRef(false)
+  // Set by deep-link effect A; consumed and cleared by effect B.
+  const pendingDeepLinkRef = useRef<{ rowId: string | null } | null>(null)
+
   const selectedCollection = collections.find((collection) => collection.id === selectedCollectionId) ?? null
   const contentLoading = loading || entriesLoading
 
-  const selectEntry = useCallback((entry: ContentEntry | null) => {
+  const selectEntry = useCallback((entry: DataRow | null) => {
     setSelectedEntry(entry)
     useEditorStore.getState().setPropertiesPanel({ collapsed: false })
   }, [])
@@ -61,7 +78,7 @@ export function useContentWorkspace({
       }
       setAuthorsLoading(true)
       try {
-        const nextAuthors = await listCmsContentAuthors()
+        const nextAuthors = await listCmsDataAuthors()
         if (!cancelled) setAuthors(nextAuthors)
       } catch (_err) {
         // Author reassignment is optional; keep the editor usable if this
@@ -76,9 +93,9 @@ export function useContentWorkspace({
     return () => { cancelled = true }
   }, [shouldLoadAuthors])
 
-  const updateSelectedEntry = useCallback((entry: ContentEntry) => {
+  const updateSelectedEntry = useCallback((entry: DataRow) => {
     setSelectedEntry(entry)
-    setEntries((current) => updateEntryList(current, entry))
+    setEntries((current) => updateRowList(current, entry))
   }, [])
 
   useEffect(() => {
@@ -89,7 +106,9 @@ export function useContentWorkspace({
       setEntriesLoading(true)
       setError(null)
       try {
-        const nextCollections = await listCmsContentCollections()
+        // Only show post-type tables in the Content page sidebar.
+        const allTables = await listCmsDataTables()
+        const nextCollections = allTables.filter((table) => table.kind === 'postType')
         if (cancelled) return
         const fallbackCollectionId = nextCollections[0]?.id ?? null
         setCollections(nextCollections)
@@ -117,18 +136,18 @@ export function useContentWorkspace({
       })
       return () => { cancelled = true }
     }
-    const collectionId = selectedCollectionId
+    const tableId = selectedCollectionId
     let cancelled = false
 
     async function loadEntries() {
       setEntriesLoading(true)
       setError(null)
       try {
-        const nextEntries = await listCmsContentEntries(collectionId)
+        const nextEntries = await listCmsDataRows(tableId)
         if (cancelled) return
         setEntries(nextEntries)
         setSelectedEntry((current) => {
-          if (!current || current.collectionId !== collectionId) {
+          if (!current || current.tableId !== tableId) {
             useEditorStore.getState().setPropertiesPanel({ collapsed: false })
             return nextEntries[0] ?? null
           }
@@ -145,18 +164,66 @@ export function useContentWorkspace({
     return () => { cancelled = true }
   }, [selectedCollectionId])
 
-  const selectCollection = useCallback((collectionId: string) => {
-    if (collectionId === selectedCollectionId) return
+  // Deep-link effect A: once collections finish loading, resolve ?table= in the
+  // original URL and override the default collection selection if a slug match
+  // is found. Runs at most once per mount (guarded by deepLinkAppliedRef).
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return
+    if (loading) return
+    deepLinkAppliedRef.current = true
+
+    const params = new URLSearchParams(initialSearchRef.current)
+    const tableSlug = params.get('table')
+    if (!tableSlug) return
+
+    const targetCollection = collections.find((c) => c.slug === tableSlug)
+    if (!targetCollection) {
+      console.warn('[content] unknown ?table= slug:', tableSlug)
+      return
+    }
+
+    // Store the row id so effect B can resolve it once the target collection's
+    // entries have loaded. null means "no specific row — keep default".
+    pendingDeepLinkRef.current = { rowId: params.get('row') }
+    setSelectedCollectionId(targetCollection.id)
     setEntriesLoading(true)
-    setSelectedCollectionId(collectionId)
+  }, [loading, collections])
+
+  // Deep-link effect B: once entries finish loading for the deep-linked
+  // collection, select the requested row (if any) and strip the URL params so
+  // the deep-link is one-shot (navigating away and back won't re-apply it).
+  useEffect(() => {
+    const pending = pendingDeepLinkRef.current
+    if (!pending || entriesLoading) return
+
+    pendingDeepLinkRef.current = null
+
+    if (pending.rowId !== null) {
+      const target = entries.find((e) => e.id === pending.rowId)
+      if (target) {
+        selectEntry(target)
+      } else {
+        console.warn('[content] unknown ?row= id:', pending.rowId)
+      }
+    }
+
+    history.replaceState({}, '', '/admin/content')
+  }, [entries, entriesLoading, selectEntry])
+
+  const selectCollection = useCallback((tableId: string) => {
+    if (tableId === selectedCollectionId) return
+    setEntriesLoading(true)
+    setSelectedCollectionId(tableId)
   }, [selectedCollectionId])
 
   const createUntitledEntry = useCallback(async () => {
     if (!selectedCollection) return null
     const nextSlug = entries.length === 0 ? 'untitled' : `untitled-${entries.length + 1}`
-    const entry = await createCmsContentEntry(selectedCollection.id, {
-      title: 'Untitled',
-      slug: nextSlug,
+    const row = await createCmsDataRow(selectedCollection.id, {
+      cells: {
+        title: 'Untitled',
+        slug: nextSlug,
+      },
     })
     // Keep "Untitled" stored on the server + visible in the sidebar list, but
     // hand the editor a draft view with an empty title so the title field
@@ -164,19 +231,14 @@ export function useContentWorkspace({
     // start typing their real title immediately; on save the draft is
     // persisted with whatever they entered (falling back to "Untitled" on
     // the server side if they leave it blank).
-    const draftEntry: ContentEntry = { ...entry, title: '' }
-    setEntries((current) => updateEntryList(current, entry))
-    selectEntry(draftEntry)
-    return draftEntry
+    const draftRow: DataRow = { ...row, cells: { ...row.cells, title: '' } }
+    setEntries((current) => updateRowList(current, row))
+    selectEntry(draftRow)
+    return draftRow
   }, [entries.length, selectEntry, selectedCollection])
 
-  const duplicateEntry = useCallback(async (entry: ContentEntry) => {
+  const duplicateEntry = useCallback(async (entry: DataRow) => {
     setError(null)
-    // Pick a unique slug within the same collection. We re-list against the
-    // current `entries` state which is the freshest local snapshot — the
-    // server is authoritative for true uniqueness, but contention on slug
-    // generation here is virtually nil for the editor flow and the server
-    // returns a typed slug_conflict error if a parallel session collides.
     const existingSlugs = new Set(entries.map((candidate) => candidate.slug))
     const baseSlug = `${entry.slug}-copy`
     let slug = baseSlug
@@ -185,23 +247,24 @@ export function useContentWorkspace({
       slug = `${baseSlug}-${suffix}`
       suffix += 1
     }
-    const duplicated = await createCmsContentEntry(entry.collectionId, {
-      title: `${entry.title} (copy)`,
-      slug,
-      bodyMarkdown: entry.bodyMarkdown,
-      featuredMediaId: entry.featuredMediaId,
-      seoTitle: entry.seoTitle,
-      seoDescription: entry.seoDescription,
+    const titleCell = typeof entry.cells.title === 'string' ? entry.cells.title : ''
+    const duplicated = await createCmsDataRow(entry.tableId, {
+      cells: {
+        ...entry.cells,
+        title: `${titleCell} (copy)`,
+        slug,
+      },
     })
-    setEntries((current) => updateEntryList(current, duplicated))
+    setEntries((current) => updateRowList(current, duplicated))
     selectEntry(duplicated)
     return duplicated
   }, [entries, selectEntry])
 
-  const createCollection = useCallback(async (input: CreateContentCollectionInput) => {
+  const createCollection = useCallback(async (input: CreateDataTableInput) => {
     setError(null)
     setEntriesLoading(true)
-    const collection = await createCmsContentCollection(input)
+    // Always create post-type tables from the Content page.
+    const collection = await createCmsDataTable({ ...input, kind: 'postType' })
     setCollections((current) => [...current, collection])
     setEntries([])
     setSelectedCollectionId(collection.id)
@@ -210,28 +273,28 @@ export function useContentWorkspace({
   }, [selectEntry])
 
   const updateCollection = useCallback(async (
-    collectionId: string,
-    input: UpdateContentCollectionInput,
+    tableId: string,
+    input: UpdateDataTableInput,
   ) => {
     setError(null)
-    const collection = await updateCmsContentCollection(collectionId, input)
+    const collection = await updateCmsDataTable(tableId, input)
     setCollections((current) => current.map((candidate) =>
       candidate.id === collection.id ? collection : candidate
     ))
     return collection
   }, [])
 
-  const deleteCollection = useCallback(async (collectionId: string) => {
+  const deleteCollection = useCallback(async (tableId: string) => {
     setError(null)
-    await deleteCmsContentCollection(collectionId)
+    await deleteCmsDataTable(tableId)
 
-    const nextCollections = collections.filter((collection) => collection.id !== collectionId)
-    const nextSelectedCollectionId = selectedCollectionId === collectionId
+    const nextCollections = collections.filter((collection) => collection.id !== tableId)
+    const nextSelectedCollectionId = selectedCollectionId === tableId
       ? nextCollections[0]?.id ?? null
       : selectedCollectionId
     setCollections(nextCollections)
 
-    if (selectedCollectionId === collectionId) {
+    if (selectedCollectionId === tableId) {
       setSelectedCollectionId(nextSelectedCollectionId)
       setEntries([])
       setEntriesLoading(Boolean(nextSelectedCollectionId))
@@ -240,26 +303,29 @@ export function useContentWorkspace({
   }, [collections, selectEntry, selectedCollectionId])
 
   const renameEntry = useCallback(async (
-    entry: ContentEntry,
-    input: Pick<ContentEntry, 'title' | 'slug'>,
+    row: DataRow,
+    input: { title: string; slug: string },
   ) => {
     setError(null)
-    const updatedEntry = await saveCmsContentEntryDraft(entry.id, {
-      title: input.title,
-      slug: input.slug,
-      bodyMarkdown: entry.bodyMarkdown,
-      featuredMediaId: entry.featuredMediaId,
-      seoTitle: entry.seoTitle,
-      seoDescription: entry.seoDescription,
+    const updatedRow = await saveCmsDataRowDraft(row.id, {
+      cells: {
+        ...row.cells,
+        title: input.title,
+        slug: input.slug,
+        body: readBodyCell(row.cells),
+        featuredMedia: readFeaturedMediaCell(row.cells),
+        seoTitle: readSeoTitleCell(row.cells),
+        seoDescription: readSeoDescriptionCell(row.cells),
+      },
     })
-    setEntries((current) => updateEntryList(current, updatedEntry))
-    if (selectedEntry?.id === entry.id) selectEntry(updatedEntry)
-    return updatedEntry
+    setEntries((current) => updateRowList(current, updatedRow))
+    if (selectedEntry?.id === row.id) selectEntry(updatedRow)
+    return updatedRow
   }, [selectEntry, selectedEntry?.id])
 
-  const deleteEntry = useCallback(async (entry: ContentEntry) => {
+  const deleteEntry = useCallback(async (entry: DataRow) => {
     setError(null)
-    await deleteCmsContentEntry(entry.id)
+    await deleteCmsDataRow(entry.id)
 
     const nextEntries = entries.filter((candidate) => candidate.id !== entry.id)
     const nextSelectedEntry = selectedEntry?.id === entry.id
@@ -273,63 +339,63 @@ export function useContentWorkspace({
     return nextSelectedEntry
   }, [entries, selectEntry, selectedEntry])
 
-  const publishEntry = useCallback(async (entry: ContentEntry) => {
+  const publishEntry = useCallback(async (entry: DataRow) => {
     setError(null)
-    const updatedEntry = await publishCmsContentEntry(entry.id)
-    setEntries((current) => updateEntryList(current, updatedEntry))
-    if (selectedEntry?.id === entry.id) selectEntry(updatedEntry)
-    return updatedEntry
+    const updatedRow = await publishCmsDataRow(entry.id)
+    setEntries((current) => updateRowList(current, updatedRow))
+    if (selectedEntry?.id === entry.id) selectEntry(updatedRow)
+    return updatedRow
   }, [selectEntry, selectedEntry?.id])
 
   const updateEntryStatus = useCallback(async (
-    entry: ContentEntry,
-    status: Exclude<ContentEntryStatus, 'published'>,
+    entry: DataRow,
+    status: Exclude<DataRowStatus, 'published'>,
   ) => {
     setError(null)
-    const updatedEntry = await updateCmsContentEntryStatus(entry.id, status)
-    setEntries((current) => updateEntryList(current, updatedEntry))
-    if (selectedEntry?.id === entry.id) selectEntry(updatedEntry)
-    return updatedEntry
+    const updatedRow = await updateCmsDataRowStatus(entry.id, status)
+    setEntries((current) => updateRowList(current, updatedRow))
+    if (selectedEntry?.id === entry.id) selectEntry(updatedRow)
+    return updatedRow
   }, [selectEntry, selectedEntry?.id])
 
   const updateEntryAuthor = useCallback(async (
-    entry: ContentEntry,
+    entry: DataRow,
     authorUserId: string,
   ) => {
     if (entry.authorUserId === authorUserId) return entry
     setError(null)
-    const updatedEntry = await updateCmsContentEntryAuthor(entry.id, authorUserId)
-    setEntries((current) => updateEntryList(current, updatedEntry))
-    if (selectedEntry?.id === entry.id) selectEntry(updatedEntry)
-    return updatedEntry
+    const updatedRow = await updateCmsDataRowAuthor(entry.id, authorUserId)
+    setEntries((current) => updateRowList(current, updatedRow))
+    if (selectedEntry?.id === entry.id) selectEntry(updatedRow)
+    return updatedRow
   }, [selectEntry, selectedEntry?.id])
 
   const moveEntryToCollection = useCallback(async (
-    entry: ContentEntry,
-    collectionId: string,
+    entry: DataRow,
+    tableId: string,
   ) => {
-    if (entry.collectionId === collectionId) return entry
+    if (entry.tableId === tableId) return entry
     setError(null)
-    const updatedEntry = await updateCmsContentEntryCollection(entry.id, collectionId)
+    const updatedRow = await updateCmsDataRowTable(entry.id, tableId)
     // Active collection view: the moved entry no longer belongs here.
-    if (entry.collectionId === selectedCollectionId) {
+    if (entry.tableId === selectedCollectionId) {
       setEntries((current) => current.filter((candidate) => candidate.id !== entry.id))
     }
     // Active collection view: it may already be the destination if the user
     // is viewing it. In that case the entry should appear in the list.
-    if (collectionId === selectedCollectionId) {
-      setEntries((current) => updateEntryList(current, updatedEntry))
+    if (tableId === selectedCollectionId) {
+      setEntries((current) => updateRowList(current, updatedRow))
     }
-    if (selectedEntry?.id === entry.id) selectEntry(updatedEntry)
-    return updatedEntry
+    if (selectedEntry?.id === entry.id) selectEntry(updatedRow)
+    return updatedRow
   }, [selectEntry, selectedCollectionId, selectedEntry?.id])
 
-  const moveSelectedEntryToCollection = useCallback(async (collectionId: string) => {
-    if (!selectedEntry || selectedEntry.collectionId === collectionId) return selectedEntry
+  const moveSelectedEntryToCollection = useCallback(async (tableId: string) => {
+    if (!selectedEntry || selectedEntry.tableId === tableId) return selectedEntry
     setError(null)
     setEntriesLoading(true)
-    const entry = await updateCmsContentEntryCollection(selectedEntry.id, collectionId)
-    setSelectedCollectionId(collectionId)
+    const entry = await updateCmsDataRowTable(selectedEntry.id, tableId)
+    setSelectedCollectionId(tableId)
     setEntries([entry])
     selectEntry(entry)
     return entry

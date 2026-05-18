@@ -41,7 +41,7 @@ import { handleRuntimeRoutes } from './runtime'
 import { handleMediaRoutes } from './media'
 import { handleMediaFolderRoutes } from './mediaFolders'
 import { handlePluginsRoutes } from './plugins'
-import { handleContentRoutes } from './content'
+import { handleDataRoutes } from './data'
 import { handleFontsRoutes } from './fonts'
 import { handlePublishRoutes } from './publish'
 
@@ -80,7 +80,7 @@ export async function handleCmsRequest(
     ?? (await handleMediaFolderRoutes(req, db))
     ?? (await handleMediaRoutes(req, db, options))
     ?? (await handlePluginsRoutes(req, db, options))
-    ?? (await handleContentRoutes(req, db))
+    ?? (await handleDataRoutes(req, db))
     ?? (await handleFontsRoutes(req, db, options))
     ?? (await handlePublishRoutes(req, db))
 

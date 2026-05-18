@@ -45,13 +45,13 @@ describe('CMS repositories', () => {
         email: 'Owner@Example.com',
         displayName: 'Owner',
         passwordHash: 'hash',
-        roleId: 'viewer',
+        roleId: 'member',
       })
 
       expect(await findUserByEmail(db, 'owner@example.com')).toMatchObject({
         id: 'user_1',
         email: 'Owner@Example.com',
-        role: { slug: 'viewer' },
+        role: { slug: 'member' },
       })
     } finally {
       await cleanup()
@@ -66,7 +66,7 @@ describe('CMS repositories', () => {
         email: 'owner@example.com',
         displayName: 'Owner',
         passwordHash: 'hash',
-        roleId: 'viewer',
+        roleId: 'member',
       })
       await createSession(db, {
         idHash: 'abc123',

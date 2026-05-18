@@ -104,6 +104,65 @@ function sanitizeNodeProps(node: unknown): void {
 }
 
 /**
+ * Remove `base.visual-component-ref` nodes whose `componentId` does not resolve
+ * to a known VC from the flat node map. Strips the entire subtree (ref +
+ * slot-instances + user content) and splices the ref out of its parent's
+ * `children[]`. Self-heals sites corrupted by the old (pre-fix) delete behaviour
+ * that left dangling refs behind.
+ *
+ * Exported for unit tests and called from `runDomainPostChecks` after the VC
+ * list has been finalised (post-cycle-filter).
+ */
+export function stripDanglingVCRefs(site: SiteDocument): void {
+  const knownVcIds = new Set(site.visualComponents.map((vc) => vc.id))
+
+  const strip = (nodes: Record<string, BaseNode>): void => {
+    // Collect all top-level ref IDs pointing at an unknown VC
+    const danglingRefIds: string[] = []
+    for (const [nodeId, node] of Object.entries(nodes)) {
+      if (node.moduleId !== 'base.visual-component-ref') continue
+      const componentId = node.props.componentId
+      if (typeof componentId !== 'string' || !componentId) continue
+      if (!knownVcIds.has(componentId)) danglingRefIds.push(nodeId)
+    }
+
+    for (const refNodeId of danglingRefIds) {
+      // DFS-collect entire subtree
+      const subtreeIds: string[] = []
+      const stack: string[] = [refNodeId]
+      while (stack.length > 0) {
+        const id = stack.pop()!
+        const node = nodes[id]
+        if (!node) continue
+        subtreeIds.push(id)
+        stack.push(...node.children)
+      }
+
+      // Remove ref from its parent's children[]
+      for (const node of Object.values(nodes)) {
+        const idx = node.children.indexOf(refNodeId)
+        if (idx !== -1) {
+          node.children.splice(idx, 1)
+          break
+        }
+      }
+
+      // Delete subtree nodes from the flat map
+      for (const id of subtreeIds) {
+        delete nodes[id]
+      }
+    }
+  }
+
+  for (const page of site.pages) {
+    strip(page.nodes as Record<string, BaseNode>)
+  }
+  for (const vc of site.visualComponents) {
+    strip(vc.tree.nodes as Record<string, BaseNode>)
+  }
+}
+
+/**
  * Drop VisualComponents that form dependency cycles.
  * Uses DFS cycle detection on the componentRef graph.
  */
@@ -200,6 +259,11 @@ function runDomainPostChecks(site: SiteDocument): SiteDocument {
       }
     }
   }
+
+  // 5c: Strip dangling VC refs — remove base.visual-component-ref nodes whose
+  // componentId doesn't resolve to a known VC (can arise from old delete bugs).
+  // Runs after slot sync (5b) so we don't strip refs added by sync.
+  stripDanglingVCRefs(site)
 
   // 6: Richtext sanitization — page nodes (flat map) and VC node trees (flat map)
   for (const page of site.pages) {

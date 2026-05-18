@@ -28,7 +28,7 @@
  * live in `shared.ts`.
  */
 import type { DbClient } from '../../../db/client'
-import { requireCapability } from '../../../auth/authz'
+import { requireCapability, requireStepUp } from '../../../auth/authz'
 import {
   handleServerPluginRuntimeRequest,
   setPluginWorkerDbClient,
@@ -61,6 +61,40 @@ const PLUGIN_PACK_INSTALL_PATTERN = /^\/admin\/api\/cms\/plugins\/([^/]+)\/pack\
 const PLUGIN_SETTINGS_PATTERN = /^\/admin\/api\/cms\/plugins\/([^/]+)\/settings$/
 const PLUGIN_RESTART_PATTERN = /^\/admin\/api\/cms\/plugins\/([^/]+)\/restart$/
 const PLUGIN_EVENTS_PATH = '/admin/api/cms/plugins/events'
+
+// ---------------------------------------------------------------------------
+// Step-up policy
+// ---------------------------------------------------------------------------
+
+/**
+ * Plugin admin actions that run third-party code, modify the worker
+ * registry, or rewrite on-disk plugin assets — i.e. anything with
+ * host-RCE-class impact if a cookie were stolen or an XSS dropped a
+ * forged request through the admin shell.
+ *
+ * Matches the step-up pattern used for `users.manage` (delete / suspend /
+ * password change): a fresh password re-entry within the last 15 min is
+ * required on top of the `plugins.manage` capability. Read-only routes
+ * (listing, masked settings, inspect-package, events SSE) and plugin
+ * record CRUD (which is bounded by a separately-installed plugin's own
+ * schema) are deliberately not in this list.
+ */
+function requiresStepUp(method: string, pathname: string): boolean {
+  // Fresh install / upgrade — uploads + executes arbitrary plugin code.
+  if (method === 'POST' && pathname === '/admin/api/cms/plugins') return true
+  if (method === 'POST' && pathname === '/admin/api/cms/plugins/package') return true
+
+  // Per-plugin mutations — every branch below re-runs a lifecycle hook
+  // (activate / deactivate / uninstall / migrate) or rewrites runtime
+  // state in a way the plugin's own server code observes.
+  if (method === 'PATCH' && PLUGIN_ITEM_PATTERN.test(pathname)) return true
+  if (method === 'DELETE' && PLUGIN_ITEM_PATTERN.test(pathname)) return true
+  if (method === 'POST' && PLUGIN_RESTART_PATTERN.test(pathname)) return true
+  if (method === 'POST' && PLUGIN_PACK_INSTALL_PATTERN.test(pathname)) return true
+  if (method === 'PUT' && PLUGIN_SETTINGS_PATTERN.test(pathname)) return true
+
+  return false
+}
 
 // ---------------------------------------------------------------------------
 // Dispatcher
@@ -96,6 +130,17 @@ export async function handlePluginsRoutes(
   if (!isPluginAdminPath(pathname)) return null
   const user = await requireCapability(req, db, 'plugins.manage')
   if (user instanceof Response) return user
+
+  // Sensitive plugin actions (install / upgrade / enable / disable /
+  // uninstall / restart / pack install / settings update) additionally
+  // require a fresh step-up window. The capability check already gates
+  // who is allowed at all; step-up further requires a recent password
+  // re-entry so a stolen session cookie alone cannot land plugin code
+  // on the host.
+  if (requiresStepUp(req.method, pathname)) {
+    const stepUp = await requireStepUp(req, db)
+    if (stepUp instanceof Response) return stepUp
+  }
 
   if (pathname === '/admin/api/cms/plugins') {
     return handlePluginsCollection(req, db, user)

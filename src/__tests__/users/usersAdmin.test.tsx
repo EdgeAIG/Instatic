@@ -19,7 +19,7 @@ const roles = [
     name: 'Owner',
     description: 'Permanent first-site owner with full system access.',
     isSystem: true,
-    capabilities: ['site.read', 'site.edit', 'users.manage', 'roles.manage', 'audit.read'],
+    capabilities: ['site.read', 'site.structure.edit','site.content.edit','site.style.edit', 'users.manage', 'roles.manage', 'audit.read'],
     createdAt: now,
     updatedAt: now,
   },
@@ -29,17 +29,17 @@ const roles = [
     name: 'Admin',
     description: 'Full admin access.',
     isSystem: true,
-    capabilities: ['site.read', 'site.edit', 'plugins.manage', 'users.manage', 'roles.manage', 'audit.read'],
+    capabilities: ['site.read', 'site.structure.edit','site.content.edit','site.style.edit', 'plugins.manage', 'users.manage', 'roles.manage', 'audit.read'],
     createdAt: now,
     updatedAt: now,
   },
   {
-    id: 'viewer',
-    slug: 'viewer',
-    name: 'Viewer',
-    description: 'Read-only admin access.',
+    id: 'member',
+    slug: 'member',
+    name: 'Member',
+    description: 'Public-facing member account — no admin access by default.',
     isSystem: true,
-    capabilities: ['site.read'],
+    capabilities: [],
     createdAt: now,
     updatedAt: now,
   },
@@ -87,10 +87,10 @@ const auditEvents = [
     action: 'user.create',
     targetType: 'user',
     targetId: 'user_1',
-    metadata: { roleId: 'viewer' },
+    metadata: { roleId: 'member' },
     actorLabel: 'hello@davidbabinec.com',
     targetLabel: 'Tester One',
-    metadataLabels: { roleId: 'Viewer' },
+    metadataLabels: { roleId: 'Member' },
     ipAddress: '127.0.0.1',
     userAgent: 'Test Browser',
     createdAt: now,
@@ -338,7 +338,7 @@ describe('UsersPage', () => {
     expect(screen.queryByRole('button', { name: /create role/i })).toBeNull()
     expect(screen.getByText('Tester One was created')).toBeDefined()
     expect(screen.getAllByText('by hello@davidbabinec.com').length).toBeGreaterThan(0)
-    expect(screen.getByText('Role: Viewer')).toBeDefined()
+    expect(screen.getByText('Role: Member')).toBeDefined()
     expect(screen.getByText('Deleted Role was deleted')).toBeDefined()
     expect(screen.queryByText('user_1 was created')).toBeNull()
     expect(screen.queryByText('by owner_1')).toBeNull()
@@ -370,7 +370,7 @@ describe('UsersPage', () => {
 
     const userRow = screen.getByLabelText('User test@test.com')
     expect(within(userRow).getByText('Active').getAttribute('data-accent')).toBeTruthy()
-    expect(within(userRow).getByText('Viewer').getAttribute('data-accent')).toBeTruthy()
+    expect(within(userRow).getByText('Member').getAttribute('data-accent')).toBeTruthy()
     expect(within(userRow).queryByRole('button', { name: /edit tester one/i })).toBeNull()
     expect(within(userRow).queryByRole('button', { name: /reset password for tester one/i })).toBeNull()
     expect(within(userRow).queryByRole('button', { name: /suspend tester one/i })).toBeNull()
@@ -417,7 +417,7 @@ describe('UsersPage', () => {
     expect(within(adminRole).getByText('Admin')).toBeDefined()
     expect(within(adminRole).queryByText('admin')).toBeNull()
     expect(within(adminRole).getByText('Full admin access.')).toBeDefined()
-    expect(within(adminRole).getByText('6 capabilities')).toBeDefined()
+    expect(within(adminRole).getByText('8 capabilities')).toBeDefined()
     expect(within(adminRole).queryByText('Plugins')).toBeNull()
     expect(within(adminRole).queryByText('Users & Roles')).toBeNull()
     expect(within(adminRole).queryByText('plugins.manage')).toBeNull()
@@ -429,7 +429,9 @@ describe('UsersPage', () => {
     fireEvent.click(within(adminRole).getByRole('button', { name: /actions for admin/i }))
     const adminMenu = screen.getByRole('menu', { name: 'Role actions for Admin' })
     expect(within(adminMenu).getByRole('menuitem', { name: 'View' })).toBeDefined()
-    expect(within(adminMenu).queryByRole('menuitem', { name: 'Edit' })).toBeNull()
+    // Non-owner system roles are now editable (by anyone with roles.manage)
+    // — only Owner is locked. Delete remains hidden for every system role.
+    expect(within(adminMenu).getByRole('menuitem', { name: 'Edit' })).toBeDefined()
     expect(within(adminMenu).queryByRole('menuitem', { name: 'Delete' })).toBeNull()
 
     const customRole = screen.getByLabelText('Role Ops')
@@ -471,7 +473,7 @@ describe('UsersPage', () => {
     expect(auditTable.getAttribute('data-density')).toBe('compact')
     expect(screen.getByText('Tester One was created')).toBeDefined()
     expect(screen.getAllByText('by hello@davidbabinec.com').length).toBeGreaterThan(0)
-    expect(screen.getByText('Role: Viewer').getAttribute('data-accent')).toBeTruthy()
+    expect(screen.getByText('Role: Member').getAttribute('data-accent')).toBeTruthy()
     expect(screen.getByText('IP: 127.0.0.1').getAttribute('data-accent')).toBeTruthy()
     expect(screen.getByText('Failed login for missing@example.com')).toBeDefined()
     expect(screen.queryByText('IP: unknown')).toBeNull()

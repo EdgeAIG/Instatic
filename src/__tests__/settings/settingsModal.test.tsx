@@ -457,8 +457,8 @@ describe('SettingsModal — PreferencesSection toggles', () => {
     // Boolean preferences: autoSave, hoverPreview, confirmBeforeDelete,
     // layersShowIcon, layersShowTag, layersShowClasses,
     // layersAutoExpandSelected, layersSmoothScroll, dimInactiveBreakpoints,
-    // propertiesSmoothScroll.
-    expect(switches.length).toBe(10)
+    // propertiesSmoothScroll, spotlightTelemetryEnabled (Phase 6).
+    expect(switches.length).toBe(11)
   })
 
   it('Auto-save toggle has aria-checked="true" by default', () => {

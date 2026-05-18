@@ -43,7 +43,7 @@ function makeFakeDb() {
           role_name: 'Owner',
           role_description: '',
           role_is_system: true,
-          role_capabilities_json: ['site.read', 'site.edit', 'pages.edit'],
+          role_capabilities_json: ['site.read', 'site.structure.edit','site.content.edit','site.style.edit', 'pages.edit'],
         } as Row] : [],
         rowCount: admin ? 1 : 0,
       }

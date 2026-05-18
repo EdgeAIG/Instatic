@@ -32,7 +32,7 @@ function pageToLoopItem(page: Page): LoopItem {
       slug: page.slug,
       permalink,
       isTemplate: page.template?.enabled === true,
-      templateCollectionId: page.template?.enabled ? page.template.collectionId : null,
+      templateTableSlug: page.template?.enabled ? page.template.tableSlug : null,
     },
   }
 }

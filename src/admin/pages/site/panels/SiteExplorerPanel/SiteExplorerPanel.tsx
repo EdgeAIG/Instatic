@@ -26,6 +26,7 @@ import {
 } from '@admin/shared/dialogs/SiteCreateDialog'
 import { ExplorerItemContextMenu, ExplorerRenameDialog, type ExplorerRenamePayload } from '@site/explorer-actions'
 import { TemplateSettingsDialog, type TemplateSettingsPayload } from '@admin/shared/dialogs/TemplateSettingsDialog'
+import { useVCDeletionConfirm } from '@admin/shared/dialogs/VCDeletionConfirmDialog'
 import styles from './SiteExplorerPanel.module.css'
 
 interface SiteExplorerPanelProps {
@@ -106,6 +107,7 @@ export function SiteExplorerPanel({
   const renameFile = useEditorStore((s) => s.renameFile)
   const deleteFile = useEditorStore((s) => s.deleteFile)
   const openInEditor = useEditorStore((s) => s.openInEditor)
+  const confirmVCDeletion = useVCDeletionConfirm()
   const [createKind, setCreateKind] = useState<SiteCreateKind | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renameTarget, setRenameTarget] = useState<SiteExplorerContextTarget | null>(null)
@@ -183,10 +185,15 @@ export function SiteExplorerPanel({
     if (target.kind === 'page') {
       deletePage(target.id)
     } else if (target.kind === 'component') {
-      deleteVisualComponent(target.id)
-      if (activeDocument?.kind === 'visualComponent' && activeDocument.vcId === target.id) {
-        setActiveDocument(null)
-      }
+      confirmVCDeletion({
+        vcId: target.id,
+        commit: () => {
+          deleteVisualComponent(target.id)
+          if (activeDocument?.kind === 'visualComponent' && activeDocument.vcId === target.id) {
+            setActiveDocument(null)
+          }
+        },
+      })
     } else {
       deleteFile(target.id)
     }
@@ -318,7 +325,7 @@ export function SiteExplorerPanel({
                     key={page.id}
                     icon={FileTextSolidIcon}
                     label={page.title}
-                    meta={page.template?.collectionId ?? ''}
+                    meta={page.template?.tableSlug ?? ''}
                     active={page.id === activePageId && activeDocument?.kind !== 'visualComponent'}
                     ariaLabel={`Open template ${page.title}`}
                     onClick={() => openPageInCanvas(page.id)}

@@ -23,6 +23,7 @@ import type { BaseNode } from '@core/page-tree/baseNode'
 import { validateComponentName, validateParamName } from '@core/visualComponents/nameValidation'
 import { wouldCreateCycle } from '@core/visualComponents/recursionGuard'
 import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
+import { buildSiteHelpers } from './site/helpers'
 
 // ---------------------------------------------------------------------------
 // Custom error types (exported so UI + tests can catch by class)
@@ -99,6 +100,57 @@ function collectSubtreeNodeIds(
     stack.push(...node.children)
   }
   return ids
+}
+
+/**
+ * Remove all `base.visual-component-ref` nodes referencing `vcId` from the
+ * given flat-map node tree, along with their entire subtrees (slot-instances,
+ * user content, etc.). Operates inside an Immer producer — mutates in place.
+ *
+ * Used by `deleteVisualComponent` to cascade ref removal across every page and
+ * every remaining VC tree in one atomic `mutateSite` call.
+ */
+function cascadeRemoveVCRefs(
+  nodes: Record<string, BaseNode>,
+  vcId: string,
+): void {
+  // Collect all top-level ref IDs that point at vcId
+  const refNodeIds: string[] = []
+  for (const [nodeId, node] of Object.entries(nodes)) {
+    if (
+      node.moduleId === 'base.visual-component-ref' &&
+      node.props.componentId === vcId
+    ) {
+      refNodeIds.push(nodeId)
+    }
+  }
+
+  for (const refNodeId of refNodeIds) {
+    // DFS-collect the entire subtree rooted at the ref node (ref + slot-instances + user content)
+    const subtreeIds: string[] = []
+    const stack: string[] = [refNodeId]
+    while (stack.length > 0) {
+      const id = stack.pop()!
+      const node = nodes[id]
+      if (!node) continue
+      subtreeIds.push(id)
+      stack.push(...node.children)
+    }
+
+    // Splice refNodeId out of its parent's children[] (exactly one parent)
+    for (const node of Object.values(nodes)) {
+      const idx = node.children.indexOf(refNodeId)
+      if (idx !== -1) {
+        node.children.splice(idx, 1)
+        break
+      }
+    }
+
+    // Delete the ref + entire subtree from the flat node map
+    for (const id of subtreeIds) {
+      delete nodes[id]
+    }
+  }
 }
 
 /**
@@ -350,7 +402,12 @@ declare module '@site/store/types' {
   interface EditorStore extends VisualComponentsSlice {}
 }
 
-export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponentsSlice> = (set, get) => ({
+export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponentsSlice> = (set, get) => {
+  // Build the closure-shared mutation helpers. `mutateSite` automatically calls
+  // `pushHistory()` before running the producer, making every action undoable.
+  const { mutateSite } = buildSiteHelpers(set, get)
+
+  return {
 
   createVisualComponent(name) {
     const { site } = get()
@@ -419,14 +476,25 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
   },
 
   deleteVisualComponent(id) {
-    set((state) => {
-        if (!state.site) return
-        if (!state.site.visualComponents) return
-        const idx = state.site.visualComponents.findIndex((v) => v.id === id)
-        if (idx === -1) return
-        state.site.visualComponents.splice(idx, 1)
-        state.site.updatedAt = Date.now()
-      })
+    mutateSite((site) => {
+      const idx = (site.visualComponents ?? []).findIndex((v) => v.id === id)
+      if (idx === -1) return
+
+      // Remove the VC from the registry first so the cascade loops below
+      // don't see it as a valid target (the remaining VCs are all "other" VCs).
+      site.visualComponents.splice(idx, 1)
+
+      // Cascade: remove every base.visual-component-ref pointing at `id` from
+      // all page trees, along with their full subtrees (slot-instances + content).
+      for (const page of site.pages) {
+        cascadeRemoveVCRefs(page.nodes as Record<string, BaseNode>, id)
+      }
+
+      // Cascade: same sweep over every remaining VC's tree.
+      for (const vc of site.visualComponents) {
+        cascadeRemoveVCRefs(vc.tree.nodes as Record<string, BaseNode>, id)
+      }
+    })
   },
 
   addParam(vcId, name, type, defaultValue = '') {
@@ -877,4 +945,5 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
 
     return newVcId
   },
-})
+  }
+}

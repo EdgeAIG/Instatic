@@ -84,6 +84,16 @@ export interface CommandRunContext extends CommandContext {
   closeSpotlight: () => void
   pushScope: (scopeId: string, args?: Record<string, string>) => void
   popScope: () => void
+  /**
+   * Wrap a sensitive action with the step-up password re-entry flow.
+   * Mirrors `useStepUp().runStepUp` — if the server rejects with
+   * `step_up_required`, the StepUpProvider's dialog opens, and on a
+   * successful re-auth the action is retried. On cancel it rejects with
+   * `Error('step_up_cancelled')`. Spotlight commands that hit step-up-
+   * gated endpoints (publish, plugin install, user delete, …) MUST wrap
+   * their server call in this so the palette's UX matches the toolbar's.
+   */
+  runStepUp: <T>(action: () => Promise<T>) => Promise<T>
 }
 
 export interface Command {

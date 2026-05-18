@@ -41,15 +41,17 @@ export const sqliteMigrations: Migration[] = [
         updated_at text not null default current_timestamp
       );
 
+      -- Built-in roles seed. The Owner row is also force-resynced on every
+      -- server boot (see syncSystemRoles in server/repositories/roles.ts),
+      -- so adding new capabilities to code automatically propagates to the
+      -- Owner without a migration. Other built-ins are inserted on first
+      -- boot only - subsequent edits via the admin UI are preserved.
       insert into roles (id, slug, name, description, is_system, capabilities_json)
       values
         ('owner', 'owner', 'Owner', 'Permanent installation owner with full system access.', 1, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
-        ('admin', 'admin', 'Admin', 'Full admin access.', 1, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
-        ('editor', 'editor', 'Editor', 'Can edit and publish assigned site content.', 1, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.publish.own","media.manage"]'),
+        ('admin', 'admin', 'Admin', 'Full admin access (cannot manage roles).', 1, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","audit.read"]'),
         ('client', 'client', 'Client', 'Can edit page copy (text, images, links) but not structure or styles.', 1, '["site.read","site.content.edit"]'),
-        ('content-manager', 'content-manager', 'Content Manager', 'Can manage all content entries and collections.', 1, '["site.read","content.create","content.edit.any","content.publish.any","content.manage","media.manage"]'),
-        ('viewer', 'viewer', 'Viewer', 'Read-only admin access.', 1, '["site.read"]'),
-        ('subscriber', 'subscriber', 'Subscriber', 'Reserved for future public member accounts.', 1, '[]')
+        ('member', 'member', 'Member', 'Public-facing member account — no admin access by default.', 1, '[]')
       on conflict (id) do update
         set slug = excluded.slug,
             name = excluded.name,

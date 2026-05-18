@@ -19,7 +19,7 @@ describe('loop source ID format', () => {
   })
 
   it('built-in sources include the documented set', () => {
-    expect(loopSourceRegistry.has('content.entries')).toBe(true)
+    expect(loopSourceRegistry.has('data.rows')).toBe(true)
     expect(loopSourceRegistry.has('site.pages')).toBe(true)
     expect(loopSourceRegistry.has('site.media')).toBe(true)
   })

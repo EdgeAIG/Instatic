@@ -22,6 +22,7 @@ import { PlusBoxSolidIcon } from 'pixel-art-icons/icons/plus-box-solid'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import { cn } from '@ui/cn'
+import { useEditorPermissions } from '@site/editorPermissionsContext'
 import styles from './BreakpointFrame.module.css'
 
 interface BreakpointFrameProps {
@@ -49,33 +50,50 @@ export function BreakpointFrame({
   // for free, since the viewport itself is transformed with the canvas).
   const viewportRef = useRef<HTMLDivElement>(null)
 
+  // Breakpoint chrome (active highlight + label-click-to-activate) is a style
+  // editing affordance — picking the "active" breakpoint controls where per-
+  // breakpoint style overrides land. Hidden for content-only Clients and
+  // pure Viewers; they get plain frames without an active-state outline.
+  const permissions = useEditorPermissions()
+  const breakpointChromeVisible = permissions.canEditStyle || permissions.canEditStructure
+
   return (
     <div
       className={cn(styles.frameWrapper, isDimmed && styles.frameWrapperDimmed)}
       data-breakpoint-dimmed={isDimmed ? 'true' : undefined}
       style={bpStyle}
     >
-      {/* Frame chrome row — breakpoint label */}
-      <div className={styles.labelRow}>
-        <Button
-          variant="ghost"
-          size="sm"
-          pressed={isActive}
-          onClick={() => onActivate(breakpoint.id)}
-          className={styles.labelBtn}
-          aria-label={`Switch to ${breakpoint.label} breakpoint`}
-        >
-          {breakpoint.label}
-          <span className={styles.pxBadge}>{breakpoint.width}px</span>
-        </Button>
-      </div>
+      {/* Frame chrome row — breakpoint label.
+          Hidden for non-editors: the label button activates a per-breakpoint
+          override target, which only makes sense when the caller can edit
+          styles or structure. */}
+      {breakpointChromeVisible && (
+        <div className={styles.labelRow}>
+          <Button
+            variant="ghost"
+            size="sm"
+            pressed={isActive}
+            onClick={() => onActivate(breakpoint.id)}
+            className={styles.labelBtn}
+            aria-label={`Switch to ${breakpoint.label} breakpoint`}
+          >
+            {breakpoint.label}
+            <span className={styles.pxBadge}>{breakpoint.width}px</span>
+          </Button>
+        </div>
+      )}
 
       {/* Viewport frame */}
       <div
         ref={viewportRef}
         data-breakpoint-id={breakpoint.id}
-        className={cn(styles.viewport, isActive && styles.viewportActive)}
+        className={cn(
+          styles.viewport,
+          // Only style/structure editors see the "active breakpoint" outline.
+          isActive && breakpointChromeVisible && styles.viewportActive,
+        )}
         onClick={(e) => {
+          if (!breakpointChromeVisible) return
           // Click on empty frame area → activate this breakpoint
           onActivate(breakpoint.id)
           e.stopPropagation()

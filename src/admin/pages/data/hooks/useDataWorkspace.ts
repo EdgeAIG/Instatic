@@ -1,0 +1,310 @@
+import { useCallback, useEffect, useState } from 'react'
+import {
+  createCmsDataRow,
+  createCmsDataTable,
+  deleteCmsDataRow,
+  deleteCmsDataTable,
+  listCmsDataRows,
+  listCmsDataTables,
+  publishCmsDataRow,
+  saveCmsDataRowDraft,
+  updateCmsDataTable,
+  updateCmsDataRowStatus,
+} from '@core/persistence'
+import type {
+  DataTable,
+  DataRow,
+  DataRowCells,
+  CreateDataTableInput,
+  UpdateDataTableInput,
+} from '@core/data/schemas'
+import { buildEmptyCells } from '../utils/fieldDefaults'
+
+function updateRowList(rows: DataRow[], row: DataRow): DataRow[] {
+  const idx = rows.findIndex((r) => r.id === row.id)
+  if (idx === -1) return [row, ...rows]
+  const next = [...rows]
+  next[idx] = row
+  return next
+}
+
+export interface DataWorkspace {
+  tables: DataTable[]
+  loadingTables: boolean
+  tablesError: string | null
+  selectedTableId: string | null
+  selectedTable: DataTable | null
+  selectTable: (tableId: string | null) => void
+  refreshTables: () => Promise<void>
+  createTable: (input: CreateDataTableInput) => Promise<DataTable>
+  updateTable: (tableId: string, input: UpdateDataTableInput) => Promise<DataTable>
+  deleteTable: (tableId: string) => Promise<void>
+  rows: DataRow[]
+  loadingRows: boolean
+  rowsError: string | null
+  refreshRows: () => Promise<void>
+  createRow: (cells?: DataRowCells) => Promise<DataRow>
+  saveRow: (rowId: string, cells: DataRowCells) => Promise<DataRow>
+  deleteRow: (rowId: string) => Promise<void>
+  selectedRowId: string | null
+  selectedRow: DataRow | null
+  selectRow: (rowId: string | null) => void
+  publishRow: (rowId: string) => Promise<DataRow>
+  setRowStatus: (rowId: string, status: 'draft' | 'unpublished') => Promise<DataRow>
+}
+
+export function useDataWorkspace(initialTableSlug?: string): DataWorkspace {
+  const [tables, setTables] = useState<DataTable[]>([])
+  // Initialize to true — the on-mount effect starts a fetch immediately, so
+  // the loading state is already correct with no synchronous setState needed.
+  const [loadingTables, setLoadingTables] = useState(true)
+  const [tablesError, setTablesError] = useState<string | null>(null)
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
+
+  // Render-time reset for rows when the selected table changes — avoids
+  // setState-in-effect.  loadingRows is pre-set to true when a table is
+  // selected (a fetch is about to start) or false when no table is selected.
+  const [trackedTableId, setTrackedTableId] = useState<string | null>(null)
+  const [rows, setRows] = useState<DataRow[]>([])
+  const [loadingRows, setLoadingRows] = useState(false)
+  const [rowsError, setRowsError] = useState<string | null>(null)
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
+
+  if (trackedTableId !== selectedTableId) {
+    setTrackedTableId(selectedTableId)
+    setRows([])
+    setRowsError(null)
+    setLoadingRows(selectedTableId !== null)
+  }
+
+  const selectedTable = tables.find((t) => t.id === selectedTableId) ?? null
+  const selectedRow = rows.find((r) => r.id === selectedRowId) ?? null
+
+  // ---------------------------------------------------------------------------
+  // Load tables on mount
+  // ---------------------------------------------------------------------------
+  // Effects must not call named functions that contain setState — the lint rule
+  // (react-hooks/set-state-in-effect) performs interprocedural analysis and
+  // flags those call sites.  Use an inline async IIFE so the rule can verify
+  // that all setState calls happen after the first `await`.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const dataTables = await listCmsDataTables()
+        if (cancelled) return
+        setTables(dataTables)
+        setTablesError(null)
+        setSelectedTableId((current) => {
+          if (current) return current
+          if (initialTableSlug) {
+            const bySlug = dataTables.find((t) => t.slug === initialTableSlug)
+            return bySlug?.id ?? dataTables[0]?.id ?? null
+          }
+          return dataTables[0]?.id ?? null
+        })
+      } catch (err) {
+        if (!cancelled) {
+          console.error('[data-workspace] Failed to load tables:', err)
+          setTablesError(err instanceof Error ? err.message : 'Could not load tables')
+        }
+      } finally {
+        if (!cancelled) setLoadingTables(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [initialTableSlug])
+
+  // ---------------------------------------------------------------------------
+  // Load rows when selected table changes
+  // ---------------------------------------------------------------------------
+  // Same rationale as the tables effect — inline IIFE keeps all setState after
+  // the first await and out of the interprocedural analysis path.
+  useEffect(() => {
+    if (!selectedTableId) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const nextRows = await listCmsDataRows(selectedTableId)
+        if (cancelled) return
+        setRows(nextRows)
+        setRowsError(null)
+      } catch (err) {
+        if (!cancelled) {
+          console.error('[data-workspace] Failed to load rows:', err)
+          setRowsError(err instanceof Error ? err.message : 'Could not load rows')
+        }
+      } finally {
+        if (!cancelled) setLoadingRows(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [selectedTableId])
+
+  // ---------------------------------------------------------------------------
+  // Table actions
+  // ---------------------------------------------------------------------------
+  const selectTable = useCallback((tableId: string | null) => {
+    setSelectedTableId(tableId)
+    setSelectedRowId(null)
+    setRows([])
+  }, [])
+
+  // loadTables / loadRows are only called from event-handler callbacks
+  // (refreshTables / refreshRows), never from effects, so setState calls
+  // before the first await are fine here.
+  const loadTables = useCallback(async () => {
+    try {
+      const dataTables = await listCmsDataTables()
+      setTables(dataTables)
+      setTablesError(null)
+      setSelectedTableId((current) => {
+        if (current) return current
+        if (initialTableSlug) {
+          const bySlug = dataTables.find((t) => t.slug === initialTableSlug)
+          return bySlug?.id ?? dataTables[0]?.id ?? null
+        }
+        return dataTables[0]?.id ?? null
+      })
+    } catch (err) {
+      console.error('[data-workspace] Failed to load tables:', err)
+      setTablesError(err instanceof Error ? err.message : 'Could not load tables')
+    } finally {
+      setLoadingTables(false)
+    }
+  }, [initialTableSlug])
+
+  // Called from event handlers — synchronous setState before await is fine.
+  const refreshTables = useCallback(async () => {
+    setLoadingTables(true)
+    setTablesError(null)
+    await loadTables()
+  }, [loadTables])
+
+  const createTable = useCallback(async (input: CreateDataTableInput): Promise<DataTable> => {
+    setTablesError(null)
+    const table = await createCmsDataTable({ ...input, kind: 'data' })
+    setTables((current) => [...current, table])
+    setSelectedTableId(table.id)
+    setRows([])
+    setSelectedRowId(null)
+    return table
+  }, [])
+
+  const updateTable = useCallback(async (
+    tableId: string,
+    input: UpdateDataTableInput,
+  ): Promise<DataTable> => {
+    setTablesError(null)
+    const table = await updateCmsDataTable(tableId, input)
+    setTables((current) => current.map((t) => (t.id === tableId ? table : t)))
+    return table
+  }, [])
+
+  const deleteTable = useCallback(async (tableId: string): Promise<void> => {
+    setTablesError(null)
+    await deleteCmsDataTable(tableId)
+    setTables((current) => current.filter((t) => t.id !== tableId))
+    setSelectedTableId((cur) => {
+      if (cur !== tableId) return cur
+      // Select the next available table after deletion; will be re-derived
+      // once setTables settles, so passing null here is safe.
+      return null
+    })
+    setRows([])
+    setSelectedRowId(null)
+  }, [])
+
+  // ---------------------------------------------------------------------------
+  // Row actions
+  // ---------------------------------------------------------------------------
+  const loadRows = useCallback(async (tableId: string) => {
+    try {
+      const nextRows = await listCmsDataRows(tableId)
+      setRows(nextRows)
+      setRowsError(null)
+    } catch (err) {
+      console.error('[data-workspace] Failed to load rows:', err)
+      setRowsError(err instanceof Error ? err.message : 'Could not load rows')
+    } finally {
+      setLoadingRows(false)
+    }
+  }, [])
+
+  // Called from event handlers — synchronous setState before await is fine.
+  const refreshRows = useCallback(async (): Promise<void> => {
+    if (!selectedTableId) return
+    setLoadingRows(true)
+    setRowsError(null)
+    await loadRows(selectedTableId)
+  }, [loadRows, selectedTableId])
+
+  const createRow = useCallback(async (cells?: DataRowCells): Promise<DataRow> => {
+    if (!selectedTable) throw new Error('No table selected')
+    setRowsError(null)
+    const payload = cells ?? buildEmptyCells(selectedTable.fields)
+    const row = await createCmsDataRow(selectedTable.id, { cells: payload })
+    setRows((current) => updateRowList(current, row))
+    return row
+  }, [selectedTable])
+
+  const saveRow = useCallback(async (rowId: string, cells: DataRowCells): Promise<DataRow> => {
+    setRowsError(null)
+    const row = await saveCmsDataRowDraft(rowId, { cells })
+    setRows((current) => updateRowList(current, row))
+    return row
+  }, [])
+
+  const deleteRow = useCallback(async (rowId: string): Promise<void> => {
+    setRowsError(null)
+    await deleteCmsDataRow(rowId)
+    setRows((current) => current.filter((r) => r.id !== rowId))
+    setSelectedRowId((cur) => (cur === rowId ? null : cur))
+  }, [])
+
+  const selectRow = useCallback((rowId: string | null) => {
+    setSelectedRowId(rowId)
+  }, [])
+
+  const publishRow = useCallback(async (rowId: string): Promise<DataRow> => {
+    setRowsError(null)
+    const row = await publishCmsDataRow(rowId)
+    setRows((current) => updateRowList(current, row))
+    return row
+  }, [])
+
+  const setRowStatus = useCallback(async (
+    rowId: string,
+    status: 'draft' | 'unpublished',
+  ): Promise<DataRow> => {
+    setRowsError(null)
+    const row = await updateCmsDataRowStatus(rowId, status)
+    setRows((current) => updateRowList(current, row))
+    return row
+  }, [])
+
+  return {
+    tables,
+    loadingTables,
+    tablesError,
+    selectedTableId,
+    selectedTable,
+    selectTable,
+    refreshTables,
+    createTable,
+    updateTable,
+    deleteTable,
+    rows,
+    loadingRows,
+    rowsError,
+    refreshRows,
+    createRow,
+    saveRow,
+    deleteRow,
+    selectedRowId,
+    selectedRow,
+    selectRow,
+    publishRow,
+    setRowStatus,
+  }
+}

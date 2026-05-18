@@ -4,7 +4,7 @@
  * The Claude Agent SDK calls these tools server-side (see server/handlers/agent/tools.ts)
  * which emits a `toolRequest` stream event so the browser can apply the
  * mutation against the live editor store. The browser then POSTs the result
- * back to /api/agent/tool-result; the server-side MCP tool handler returns
+ * back to /admin/api/agent/tool-result; the server-side MCP tool handler returns
  * the result to the SDK and Claude continues the loop.
  *
  * No batch semantics, no rollback. Each tool call is its own atomic mutation
@@ -612,7 +612,7 @@ async function runRenderSnapshot(
  * Apply a single page-builder write tool against the editor store.
  *
  * The browser receives a `toolRequest` event from the server stream,
- * dispatches the tool here, and POSTs the result back to /api/agent/tool-result
+ * dispatches the tool here, and POSTs the result back to /admin/api/agent/tool-result
  * so the server-side MCP tool handler can return the result to Claude.
  */
 export async function executeAgentTool(

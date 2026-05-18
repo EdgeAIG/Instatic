@@ -45,7 +45,7 @@
       "template": {
         "enabled": true,
         "context": "entry",
-        "collectionId": "posts",
+        "tableSlug": "posts",
         "priority": 10,
         "conditions": [
           {

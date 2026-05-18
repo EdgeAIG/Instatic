@@ -34,7 +34,7 @@ function page(id: string, template = false): Page {
         children: [],
       },
     },
-    ...(template ? { template: { collectionId: 'posts', priority: 0 } } : {}),
+    ...(template ? { template: { enabled: true, context: 'entry', tableSlug: 'posts', priority: 0, conditions: [] } } : {}),
   }
 }
 

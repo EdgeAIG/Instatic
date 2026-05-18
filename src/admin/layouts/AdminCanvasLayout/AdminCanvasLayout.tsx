@@ -66,7 +66,15 @@ import styles from './AdminCanvasLayout.module.css'
 import { useCallback, type ReactNode } from 'react'
 import type { AdminWorkspace } from '@admin/workspace'
 import { useCurrentAdminUser } from '@admin/sessionContext'
-import { hasAllCapabilities, hasCapability } from '@admin/access'
+import {
+  canEditContent as accessCanEditContent,
+  canEditStructure as accessCanEditStructure,
+  canEditStyle as accessCanEditStyle,
+  canSaveDraftSite,
+  hasCapability,
+} from '@admin/access'
+import { EditorPermissionsProvider } from '@site/EditorPermissionsProvider'
+import type { EditorPermissions } from '@site/editorPermissionsContext'
 
 /**
  * AdminCanvasLayout is the canvas-bearing shell — used by the Site editor
@@ -74,7 +82,7 @@ import { hasAllCapabilities, hasCapability } from '@admin/access'
  * plugin pages) render through `AdminPageLayout` instead, which skips the
  * canvas / sidebar / DnD chrome they don't need.
  */
-type AdminCanvasWorkspace = Extract<AdminWorkspace, 'site' | 'content' | 'media'>
+type AdminCanvasWorkspace = Extract<AdminWorkspace, 'site' | 'content' | 'data' | 'media'>
 
 interface AdminCanvasLayoutProps {
   workspace?: AdminCanvasWorkspace
@@ -117,8 +125,27 @@ export function AdminCanvasLayout({
   const currentUser = useCurrentAdminUser()
   const customRightSidebarExpanded = workspace !== 'site' && Boolean(contentRightPanel)
   const hasRightSidebar = customRightSidebarExpanded || (workspace === 'site' && rightSidebarExpanded)
-  const canEditDraftSite = !currentUser || hasAllCapabilities(currentUser, ['site.edit', 'pages.edit'])
+  // Three-way edit permissions — see `src/admin/access.ts`. A user with all
+  // three holds full editor rights; a user with only `canEditContent` is the
+  // "Client / copy editor" persona: read everything, change copy on existing
+  // nodes, no DnD, no style edits, no structural changes.
+  const canEditStructureFlag = accessCanEditStructure(currentUser)
+  const canEditContentFlag = accessCanEditContent(currentUser)
+  const canEditStyleFlag = accessCanEditStyle(currentUser)
+  const canSaveSite = canSaveDraftSite(currentUser)
+  // Legacy "anything-editable" flag — true when the caller can drag/drop and
+  // structurally modify the canvas. Most existing call sites are structural
+  // by nature (DnD, context menu, rename, delete keyboard shortcut, plugin
+  // overlays). Content-only callers still get the canvas in read-mostly mode
+  // with content controls live.
+  const canEditDraftSite = canEditStructureFlag
   const canPublishPages = !currentUser || hasCapability(currentUser, 'pages.publish')
+
+  const permissions: EditorPermissions = {
+    canEditStructure: canEditStructureFlag,
+    canEditContent: canEditContentFlag,
+    canEditStyle: canEditStyleFlag,
+  }
   const requiresSiteDocument = workspace === 'site'
 
   // J12 — wire persistence: load, auto-save, toolbar Save, Cmd+S.
@@ -212,10 +239,11 @@ export function AdminCanvasLayout({
   }
 
   return (
+    <EditorPermissionsProvider value={permissions}>
     <div className={styles.shell} data-editor-density={density}>
       {/* ── Top toolbar (z-60, Guideline #374) ───────────────────────────── */}
       <Toolbar
-        onSave={canEditDraftSite ? persistence.saveSite : undefined}
+        onSave={canSaveSite ? persistence.saveSite : undefined}
         saveStatus={persistence.saveStatus}
         publishEnabled={workspace === 'site' && canPublishPages}
         section={workspace}
@@ -261,8 +289,11 @@ export function AdminCanvasLayout({
               <>
                 {/* Canvas — fills the remaining space between sidebars */}
                 <CanvasRoot editable={canEditDraftSite} />
-                {/* Properties can be unpinned into the floating draggable overlay. */}
-                {canEditDraftSite && propertiesPanelMode === 'floating' && <PropertiesPanel variant="floating" />}
+                {/* Properties can be unpinned into the floating draggable
+                    overlay. Shown to any caller who can make some kind of
+                    edit — a content-only Client still needs the panel to
+                    change text / image props. */}
+                {canSaveSite && propertiesPanelMode === 'floating' && <PropertiesPanel variant="floating" />}
               </>
             ) : (
               contentCanvas
@@ -271,7 +302,7 @@ export function AdminCanvasLayout({
         </div>
         <RightSidebar
           contentPanel={workspace !== 'site' ? contentRightPanel : undefined}
-          suppressDefaultPanel={workspace !== 'site' || !canEditDraftSite}
+          suppressDefaultPanel={workspace !== 'site' || !canSaveSite}
         />
       </div>
       </ConfirmDeleteProvider>
@@ -286,6 +317,7 @@ export function AdminCanvasLayout({
       {/* J10 — Settings Modal (portal-rendered, listens to store.settingsModalOpen) */}
       <SettingsModal />
     </div>
+    </EditorPermissionsProvider>
   )
 }
 

@@ -38,6 +38,8 @@ import {
   getActiveStyleTab,
 } from './cssControlTypes'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
+import { useEditorPermissions } from '@site/editorPermissionsContext'
+import { EmptyState } from '@ui/components/EmptyState'
 import styles from './StyleSurface.module.css'
 import sectionStyles from '@ui/components/Section/Section.module.css'
 
@@ -181,9 +183,25 @@ export function StyleSurface({
     ? activeClass
     : null
 
-  // CSS area content.
+  // CSS area content. Three branches:
+  //  - caller lacks `site.style.edit`           → role-locked notice
+  //  - active class is set and editable         → ClassComposer
+  //  - active class is a locked generated utility → utility notice
+  //  - no active class                          → teaser + "Add class" CTA
+  const permissions = useEditorPermissions()
+  const canEditStyleHere = permissions.canEditStyle
   let cssContent: ReactNode
-  if (activeClass != null) {
+  if (!canEditStyleHere) {
+    cssContent = (
+      <div className={styles.lockedContent}>
+        <EmptyState
+          variant="centered"
+          title="Styles are read-only for your role"
+          description="Your role can edit page copy but not classes or style overrides. Ask an editor to make visual changes."
+        />
+      </div>
+    )
+  } else if (activeClass != null) {
     if (isGeneratedClassLocked(activeClass)) {
       cssContent = (
         <div className={styles.lockedContent}>

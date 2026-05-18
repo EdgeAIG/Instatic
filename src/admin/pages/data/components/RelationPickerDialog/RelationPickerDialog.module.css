@@ -1,0 +1,38 @@
+/**
+ * RelationPickerDialog — body styles only.
+ * Dialog chrome (backdrop, header, footer) lives in @ui/components/Dialog.
+ */
+
+.body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    /* Let the list scroll, not the whole dialog body */
+    min-height: 0;
+}
+
+.search {
+    flex-shrink: 0;
+}
+
+.loadingState {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 0;
+    color: var(--editor-text-muted);
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    max-height: 320px;
+}
+
+.rowLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
