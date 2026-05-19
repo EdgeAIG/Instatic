@@ -96,12 +96,6 @@
     --chart-segment-empty-border: rgba(255, 255, 255, 0.04);
     --chart-track-bg: rgba(255, 255, 255, 0.04);
 
-    /* ─── Admin shell (login / setup page) ───────────────────────────────── */
-    --admin-bg: #050505; /* admin chrome bg — slightly off-pure-black */
-    --admin-panel-bg: #0b0b0b; /* admin panel surface */
-    --admin-panel-border: #232323; /* admin panel border */
-    --admin-input-border: #2a2a2a; /* admin input border on dark panel */
-
     /* ─── Focus Ring ─────────────────────────────────────────────────────── */
     --editor-focus-ring: 0 0 0 1px rgba(255, 255, 255, 0.25);
 
