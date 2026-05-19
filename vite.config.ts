@@ -174,11 +174,32 @@ export default defineConfig({
     },
   },
   build: {
+    // Aligned with the per-chunk caps in
+    // `src/__tests__/architecture/bundle-size-budgets.test.ts` — the real
+    // enforcement of bundle size in this repo. The two intentionally-large
+    // lazy chunks (`AdminCanvasLayout-*` budget 700 KB, `CodeMirrorEditor-*`
+    // budget 650 KB) sit just above Vite's default 500 KB warning threshold,
+    // so the default fires on every build for chunks that are explicitly
+    // capped and route-lazy. Raising this to 720 KB silences the
+    // false-positive noise while still catching anything that grows past the
+    // established budgets — `bundle-size-budgets.test.ts` is the actual gate.
+    chunkSizeWarningLimit: 720,
     rolldownOptions: {
       output: {
         codeSplitting: {
           groups: [{ name: vendorChunkName }],
+          // Safety net: don't emit a vendor chunk so small the extra HTTP
+          // request costs more than the bytes saved. If a group shrinks
+          // below this floor, Rolldown folds it back into a parent chunk.
+          minSize: 10_000,
         },
+        // Manual chunk groups can reorder module evaluation across chunks,
+        // which matters when a module has side effects at evaluation time
+        // (e.g. global polyfill registration, CSS-in-JS injection). This
+        // injects tiny runtime helpers so modules always run in declared
+        // order. Costs a few bytes; bounded by the bundle-size budgets in
+        // src/__tests__/architecture/bundle-size-budgets.test.ts.
+        strictExecutionOrder: true,
       },
     },
   },
