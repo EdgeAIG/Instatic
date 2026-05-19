@@ -52,14 +52,21 @@ describe('Self-hosted CMS pivot — static ZIP export removal', () => {
     expect(offenders).toEqual([])
   })
 
-  it('does not expose local site management routes or dashboard files', () => {
+  it('does not expose the old multi-project router / local dashboard files', () => {
     const router = read(join(SRC_ROOT, 'admin/router.tsx'))
-    expect(router).not.toContain('Dashboard')
+    // The new admin Dashboard section (`/admin/dashboard`) is permitted — what
+    // we still ban is the OLD per-project editor router (`/editor/:projectId`)
+    // that came with the static ZIP export workflow.
     expect(router).not.toContain('/editor/:projectId')
     expect(router).not.toContain('/editor/:siteId')
     expect(router).toContain('path="/"')
-    expect(router).toContain('to="/admin/site"')
+    // Root and `/admin` redirect to `/admin/dashboard` — that's the admin home.
+    expect(router).toContain('to="/admin/dashboard"')
     expect(router).toContain('path="/admin/content"')
+    // The old root-level Dashboard.tsx file (the multi-project picker that
+    // came with the export-mode UI) must stay deleted. The new admin
+    // dashboard lives at admin/pages/dashboard/DashboardPage.tsx, not the
+    // legacy root path.
     expect(existsSync(join(SRC_ROOT, 'admin/Dashboard.tsx'))).toBe(false)
     expect(existsSync(join(SRC_ROOT, 'admin/Dashboard.module.css'))).toBe(false)
   })

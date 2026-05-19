@@ -1,0 +1,307 @@
+/**
+ * OnboardingPanel — two-column layout (progress + headline | steps).
+ *
+ *   ┌──────────────────────┬───────────────────────────────────┐
+ *   │                      │  step 1 — full-width row          │
+ *   │   ┌─────┐            ├───────────────────────────────────┤
+ *   │   │  3  │            │  step 2                           │
+ *   │   │ /5  │            ├───────────────────────────────────┤
+ *   │   └─────┘            │  …                                │
+ *   │                      │                                   │
+ *   │   Finish setting     │                                   │
+ *   │   up your site       │                                   │
+ *   │                      │                                   │
+ *   │   short description  │                                   │
+ *   │                      │                                   │
+ *   │   [Dismiss]          │                                   │
+ *   └──────────────────────┴───────────────────────────────────┘
+ *
+ * Both columns paint their own `--editor-surface-2` tone; the 1px grid
+ * gap reveals the darker page surface as a hairline divider — same
+ * pattern as the dashboard widget grid.
+ *
+ * The header card spans the full height of the steps stack (CSS Grid
+ * `align-items: stretch` default). Inside, the ring + headline +
+ * description live in a `space-between` flex column with the Dismiss
+ * button anchored at the bottom.
+ *
+ * Completed steps drop to 0.55 opacity so the remaining work jumps
+ * out at a glance.
+ */
+
+.onboarding {
+    display: grid;
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    gap: 1px;
+    background: transparent;
+}
+
+/* ── Header column ──────────────────────────────────────────────── */
+.head {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 28px;
+    padding: 32px 28px 24px;
+    background: var(--editor-surface-2);
+    border: 0;
+    border-radius: 16px;
+    /* Subtle mint wash — gives the progress card a faint "achievement"
+       tone without making it feel like a banner. */
+    background-image: linear-gradient(
+        180deg,
+        rgba(142, 230, 200, 0.06),
+        rgba(142, 230, 200, 0) 65%
+    );
+}
+
+.headBlock {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 22px;
+}
+
+.headTitle {
+    font-size: 26px;
+    line-height: 1.15;
+    font-weight: 600;
+    color: var(--editor-text-bright);
+    letter-spacing: -0.015em;
+    margin: 0;
+    max-width: 12ch;
+}
+
+.headDesc {
+    font-size: 12.5px;
+    color: var(--editor-text-muted);
+    margin: 0;
+    line-height: 1.55;
+    max-width: 32ch;
+}
+
+.headActions {
+    display: flex;
+    gap: 6px;
+}
+
+/* ── Progress ring ───────────────────────────────────────────────── */
+.ring {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.ring svg {
+    display: block;
+}
+
+.ringText {
+    position: absolute;
+    inset: 0;
+    /* `place-items: center` centers the single inline-flex child both
+       horizontally and vertically — the bug in the earlier revision
+       was using flex+`align-items: baseline` on this container, which
+       (without a parent baseline reference) pulled the text to the
+       container's top edge instead of centering it. */
+    display: grid;
+    place-items: center;
+}
+
+.ringFraction {
+    /* Inline-flex with baseline alignment puts the big numerator and
+       the small denominator on the same baseline as a single visual
+       fraction ("3/5"). Inline-flex (not plain inline) lets us set
+       a tiny gap without falling back to word-spacing tricks. */
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1px;
+    font-family: var(--font-mono);
+    font-size: 36px;
+    font-weight: 600;
+    color: var(--editor-text-bright);
+    letter-spacing: -0.04em;
+    line-height: 1;
+}
+
+.ringFraction small {
+    color: var(--editor-text-muted);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+/* ── Steps stack ─────────────────────────────────────────────────── */
+.steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.step {
+    display: grid;
+    grid-template-columns: 28px 32px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 22px;
+    background: var(--editor-surface-2);
+    border-radius: 16px;
+    transition:
+        background 120ms ease,
+        opacity 120ms ease;
+}
+
+.step:hover {
+    background: var(--editor-surface-3);
+}
+
+/* Completed steps dim so the next-up work reads as the focus area.
+   Opacity wraps the whole row — the user can still click into a
+   completed step to revisit it; it's just visually de-emphasised. */
+.step[data-state="done"] {
+    opacity: 0.55;
+}
+
+.step[data-state="done"]:hover {
+    opacity: 0.85;
+}
+
+.stepCheck {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px dashed var(--editor-border-med);
+    display: grid;
+    place-items: center;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+}
+
+.step[data-state="done"] .stepCheck {
+    background: var(--editor-success-green);
+    border: 0;
+    color: var(--editor-bg);
+}
+
+.step[data-state="active"] .stepCheck {
+    border: 1px solid var(--editor-text);
+    border-style: solid;
+    color: var(--editor-text-bright);
+}
+
+.stepIcon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--editor-surface);
+    display: grid;
+    place-items: center;
+    color: var(--editor-text-secondary);
+    flex-shrink: 0;
+}
+
+.step[data-state="done"] .stepIcon {
+    color: var(--editor-success-green);
+}
+
+.step[data-state="active"] .stepIcon {
+    color: var(--editor-text-bright);
+}
+
+.stepBody {
+    min-width: 0;
+}
+
+.stepTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--editor-text-bright);
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.stepIndex {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--editor-text-subtle);
+    letter-spacing: 0.04em;
+    font-weight: 500;
+}
+
+.stepDesc {
+    font-size: 12px;
+    color: var(--editor-text-muted);
+    line-height: 1.5;
+    margin-top: 4px;
+}
+
+.stepCta {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.stepHint {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--editor-text-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.stepHint[data-state="done"] {
+    color: var(--editor-success-green);
+}
+
+/* ── Narrow screens: stack header above steps ───────────────────── */
+@media (max-width: 900px) {
+    .onboarding {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .head {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 24px 22px;
+    }
+
+    .headBlock {
+        flex-direction: row;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .headTitle {
+        font-size: 18px;
+        max-width: none;
+    }
+
+    .headDesc {
+        display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .step {
+        grid-template-columns: 28px minmax(0, 1fr);
+        row-gap: 12px;
+    }
+
+    .stepIcon {
+        display: none;
+    }
+
+    .stepCta {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+    }
+}

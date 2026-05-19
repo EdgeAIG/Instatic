@@ -20,6 +20,9 @@ import styles from './AdminEntry.module.css'
 // Side-effect imports for `@modules/base` and `@core/loops/sources` live
 // inside `SitePage.tsx` so they only load when the visual editor mounts —
 // they're not used by Users / Content / Plugins / Account.
+const DashboardPage = lazy(() =>
+  import('./pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+)
 const SitePage = lazy(() =>
   import('./pages/site/SitePage').then((m) => ({ default: m.SitePage })),
 )
@@ -58,7 +61,7 @@ interface AdminEntryProps {
   section?: AdminSection
 }
 
-export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
+export default function AdminEntry({ section = 'dashboard' }: AdminEntryProps) {
   const boot = useAdminBoot()
   const [override, setOverride] = useState<PreAuthOverride | null>(null)
 
@@ -120,14 +123,16 @@ function AuthenticatedAdmin({
       <StepUpProvider>
         <SpotlightRoot>
           <Suspense fallback={<AppLoadingScreen />}>
-            {section === 'content' ? <ContentPage /> :
+            {section === 'dashboard' ? <DashboardPage /> :
+              section === 'site' ? <SitePage /> :
+              section === 'content' ? <ContentPage /> :
               section === 'data' ? <DataPage /> :
               section === 'media' ? <MediaPage /> :
               section === 'plugins' ? <PluginsPage /> :
               section === 'users' ? <UsersPage /> :
               section === 'pluginPage' ? <PluginPage /> :
               section === 'account' ? <AccountPage /> :
-              <SitePage />}
+              <DashboardPage />}
           </Suspense>
         </SpotlightRoot>
       </StepUpProvider>

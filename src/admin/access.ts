@@ -97,6 +97,8 @@ function canAccessUsersWorkspace(user: CmsCurrentUser | null): boolean {
 
 export function canAccessWorkspace(user: CmsCurrentUser | null, workspace: AdminWorkspace): boolean {
   switch (workspace) {
+    case 'dashboard':
+      return hasCapability(user, 'dashboard.read')
     case 'site':
       // site.read covers the read-only canvas viewer. Editors of any flavour
       // (structure / content / style) also have site.read on a well-formed
@@ -121,12 +123,17 @@ export function canAccessWorkspace(user: CmsCurrentUser | null, workspace: Admin
 }
 
 export function firstAccessibleWorkspace(user: CmsCurrentUser | null): AdminWorkspace | null {
-  const order: AdminWorkspace[] = ['site', 'content', 'data', 'media', 'plugins', 'users']
+  // Dashboard comes first — it's the canonical admin home. Falls through to
+  // the next accessible workspace for users whose role doesn't grant
+  // `dashboard.read` (rare; only happens with hand-edited custom roles).
+  const order: AdminWorkspace[] = ['dashboard', 'site', 'content', 'data', 'media', 'plugins', 'users']
   return order.find((workspace) => canAccessWorkspace(user, workspace)) ?? null
 }
 
 export function workspacePath(workspace: AdminWorkspace): string {
   switch (workspace) {
+    case 'dashboard':
+      return '/admin/dashboard'
     case 'site':
       return '/admin/site'
     case 'content':

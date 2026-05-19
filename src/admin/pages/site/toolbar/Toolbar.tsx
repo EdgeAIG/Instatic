@@ -30,6 +30,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArticleSolidIcon } from 'pixel-art-icons/icons/article-solid'
+import { DashboardSolidIcon } from 'pixel-art-icons/icons/dashboard-solid'
 import { DatabaseSolidIcon } from 'pixel-art-icons/icons/database-solid'
 import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
 import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
@@ -256,6 +257,12 @@ export function Toolbar({
 function DefaultAdminNavigation({ section }: { section: AdminWorkspace }) {
   return (
     <>
+      <DefaultNavSlot
+        href="/admin/dashboard"
+        icon={<DashboardSolidIcon size={NAV_ICON_SIZE} aria-hidden="true" />}
+        label="Dashboard"
+        active={section === 'dashboard'}
+      />
       <DefaultNavSlot
         href="/admin/site"
         icon={<LayoutSolidIcon size={NAV_ICON_SIZE} aria-hidden="true" />}

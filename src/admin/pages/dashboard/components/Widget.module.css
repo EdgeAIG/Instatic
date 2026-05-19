@@ -1,0 +1,115 @@
+/**
+ * Widget chrome styles. Achromatic surface, --tint property carries the
+ * accent colour from the parent (title-dot, default chart fills).
+ */
+
+.widget {
+    /* Default tint — overridden by the inline `--tint` from Widget.tsx. */
+    --tint: var(--editor-text-muted);
+
+    position: relative;
+    /* Fill the grid cell — each cell's height comes from the widget's
+       per-tile row span (set on the parent `.cell` via `grid-row: span N`).
+       Without `height: 100%`, the section would collapse to its content
+       height and the grid would still allocate the full row, leaving
+       the visible card stranded at the top of an empty cell. */
+    height: 100%;
+    background: var(--editor-surface-2);
+    /* Borderless tile look — the 1px grid gap on the darker parent
+       surface visually separates cards (see DashboardGrid.module.css). */
+    border: 0;
+    border-radius: 16px;
+    padding: 18px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition:
+        background 150ms ease,
+        transform 120ms ease,
+        box-shadow 150ms ease;
+}
+
+.widget:hover {
+    /* No border to recolour — lift the surface tone instead. Stays
+       achromatic per the editor's design-token policy. */
+    background: var(--editor-surface-3);
+}
+
+.editing {
+    cursor: grab;
+    /* Subtle inset outline replaces the previous dashed border so
+       customise mode is still legible without breaking the borderless
+       look (CSS box-shadow doesn't affect layout the way a border
+       would). */
+    box-shadow: inset 0 0 0 1px rgba(155, 220, 255, 0.18);
+}
+
+.editing:hover {
+    box-shadow: inset 0 0 0 1px rgba(155, 220, 255, 0.4);
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--editor-text-muted);
+}
+
+.dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--tint);
+}
+
+.headEnd {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.menu {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    background: transparent;
+    border: 0;
+    color: var(--editor-text-subtle);
+    cursor: pointer;
+    opacity: 0;
+    transition:
+        opacity 120ms ease,
+        background 120ms ease;
+}
+
+.widget:hover .menu {
+    opacity: 1;
+}
+
+.menu:hover {
+    background: var(--editor-selection);
+    color: var(--editor-text);
+}
+
+.handle {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    color: var(--editor-text-subtle);
+    cursor: grab;
+}

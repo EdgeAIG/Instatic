@@ -53,6 +53,7 @@ export const PLUGIN_PERMISSION_VALUES = [
   'modules.register',
   'loops.register',
   'visualComponents.register',
+  'dashboard.widgets.register',
   // Frontend / published pages
   'frontend.scripts',
   'frontend.tracker',
@@ -398,7 +399,7 @@ export interface PluginCommand {
    * of the listed workspaces. Omit (or include 'any') to show everywhere.
    */
   workspaces?: ReadonlyArray<
-    'site' | 'content' | 'data' | 'media' | 'plugins' | 'users' | 'account' | 'any'
+    'dashboard' | 'site' | 'content' | 'data' | 'media' | 'plugins' | 'users' | 'account' | 'any'
   >
 }
 
@@ -516,6 +517,49 @@ export interface RegisteredPluginCanvasOverlay extends PluginCanvasOverlay {
   pluginId: string
 }
 
+/**
+ * Tints reserved for dashboard widgets. Mirrors the four `--rail-tint-*`
+ * tokens in `src/styles/globals.css`. Widget chrome reads the value to
+ * colour the title-dot and default chart accents.
+ */
+export type PluginDashboardWidgetTint = 'mint' | 'lilac' | 'sky' | 'peach'
+
+/**
+ * Default column span on the 12-column dashboard grid. Users can resize
+ * a widget after dropping it via the customize-mode resize handle; this
+ * is just the initial size.
+ */
+export type PluginDashboardWidgetSize = 3 | 4 | 6 | 8 | 12
+
+export interface PluginDashboardWidgetRendererProps {
+  /** Current grid span (1 .. 12). */
+  span: number
+  /** True while the user has the dashboard in "Customize" mode. */
+  editing: boolean
+}
+
+/**
+ * Dashboard widget registered by a plugin via
+ * `api.dashboard.widgets.register(...)`. Requires the
+ * `dashboard.widgets.register` permission.
+ *
+ *   • `id` MUST be namespaced under the plugin id (`<pluginId>.<rest>`),
+ *     enforced by the registry at registration time.
+ *   • `icon` is a pixel-art-icon component reference (direct import).
+ *   • `component` is a regular React component. The host renders the
+ *     widget chrome (title row, drag handle, kebab menu) and mounts the
+ *     component inside the body — plugins only own the content.
+ */
+export interface PluginDashboardWidget {
+  id: string
+  name: string
+  description: string
+  iconName: string
+  defaultSize: PluginDashboardWidgetSize
+  tint: PluginDashboardWidgetTint
+  component: import('react').ComponentType<PluginDashboardWidgetRendererProps>
+}
+
 export interface EditorPluginApi {
   /**
    * Plugin metadata available to editor entrypoints. Mirrors the shape of
@@ -587,6 +631,23 @@ export interface EditorPluginApi {
        * on each debounced keystroke and groups results under `provider.label`.
        */
       registerProvider: (provider: PluginPaletteProvider) => void
+    }
+  }
+  /**
+   * Admin dashboard surface — `/admin/dashboard`. Plugins register cards
+   * (analytics charts, queue counters, plugin-specific stats) for the
+   * configurable widget grid via `dashboard.widgets.register(...)`.
+   * Requires the `dashboard.widgets.register` permission.
+   */
+  dashboard: {
+    widgets: {
+      /**
+       * Register a dashboard widget. The widget id MUST be namespaced
+       * under the plugin id (`<pluginId>.<rest>`) — registration is
+       * rejected otherwise. Re-registration with the same id replaces
+       * the previous definition (normal on plugin upgrade).
+       */
+      register: (widget: PluginDashboardWidget) => void
     }
   }
   cms: {

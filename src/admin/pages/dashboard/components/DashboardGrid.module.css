@@ -1,0 +1,248 @@
+/**
+ * Dashboard grid — true 12-column / fixed-row-height tile layout.
+ *
+ * The fixed row track (`grid-auto-rows: var(--row-h)`) is what makes
+ * per-tile vertical resize work: changing a widget's `grid-row: span N`
+ * snaps its height to an integer multiple of `--row-h`. Without it the
+ * grid would collapse rows to the tallest widget and all neighbours
+ * would inherit the same height.
+ *
+ * `--row-h` and `--gap` are mirrored from the GRID_ROW_HEIGHT / GRID_GAP
+ * constants in useDashboardLayout.ts so the JS resize handler can
+ * compute snap deltas without a duplicated magic number.
+ *
+ * `auto-flow: dense` lets later widgets backfill earlier gaps so the
+ * layout reads as densely-packed even when sizes vary.
+ */
+
+.gridLayout {
+    --row-h: 70px;
+    /* 1px hairline — see GRID_GAP in useDashboardLayout.ts. The grid sits
+       on `--editor-surface` (darker) while each card is `--editor-surface-2`
+       (lighter), so a 1px gap reveals the parent and reads as a
+       borderless tile divider. */
+    --gap: 1px;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-auto-rows: var(--row-h);
+    grid-auto-flow: dense;
+    gap: var(--gap);
+    position: relative;
+}
+
+.editing {
+    outline: 1px dashed rgba(155, 220, 255, 0.18);
+    outline-offset: 8px;
+    border-radius: 12px;
+}
+
+.cell {
+    --span: 4;
+    --rows: 2;
+    grid-column: span var(--span);
+    grid-row: span var(--rows);
+    min-width: 0;
+    position: relative;
+    background: transparent;
+    padding: 0;
+}
+
+.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+}
+
+.dropTarget {
+    outline: 1px dashed var(--rail-tint-sky);
+    outline-offset: 4px;
+    border-radius: 16px;
+}
+
+.dragOverlay {
+    pointer-events: none;
+    opacity: 0.92;
+    transform: scale(1.02);
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.6);
+    border-radius: 14px;
+}
+
+/* ── Resize handles ────────────────────────────────────────────────
+ *
+ * Each handle is positioned ON the visible card edge (not over the
+ * grid gap), so the user grabs exactly the edge they see.
+ *
+ *   ┌─────────────────────────┐
+ *   │  ┌── top ──┐            │
+ *   │  │         │            │
+ *   │ left      right         │
+ *   │  │         │            │
+ *   │  └─ bottom ┘            │
+ *   └─────────────────────────┘
+ *
+ * Horizontal handles (left / right) resize column span. Vertical
+ * handles (top / bottom) resize row span. All four are 14px wide and
+ * stay invisible until the user hovers the cell. The center 4px ×
+ * 32px (or 32px × 4px) accent rail is the visible affordance.
+ */
+.handle {
+    position: absolute;
+    z-index: 10;
+    user-select: none;
+    touch-action: none;
+}
+
+.handle::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    background: var(--rail-tint-sky);
+    border-radius: 2px;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+
+.cell:hover .handle::before {
+    opacity: 0.6;
+}
+
+.handle:hover::before {
+    opacity: 1;
+}
+
+/* Right edge — drag horizontally to resize column span. Width is 8px
+   (was 12px in the 14px-gap design) — with a 1px hairline gap a 12px
+   handle on each neighbour overlaps significantly, so we narrow it
+   to keep the pointer-event boundary inside each cell. */
+.handleRight {
+    top: 0;
+    right: 0;
+    width: 8px;
+    height: 100%;
+    cursor: ew-resize;
+}
+
+.handleRight::before {
+    width: 4px;
+    height: 32px;
+}
+
+/* Left edge — drag horizontally (inverted delta). */
+.handleLeft {
+    top: 0;
+    left: 0;
+    width: 8px;
+    height: 100%;
+    cursor: ew-resize;
+}
+
+.handleLeft::before {
+    width: 4px;
+    height: 32px;
+}
+
+/* Bottom edge — drag vertically to resize row span. */
+.handleBottom {
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    cursor: ns-resize;
+}
+
+.handleBottom::before {
+    width: 32px;
+    height: 4px;
+}
+
+/* Top edge — drag vertically (inverted delta). */
+.handleTop {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    cursor: ns-resize;
+}
+
+.handleTop::before {
+    width: 32px;
+    height: 4px;
+}
+
+/* Bottom-right corner — simultaneous both-axis resize. Wins over the
+   bottom/right edge handles in the overlapping 12 × 12 area. */
+.handleCorner {
+    right: 0;
+    bottom: 0;
+    width: 14px;
+    height: 14px;
+    cursor: nwse-resize;
+    z-index: 11;
+}
+
+.handleCorner::before {
+    width: 6px;
+    height: 6px;
+    border-radius: 1px;
+}
+
+/* ── "Add block" cell ──────────────────────────────────────────────── */
+.addWidget {
+    /* Mirrors the `.cell` defaults so the add-block tile is the same
+       tile size as the smallest first-party widget. */
+    --span: 3;
+    --rows: 3;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    /* Borderless to match the widget cards. The dashed indication is
+       kept as an inset box-shadow so the tile still reads as an
+       "empty slot" affordance without breaking the 1px-gap pattern. */
+    background: transparent;
+    border: 0;
+    border-radius: 16px;
+    box-shadow: inset 0 0 0 1px var(--editor-border-med);
+    color: var(--editor-text-muted);
+    cursor: pointer;
+    transition:
+        color 120ms ease,
+        background 120ms ease,
+        box-shadow 120ms ease;
+    padding: 18px;
+    height: 100%;
+}
+
+.addWidget:hover {
+    color: var(--editor-text-bright);
+    background: rgba(255, 255, 255, 0.02);
+    box-shadow: inset 0 0 0 1px var(--editor-text-muted);
+}
+
+.addInner {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+}
+
+.addIcon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--editor-surface);
+    border: 1px solid var(--editor-border);
+    display: grid;
+    place-items: center;
+    color: var(--editor-text-secondary);
+}
+
+.addLabel {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+@media (max-width: 980px) {
+    .cell {
+        grid-column: span 12;
+    }
+}

@@ -9,6 +9,7 @@
 import type { CapabilityGroup } from '../types'
 
 export const CAPABILITY_GROUPS: CapabilityGroup[] = [
+  { title: 'Dashboard', capabilities: ['dashboard.read'] },
   {
     title: 'Site',
     capabilities: [

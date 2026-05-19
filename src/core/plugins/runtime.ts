@@ -51,6 +51,7 @@ import type {
   PluginCanvasOverlay,
   PluginCommand,
   PluginCommandResult,
+  PluginDashboardWidget,
   PluginEditorPanel,
   PluginManifest,
   PluginPaletteProvider,
@@ -60,6 +61,41 @@ import type {
   RegisteredPluginToolbarButton,
 } from '@core/plugin-sdk'
 import { assertPluginPermission } from '@core/plugin-sdk'
+import { dashboardWidgetRegistry } from '@core/dashboard'
+
+/**
+ * Icon-name → component resolver injected by the admin shell at boot.
+ *
+ * The dashboard registry stores real React icon components (so the
+ * DashboardPage can render them directly), but plugins declare their
+ * widget icons by string name across the SDK boundary. We need a
+ * lookup table here to bridge the two — but that table lives in the
+ * admin layer (it imports real `pixel-art-icons/icons/<name>` modules)
+ * and `@core/plugins/runtime` must not pull admin code into its graph.
+ *
+ * Instead, the admin shell calls `bindDashboardWidgetIconResolver(...)`
+ * once at boot to inject the resolver. If a plugin registers a widget
+ * before the resolver is bound (only possible from the server side, which
+ * doesn't load this runtime), or if no resolver is bound, the widget
+ * registration is rejected loudly rather than silently rendering a
+ * placeholder.
+ */
+type IconResolver = (iconName: string) => import('@core/dashboard').PixelArtIconComponent
+
+let dashboardIconResolver: IconResolver | null = null
+
+export function bindDashboardWidgetIconResolver(resolver: IconResolver): void {
+  dashboardIconResolver = resolver
+}
+
+function requireDashboardIconResolver(): IconResolver {
+  if (!dashboardIconResolver) {
+    throw new Error(
+      '[plugin-runtime] dashboard widget icon resolver not bound. The admin shell must call bindDashboardWidgetIconResolver() at boot before any plugin registers a dashboard widget.',
+    )
+  }
+  return dashboardIconResolver
+}
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
@@ -120,8 +156,9 @@ class PluginRuntime {
 
   /**
    * Deactivate all registrations for a single plugin — commands, toolbar
-   * buttons, panels, canvas overlays, and palette providers. Called when a
-   * plugin is disabled or uninstalled at runtime without a full reload.
+   * buttons, panels, canvas overlays, palette providers, and dashboard
+   * widgets. Called when a plugin is disabled or uninstalled at runtime
+   * without a full reload.
    *
    * The common case (editor page reload) still goes through `reset()` which
    * clears all registrations at once. This method handles the incremental
@@ -143,6 +180,7 @@ class PluginRuntime {
     for (const [key, provider] of this.paletteProviders) {
       if (provider.pluginId === pluginId) this.paletteProviders.delete(key)
     }
+    dashboardWidgetRegistry.unregisterByOwner(pluginId)
     this.toolbarButtonsSnapshot = null
     this.panelsSnapshot = null
     this.canvasOverlaysSnapshot = null
@@ -206,6 +244,30 @@ class PluginRuntime {
     this.toolbarButtons.set(button.id, { ...button, pluginId })
     this.toolbarButtonsSnapshot = null
     this.emit()
+  }
+
+  /**
+   * Register a dashboard widget on behalf of a plugin. Caller MUST have
+   * already asserted the `dashboard.widgets.register` permission. The
+   * widget id must be namespace-locked under the plugin id
+   * (`<pluginId>.<rest>`) — enforced by the registry, not here.
+   *
+   * Plugin-side iconName strings are resolved through the bound
+   * `IconResolver` (`bindDashboardWidgetIconResolver`) — if no resolver
+   * has been bound by the host, the registration throws loudly.
+   */
+  registerDashboardWidget(pluginId: string, widget: PluginDashboardWidget): void {
+    const iconResolve = requireDashboardIconResolver()
+    dashboardWidgetRegistry.register({
+      id: widget.id,
+      ownerId: pluginId,
+      name: widget.name,
+      description: widget.description,
+      icon: iconResolve(widget.iconName),
+      defaultSize: widget.defaultSize,
+      tint: widget.tint,
+      render: widget.component,
+    })
   }
 
   /**
@@ -400,6 +462,14 @@ export function createEditorPluginApi(
             return
           }
           pluginRuntime.registerPaletteProvider(manifest.id, provider)
+        },
+      },
+    },
+    dashboard: {
+      widgets: {
+        register(widget) {
+          assertPluginPermission(manifest, 'dashboard.widgets.register')
+          pluginRuntime.registerDashboardWidget(manifest.id, widget)
         },
       },
     },

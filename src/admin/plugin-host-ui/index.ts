@@ -41,6 +41,22 @@ export {
   PluginTextarea as Textarea,
 } from '@plugins/components/PluginAdminUi/PluginAdminUiComponents'
 
+/**
+ * Chart primitives — Sparkline, Bars, StackedBar, StatValue, Delta.
+ *
+ * Re-exported here so plugins building dashboard widgets can render the
+ * same chart shapes as first-party widgets without bundling their own
+ * chart code. Stay achromatic by default; tint colors come from the
+ * widget chrome via the standard `--rail-tint-*` tokens.
+ */
+export {
+  Sparkline,
+  Bars,
+  StackedBar,
+  StatValue,
+  Delta,
+} from '@ui/components/charts'
+
 export type {
   PluginUiAlertProps as AlertProps,
   PluginUiButtonProps as ButtonProps,
@@ -58,3 +74,12 @@ export type {
   PluginUiTextProps as TextProps,
   PluginUiTextareaProps as TextareaProps,
 } from '@core/plugin-sdk'
+
+export type {
+  SparklineProps,
+  BarsProps,
+  StackedBarProps,
+  StackedBarSegment,
+  StatValueProps,
+  DeltaProps,
+} from '@ui/components/charts'

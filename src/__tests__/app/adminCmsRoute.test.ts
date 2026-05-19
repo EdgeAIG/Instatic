@@ -9,11 +9,14 @@ describe('admin CMS route wiring', () => {
     const router = readFileSync(join(root, 'src/admin/router.tsx'), 'utf8')
 
     expect(router).toContain('path="/admin"')
-    expect(router).toContain('to="/admin/site"')
+    // Admin home redirects to the dashboard (the new admin-home section).
+    expect(router).toContain('to="/admin/dashboard"')
+    expect(router).toContain('path="/admin/dashboard"')
     expect(router).toContain('path="/admin/site"')
     expect(router).toContain('path="/admin/content"')
     expect(router).toContain('AdminEntry')
-    expect(router).not.toContain('Dashboard')
+    // The OLD multi-project editor URLs that came with the static ZIP export
+    // workflow must stay gone.
     expect(router).not.toContain('/editor/:projectId')
     expect(router).not.toContain('/editor/:siteId')
   })

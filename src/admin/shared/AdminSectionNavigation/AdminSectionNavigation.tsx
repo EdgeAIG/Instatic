@@ -9,6 +9,7 @@
  */
 import { useEffect, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from 'react'
 import { ArticleSolidIcon } from 'pixel-art-icons/icons/article-solid'
+import { DashboardSolidIcon } from 'pixel-art-icons/icons/dashboard-solid'
 import { DatabaseSolidIcon } from 'pixel-art-icons/icons/database-solid'
 import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
 import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
@@ -92,6 +93,15 @@ export function AdminSectionNavigation({
 
   return (
     <>
+      {canAccess('dashboard') && (
+        <NavItem
+          to="/admin/dashboard"
+          icon={<DashboardSolidIcon size={NAV_ICON_SIZE} aria-hidden="true" />}
+          label="Dashboard"
+          active={section === 'dashboard'}
+          onNavigateStart={onWorkspaceNavigateStart}
+        />
+      )}
       {canAccess('site') && (
         <NavItem
           to="/admin/site"

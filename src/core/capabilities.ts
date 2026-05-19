@@ -12,6 +12,7 @@
  * Mirrored from `server/auth/capabilities.ts` — keep both lists in sync.
  */
 export const CORE_CAPABILITIES = [
+  'dashboard.read',
   'site.read',
   'site.structure.edit',
   'site.content.edit',

@@ -23,6 +23,10 @@ import type { Migration } from './runMigrations'
  *
  * Migration IDs and order are identical to `migrations-pg.ts` — enforced by
  * `src/__tests__/architecture/migration-parity.test.ts`.
+ *
+ * Pages and Visual Components are stored in data_tables / data_rows — the
+ * same unified store as posts. The legacy "pages" and "page_versions" tables
+ * have been removed from this baseline.
  */
 export const sqliteMigrations: Migration[] = [
   {
@@ -48,9 +52,9 @@ export const sqliteMigrations: Migration[] = [
       -- boot only - subsequent edits via the admin UI are preserved.
       insert into roles (id, slug, name, description, is_system, capabilities_json)
       values
-        ('owner', 'owner', 'Owner', 'Permanent installation owner with full system access.', 1, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
-        ('admin', 'admin', 'Admin', 'Full admin access (cannot manage roles).', 1, '["site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","audit.read"]'),
-        ('client', 'client', 'Client', 'Can edit page copy (text, images, links) but not structure or styles.', 1, '["site.read","site.content.edit"]'),
+        ('owner', 'owner', 'Owner', 'Permanent installation owner with full system access.', 1, '["dashboard.read","site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","roles.manage","audit.read"]'),
+        ('admin', 'admin', 'Admin', 'Full admin access (cannot manage roles).', 1, '["dashboard.read","site.read","site.structure.edit","site.content.edit","site.style.edit","pages.edit","pages.publish","content.create","content.edit.own","content.edit.any","content.publish.own","content.publish.any","content.manage","media.manage","runtime.manage","plugins.manage","users.manage","audit.read"]'),
+        ('client', 'client', 'Client', 'Can edit page copy (text, images, links) but not structure or styles.', 1, '["dashboard.read","site.read","site.content.edit"]'),
         ('member', 'member', 'Member', 'Public-facing member account — no admin access by default.', 1, '[]')
       on conflict (id) do update
         set slug = excluded.slug,
@@ -162,34 +166,11 @@ export const sqliteMigrations: Migration[] = [
         on login_attempts (email_norm, attempted_at desc)
         where email_norm is not null;
 
-      -- ─── Pages + Page versions ────────────────────────────────────────────
-
-      create table if not exists pages (
-        id text primary key,
-        title text not null,
-        slug text not null unique,
-        status text not null default 'draft',
-        draft_document_json text not null,
-        active_version_id text,
-        sort_order integer not null default 0,
-        owner_user_id text references users(id) on delete set null,
-        created_by_user_id text references users(id) on delete set null,
-        updated_by_user_id text references users(id) on delete set null,
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp
-      );
-
-      create table if not exists page_versions (
-        id text primary key,
-        page_id text not null references pages(id) on delete cascade,
-        version integer not null,
-        snapshot_json text not null,
-        published_at text not null default current_timestamp,
-        published_by_user_id text references users(id) on delete set null,
-        unique (page_id, version)
-      );
-
       -- ─── Data tables (unified content schema) ─────────────────────────────
+      --
+      -- Pages and Visual Components are stored here alongside posts. The
+      -- legacy "pages" and "page_versions" tables have been removed; all
+      -- content now lives in data_rows keyed by table_id.
 
       create table if not exists data_tables (
         id text primary key,
@@ -201,33 +182,27 @@ export const sqliteMigrations: Migration[] = [
         plural_label text not null,
         primary_field_id text not null default 'title',
         fields_json text not null default '[]',
+        system integer not null default 0,
         created_by_user_id text references users(id) on delete set null,
         updated_by_user_id text references users(id) on delete set null,
         created_at text not null default current_timestamp,
         updated_at text not null default current_timestamp,
         deleted_at text,
-        constraint data_tables_kind_check check (kind in ('postType', 'data'))
+        constraint data_tables_kind_check check (kind in ('postType', 'data', 'page', 'component'))
       );
 
       create unique index if not exists data_tables_slug_active_idx
         on data_tables (slug)
         where deleted_at is null;
 
-      insert into data_tables (
-        id, name, slug, kind, route_base, singular_label, plural_label,
-        primary_field_id, fields_json
-      )
-      values (
-        'posts',
-        'Posts',
-        'posts',
-        'postType',
-        '/posts',
-        'Post',
-        'Posts',
-        'title',
-        '[{"type":"text","id":"title","label":"Title","required":true,"builtIn":true},{"type":"text","id":"slug","label":"Slug","required":true,"builtIn":true},{"type":"richText","id":"body","label":"Body","format":"markdown","builtIn":true},{"type":"media","id":"featuredMedia","label":"Featured media","mediaKind":"image","builtIn":true},{"type":"text","id":"seoTitle","label":"SEO title","builtIn":true},{"type":"longText","id":"seoDescription","label":"SEO description","builtIn":true}]'
-      )
+      -- ─── System table seeds ────────────────────────────────────────────────
+      --
+      -- Three system tables are seeded at boot. They are protected from rename
+      -- and delete (system = 1). Users can add custom fields to them.
+
+      insert into data_tables (id, name, slug, kind, route_base, singular_label, plural_label, primary_field_id, system, fields_json)
+      values ('posts', 'Posts', 'posts', 'postType', '/posts', 'Post', 'Posts', 'title', 1,
+        '[{"type":"text","id":"title","label":"Title","required":true,"builtIn":true},{"type":"text","id":"slug","label":"Slug","required":true,"builtIn":true},{"type":"richText","id":"body","label":"Body","format":"markdown","builtIn":true},{"type":"media","id":"featuredMedia","label":"Featured media","mediaKind":"image","builtIn":true},{"type":"text","id":"seoTitle","label":"SEO title","builtIn":true},{"type":"longText","id":"seoDescription","label":"SEO description","builtIn":true}]')
       on conflict (id) do update
         set name = excluded.name,
             slug = excluded.slug,
@@ -236,6 +211,39 @@ export const sqliteMigrations: Migration[] = [
             singular_label = excluded.singular_label,
             plural_label = excluded.plural_label,
             primary_field_id = excluded.primary_field_id,
+            system = excluded.system,
+            fields_json = excluded.fields_json,
+            updated_at = current_timestamp,
+            deleted_at = null;
+
+      insert into data_tables (id, name, slug, kind, route_base, singular_label, plural_label, primary_field_id, system, fields_json)
+      values ('pages', 'Pages', 'pages', 'page', '', 'Page', 'Pages', 'title', 1,
+        '[{"type":"text","id":"title","label":"Title","required":true,"builtIn":true},{"type":"text","id":"slug","label":"Slug","required":true,"builtIn":true},{"type":"pageTree","id":"body","label":"Body","required":true,"builtIn":true},{"type":"text","id":"seoTitle","label":"SEO title","builtIn":true},{"type":"longText","id":"seoDescription","label":"SEO description","builtIn":true},{"type":"boolean","id":"templateEnabled","label":"Template","builtIn":true},{"type":"select","id":"templateContext","label":"Template context","options":[{"id":"entry","label":"Entry","value":"entry"}],"builtIn":true},{"type":"text","id":"templateTableSlug","label":"Template table","builtIn":true},{"type":"number","id":"templatePriority","label":"Template priority","integer":true,"builtIn":true},{"type":"longText","id":"templateConditions","label":"Template conditions","builtIn":true}]')
+      on conflict (id) do update
+        set name = excluded.name,
+            slug = excluded.slug,
+            kind = excluded.kind,
+            route_base = excluded.route_base,
+            singular_label = excluded.singular_label,
+            plural_label = excluded.plural_label,
+            primary_field_id = excluded.primary_field_id,
+            system = excluded.system,
+            fields_json = excluded.fields_json,
+            updated_at = current_timestamp,
+            deleted_at = null;
+
+      insert into data_tables (id, name, slug, kind, route_base, singular_label, plural_label, primary_field_id, system, fields_json)
+      values ('components', 'Components', 'components', 'component', '', 'Component', 'Components', 'name', 1,
+        '[{"type":"text","id":"name","label":"Name","required":true,"builtIn":true},{"type":"text","id":"slug","label":"Slug","required":true,"builtIn":true},{"type":"pageTree","id":"body","label":"Body","required":true,"builtIn":true},{"type":"fieldSchema","id":"params","label":"Params","builtIn":true},{"type":"longText","id":"classIds","label":"Classes","builtIn":true}]')
+      on conflict (id) do update
+        set name = excluded.name,
+            slug = excluded.slug,
+            kind = excluded.kind,
+            route_base = excluded.route_base,
+            singular_label = excluded.singular_label,
+            plural_label = excluded.plural_label,
+            primary_field_id = excluded.primary_field_id,
+            system = excluded.system,
             fields_json = excluded.fields_json,
             updated_at = current_timestamp,
             deleted_at = null;
@@ -267,6 +275,14 @@ export const sqliteMigrations: Migration[] = [
 
       create index if not exists data_rows_table_idx
         on data_rows (table_id, updated_at desc)
+        where deleted_at is null;
+
+      create index if not exists data_rows_table_status_idx
+        on data_rows (table_id, status, updated_at desc)
+        where deleted_at is null;
+
+      create index if not exists data_rows_table_author_idx
+        on data_rows (table_id, author_user_id, updated_at desc)
         where deleted_at is null;
 
       create table if not exists data_row_versions (
@@ -414,7 +430,7 @@ export const sqliteMigrations: Migration[] = [
 
       create table if not exists published_runtime_assets (
         id text primary key,
-        page_version_id text not null references page_versions(id) on delete cascade,
+        data_row_version_id text not null references data_row_versions(id) on delete cascade,
         asset_path text not null,
         public_path text not null unique,
         content_type text not null,
@@ -422,8 +438,8 @@ export const sqliteMigrations: Migration[] = [
         created_at text not null default current_timestamp
       );
 
-      create index if not exists published_runtime_assets_page_version_idx
-        on published_runtime_assets (page_version_id);
+      create index if not exists published_runtime_assets_data_row_version_idx
+        on published_runtime_assets (data_row_version_id);
 
       -- ─── Cross-FK fixups ──────────────────────────────────────────────────
       --
@@ -484,6 +500,15 @@ export const sqliteMigrations: Migration[] = [
 
       create index if not exists plugin_schedule_runs_lookup_idx
         on plugin_schedule_runs (plugin_id, schedule_id, started_at desc);
+    `,
+  },
+  {
+    id: '003_page_version_snapshot',
+    sql: `
+      -- Add snapshot_json to data_row_versions so the publish pipeline can
+      -- store the full SiteDocument (shell + all pages) alongside each
+      -- published page version. SQLite mirror of the Postgres migration.
+      alter table data_row_versions add column snapshot_json text;
     `,
   },
 ]

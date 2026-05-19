@@ -1,0 +1,74 @@
+/**
+ * DashboardPage — top-level styling for the admin dashboard. Wraps the
+ * `AdminPageLayout` body with the breadcrumb row, edit-mode banner, and
+ * the grid header.
+ */
+
+.crumbs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--editor-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: -16px;
+    margin-top: -8px;
+}
+
+.crumbsCurrent {
+    color: var(--editor-text-secondary);
+}
+
+.editBanner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(155, 220, 255, 0.08);
+    border: 1px solid rgba(155, 220, 255, 0.18);
+    border-radius: 12px;
+    font-size: 12px;
+    color: var(--editor-text);
+}
+
+.editBanner b {
+    color: var(--editor-text-bright);
+    font-weight: 600;
+}
+
+/* ── Grid header (Overview · NN blocks · time tabs · Add) ─────────── */
+.gridHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.gridHeaderLeft {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+}
+
+.gridHeaderLeft h2 {
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    color: var(--editor-text-bright);
+    font-weight: 600;
+    margin: 0;
+}
+
+.gridCount {
+    font-size: 12px;
+    color: var(--editor-text-muted);
+    font-family: var(--font-mono);
+}
+
+.gridHeaderRight {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}

@@ -1,0 +1,309 @@
+/**
+ * Shared utilities for first-party dashboard widgets — small helpers that
+ * would otherwise be repeated as inline styles across every widget body.
+ */
+
+.fillBottom {
+    margin-top: auto;
+}
+
+.axisRow {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--editor-text-subtle);
+    margin-top: 4px;
+}
+
+/* ── List-style widgets (Top pages, Publish queue) ────────────────── */
+.wlist {
+    list-style: none;
+    display: grid;
+    gap: 0;
+    margin-top: auto;
+    padding: 0;
+}
+
+.wlist li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-top: 1px solid var(--editor-border);
+    font-size: 13px;
+    color: var(--editor-text);
+}
+
+.wlist li:first-child {
+    border-top: 0;
+}
+
+.wlistTitle {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wlistMeta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--editor-text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wlistPath {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--editor-text-subtle);
+}
+
+.deltaSpacing {
+    margin-left: 8px;
+}
+
+/* ── Activity feed ─────────────────────────────────────────────────── */
+.feed {
+    display: grid;
+    gap: 0;
+    margin-top: auto;
+}
+
+.feedRow {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-top: 1px solid var(--editor-border);
+}
+
+.feedRow:first-child {
+    border-top: 0;
+}
+
+.feedAvatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    background: var(--editor-surface);
+    border: 1px solid var(--editor-border);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--editor-text-secondary);
+}
+
+.feedBody {
+    font-size: 12.5px;
+    color: var(--editor-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.feedBody em {
+    font-style: normal;
+    color: var(--editor-text-muted);
+}
+
+.feedBody code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--editor-text-bright);
+    background: var(--editor-selection);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.feedTime {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--editor-text-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* ── Plugin list row ───────────────────────────────────────────────── */
+.pluginRow {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 9px 0;
+    border-top: 1px solid var(--editor-border);
+    font-size: 12.5px;
+}
+
+.pluginRow:first-of-type {
+    border-top: 0;
+}
+
+.pluginIcon {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--editor-surface);
+    border: 1px solid var(--editor-border);
+    display: grid;
+    place-items: center;
+    color: var(--editor-text-secondary);
+}
+
+.pluginName {
+    color: var(--editor-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pluginName small {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--editor-text-subtle);
+    margin-top: 2px;
+}
+
+/* ── Tiny status dot ───────────────────────────────────────────────── */
+.dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.dotGreen {
+    background: var(--editor-success-green);
+}
+
+.dotAmber {
+    background: var(--editor-warning);
+}
+
+.dotMuted {
+    background: var(--editor-text-subtle);
+}
+
+/* ── Badges (queued / live / draft) ────────────────────────────────── */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+}
+
+.badgeDraft {
+    background: var(--editor-selection);
+    color: var(--editor-text-muted);
+}
+
+.badgeLive {
+    background: var(--editor-success-bg);
+    color: var(--editor-success-green);
+}
+
+.badgeQueued {
+    background: var(--editor-warning-bg);
+    color: var(--editor-warning);
+}
+
+/* ── Pages / posts / status row utilities ──────────────────────────── */
+.subFootRow {
+    margin-top: auto;
+    display: flex;
+    gap: 16px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--editor-text-muted);
+}
+
+.statusRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-top: 1px solid var(--editor-border);
+}
+
+.statusRow:first-of-type {
+    border-top: 0;
+}
+
+.statusLabel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--editor-text);
+}
+
+.statusGrid {
+    display: grid;
+    gap: 0;
+    margin-top: 4px;
+}
+
+/* ── Domain widget ─────────────────────────────────────────────────── */
+.domainName {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--editor-text-bright);
+    margin-top: 2px;
+}
+
+.domainList {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--editor-text-muted);
+}
+
+.domainList > div {
+    display: flex;
+    justify-content: space-between;
+}
+
+.domainOk {
+    color: var(--editor-success-green);
+}
+
+/* ── Media thumbnail grid ──────────────────────────────────────────── */
+.mediaGrid {
+    margin-top: auto;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 3px;
+    padding-top: 12px;
+}
+
+.mediaCell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    background: var(--editor-surface-3);
+}
+
+.mediaCellAccent {
+    background: var(--rail-tint-peach);
+    opacity: 0.6;
+}
+
+.mediaCellEmpty {
+    background: var(--editor-surface);
+}

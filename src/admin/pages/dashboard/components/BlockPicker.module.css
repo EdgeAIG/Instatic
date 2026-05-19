@@ -1,0 +1,141 @@
+.picker {
+    position: fixed;
+    right: 28px;
+    bottom: 28px;
+    width: 320px;
+    max-height: 70vh;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    box-shadow: var(--panel-shadow);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 50;
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.head h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--editor-text-bright);
+    margin: 0;
+}
+
+.head p {
+    font-size: 11px;
+    color: var(--editor-text-muted);
+    margin: 2px 0 0;
+}
+
+.searchWrap {
+    padding: 10px 12px 0;
+}
+
+.search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    background: var(--editor-surface);
+    border: 1px solid var(--editor-border);
+    border-radius: 10px;
+    color: var(--editor-text-muted);
+    font-size: 12px;
+}
+
+.search input {
+    flex: 1;
+    background: transparent;
+    border: 0;
+    outline: none;
+    color: var(--editor-text);
+    font: inherit;
+    font-size: 12px;
+}
+
+.list {
+    overflow: auto;
+    padding: 6px;
+}
+
+.item {
+    display: grid;
+    grid-template-columns: 32px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 120ms ease;
+}
+
+.item:hover {
+    background: var(--editor-selection);
+}
+
+.icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--editor-surface);
+    border: 1px solid var(--editor-border);
+    display: grid;
+    place-items: center;
+    color: var(--rail-tint-mint);
+}
+
+.name {
+    font-size: 13px;
+    color: var(--editor-text);
+}
+
+.name small {
+    display: block;
+    font-size: 11px;
+    color: var(--editor-text-muted);
+    margin-top: 2px;
+    font-family: var(--font-mono);
+}
+
+.add {
+    appearance: none;
+    border: 0;
+    background: var(--editor-surface-3);
+    color: var(--editor-text);
+    border-radius: 999px;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+}
+
+.add:hover {
+    background: var(--editor-surface-4);
+}
+
+.added {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--editor-success-green);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.empty {
+    font-size: 12px;
+    color: var(--editor-text-muted);
+    text-align: center;
+    padding: 16px 8px;
+    margin: 0;
+}

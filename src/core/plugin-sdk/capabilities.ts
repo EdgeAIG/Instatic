@@ -104,6 +104,13 @@ export const PLUGIN_CAPABILITIES: PluginCapability[] = [
     surfaces: ['admin', 'manifest'],
   },
   {
+    permission: 'dashboard.widgets.register',
+    label: 'Register dashboard widgets',
+    description: 'Allows the plugin to add cards to the admin dashboard grid (e.g. analytics charts, queue counters, plugin-specific stats). Each widget runs as a regular React component inside the host\'s admin shell.',
+    risk: 'medium',
+    surfaces: ['admin'],
+  },
+  {
     permission: 'frontend.scripts',
     label: 'Inject scripts into published pages',
     description: 'Allows the plugin to ship a JavaScript file that is loaded on every published page (analytics, third-party widgets, custom runtimes).',

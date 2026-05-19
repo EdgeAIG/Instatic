@@ -18,6 +18,7 @@ import { Type, type Static } from '@core/utils/typeboxHelpers'
  * `site.style.edit` without structural rights.
  */
 const CoreCapabilitySchema = Type.Union([
+  Type.Literal('dashboard.read'),
   Type.Literal('site.read'),
   Type.Literal('site.structure.edit'),
   Type.Literal('site.content.edit'),
@@ -41,6 +42,7 @@ const CoreCapabilitySchema = Type.Union([
 export type CoreCapability = Static<typeof CoreCapabilitySchema>
 
 const CORE_CAPABILITIES: CoreCapability[] = [
+  'dashboard.read',
   'site.read',
   'site.structure.edit',
   'site.content.edit',
@@ -96,6 +98,7 @@ const adminCapabilities: CoreCapability[] = CORE_CAPABILITIES.filter(
 )
 
 const clientCapabilities: CoreCapability[] = [
+  'dashboard.read',
   'site.read',
   'site.content.edit',
 ]
