@@ -13,6 +13,7 @@ import { createFilesSlice } from './slices/filesSlice'
 import { createVisualComponentsSlice } from './slices/visualComponentsSlice'
 import { createSettingsSlice, bindSettingsBridgeStoreApi } from './slices/settingsSlice'
 import { createAgentSlice } from '@site/agent/agentSlice'
+import { siteAgentSliceConfig } from '@site/agent/agentSliceConfig.site'
 import { createSitePanelSlice } from './slices/sitePanelSlice'
 import { createClipboardSlice } from './slices/clipboardSlice'
 import { setAgentStoreApi } from '@site/agent/storeRef'
@@ -61,7 +62,7 @@ export const useEditorStore = create<EditorStore>()(
       ...createFilesSlice(...args),
       ...createVisualComponentsSlice(...args),
       ...createSettingsSlice(...args),
-      ...createAgentSlice(...args),
+      ...createAgentSlice(siteAgentSliceConfig)(...args),
       ...createSitePanelSlice(...args),
       ...createClipboardSlice(...args),
     }))

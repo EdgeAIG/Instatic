@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { useEditorStore } from '@site/store/store'
+import { useAgentStore } from '@admin/ai/useAgentStore'
 import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
 import { BulletlistSolidIcon } from 'pixel-art-icons/icons/bulletlist-solid'
@@ -17,12 +17,12 @@ import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
 import styles from './AgentPanel.module.css'
 
 export function ConversationHistory() {
-  const conversations = useEditorStore((s) => s.agentConversations)
-  const activeId = useEditorStore((s) => s.agentConversationId)
-  const loadAgentConversations = useEditorStore((s) => s.loadAgentConversations)
-  const loadAgentConversation = useEditorStore((s) => s.loadAgentConversation)
-  const startNewAgentConversation = useEditorStore((s) => s.startNewAgentConversation)
-  const deleteAgentConversation = useEditorStore((s) => s.deleteAgentConversation)
+  const conversations = useAgentStore((s) => s.agentConversations)
+  const activeId = useAgentStore((s) => s.agentConversationId)
+  const loadAgentConversations = useAgentStore((s) => s.loadAgentConversations)
+  const loadAgentConversation = useAgentStore((s) => s.loadAgentConversation)
+  const startNewAgentConversation = useAgentStore((s) => s.startNewAgentConversation)
+  const deleteAgentConversation = useAgentStore((s) => s.deleteAgentConversation)
 
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
@@ -94,7 +94,7 @@ export function ConversationHistory() {
                     <span className={styles.historyItemTime}>
                       {formatRelativeTime(conv.updatedAt)}
                     </span>
-                    {/* Span (not <button>) so it doesn't nest inside the
+                    {/* Span (not a native button) so it doesn't nest inside the
                         ContextMenuItem's Button — nested interactive
                         elements are invalid HTML + would trip BTN-3. */}
                     <span

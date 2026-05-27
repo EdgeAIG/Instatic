@@ -23,7 +23,7 @@
  */
 
 import { useRef, useEffect, useCallback, memo, useMemo } from 'react'
-import { useEditorStore } from '@site/store/store'
+import { useAgentStore } from '@admin/ai/useAgentStore'
 import { renderMarkdownToHtml } from '@site/agent/markdown'
 import type { AgentMessage, AgentToolCall } from '@site/agent/types'
 import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
@@ -59,14 +59,14 @@ type PanelVariant = 'floating' | 'docked'
  * Agent routes via Vite proxy `/admin/api/agent` → local Bun server → Claude SDK.
  */
 export const AgentPanel = memo(function AgentPanel({ variant = 'floating' }: { variant?: PanelVariant }) {
-  const isOpen = useEditorStore((s) => s.isAgentOpen)
-  const isStreaming = useEditorStore((s) => s.isAgentStreaming)
-  const messages = useEditorStore((s) => s.agentMessages)
-  const agentError = useEditorStore((s) => s.agentError)
-  const closeAgent = useEditorStore((s) => s.closeAgent)
-  const sendAgentMessage = useEditorStore((s) => s.sendAgentMessage)
-  const abortAgent = useEditorStore((s) => s.abortAgent)
-  const clearAgentMessages = useEditorStore((s) => s.clearAgentMessages)
+  const isOpen = useAgentStore((s) => s.isAgentOpen)
+  const isStreaming = useAgentStore((s) => s.isAgentStreaming)
+  const messages = useAgentStore((s) => s.agentMessages)
+  const agentError = useAgentStore((s) => s.agentError)
+  const closeAgent = useAgentStore((s) => s.closeAgent)
+  const sendAgentMessage = useAgentStore((s) => s.sendAgentMessage)
+  const abortAgent = useAgentStore((s) => s.abortAgent)
+  const clearAgentMessages = useAgentStore((s) => s.clearAgentMessages)
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const threadRef = useRef<HTMLDivElement>(null)

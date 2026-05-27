@@ -5,6 +5,7 @@ import {
   type AgentBridgeRuntime,
   type AgentTextStreamSink,
 } from '@site/agent/agentSlice'
+import { executeAgentTool } from '@site/agent/executor'
 import type { AgentMessage, AgentToolCall } from '@site/agent/types'
 import '@modules/base'
 
@@ -148,6 +149,7 @@ describe('processStreamEvent — bridge handshake', () => {
       useEditorStore.setState,
       bridge,
       null,
+      executeAgentTool,
     )
 
     expect(bridge.bridgeId).toBe('bridge-xyz')
@@ -176,6 +178,7 @@ describe('processStreamEvent — toolRequest dispatches to executor', () => {
         useEditorStore.setState,
         bridge,
         null,
+        executeAgentTool,
       )
     } finally {
       intercept.restore()
@@ -216,6 +219,7 @@ describe('processStreamEvent — toolRequest dispatches to executor', () => {
         useEditorStore.setState,
         bridge,
         null,
+        executeAgentTool,
       )
     } finally {
       intercept.restore()
@@ -250,6 +254,7 @@ describe('processStreamEvent — toolCall / toolResult badges', () => {
       useEditorStore.setState,
       bridge,
       null,
+      executeAgentTool,
     )
 
     const pending = getToolCallBlocks(useEditorStore.getState().agentMessages[0])
@@ -269,6 +274,7 @@ describe('processStreamEvent — toolCall / toolResult badges', () => {
       useEditorStore.setState,
       bridge,
       null,
+      executeAgentTool,
     )
 
     const completed = getToolCallBlocks(useEditorStore.getState().agentMessages[0])
@@ -307,6 +313,7 @@ describe('processStreamEvent — chronological text/tool ordering', () => {
       useEditorStore.setState,
       bridge,
       null,
+      executeAgentTool,
     )
 
     await processStreamEvent(
@@ -322,6 +329,7 @@ describe('processStreamEvent — chronological text/tool ordering', () => {
       useEditorStore.setState,
       bridge,
       null,
+      executeAgentTool,
     )
 
     await processStreamEvent(
@@ -336,6 +344,7 @@ describe('processStreamEvent — chronological text/tool ordering', () => {
       useEditorStore.setState,
       bridge,
       null,
+      executeAgentTool,
     )
 
     await processStreamEvent(
@@ -345,6 +354,7 @@ describe('processStreamEvent — chronological text/tool ordering', () => {
       useEditorStore.setState,
       bridge,
       null,
+      executeAgentTool,
     )
 
     const blocks = useEditorStore.getState().agentMessages[0].blocks

@@ -2,6 +2,7 @@ import { useRef, type CSSProperties, type ReactNode } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { LeftSidebarPanelId } from '@site/store/slices/uiSlice'
 import { AgentPanel } from '@site/panels/AgentPanel'
+import { AgentStoreProvider } from '@admin/ai/AgentStoreContext'
 import { ColorsPanel } from '@site/panels/ColorsPanel'
 import { DependenciesPanel } from '@site/panels/DependenciesPanel'
 import { DomPanel } from '@site/panels/DomPanel'
@@ -138,7 +139,20 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
                 <DependenciesPanel variant="docked" />
               </div>
               <div className={styles.panelMount} hidden={effectiveActivePanel !== 'agent'}>
-                <AgentPanel variant="docked" />
+                {/* Inject the site editor's store API so AgentPanel +
+                    ModelPicker + ConversationHistory read agent state
+                    from useEditorStore. The same components are mounted
+                    in ContentPage with a different store.
+
+                    The eslint-disable below covers a known Zustand idiom:
+                    `useEditorStore` is the store API AND a hook — we pass
+                    the store API here, never call it as a hook in this
+                    file. The React-Compiler rule keys on the identifier
+                    prefix and can't see through the dual API. */}
+                {/* eslint-disable-next-line react-compiler/react-compiler */}
+                <AgentStoreProvider store={useEditorStore}>
+                  <AgentPanel variant="docked" />
+                </AgentStoreProvider>
               </div>
               {effectivePluginPanelId !== null && (
                 <div

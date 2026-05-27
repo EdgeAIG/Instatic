@@ -19,7 +19,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useEditorStore } from '@site/store/store'
+import { useAgentStore } from '@admin/ai/useAgentStore'
 import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
 import { ChevronDownIcon } from 'pixel-art-icons/icons/chevron-down'
@@ -37,9 +37,9 @@ interface ModelPickerProps {
 }
 
 export function ModelPicker({ className }: ModelPickerProps) {
-  const activeCredentialId = useEditorStore((s) => s.agentActiveCredentialId)
-  const activeModelId = useEditorStore((s) => s.agentActiveModelId)
-  const setAgentProvider = useEditorStore((s) => s.setAgentProvider)
+  const activeCredentialId = useAgentStore((s) => s.agentActiveCredentialId)
+  const activeModelId = useAgentStore((s) => s.agentActiveModelId)
+  const setAgentProvider = useAgentStore((s) => s.setAgentProvider)
 
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)

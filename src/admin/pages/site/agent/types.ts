@@ -201,11 +201,12 @@ export interface AgentRequestBody {
   /** The user's new message. */
   prompt: string
   /**
-   * Snapshot of the current page tree handed to the site-scope read tools
-   * via `ToolContext.snapshot`. The chat handler attaches it to the
-   * Anthropic + OpenAI drivers' shared snapshot binding.
+   * Scope-specific snapshot handed to the read tools via
+   * `ToolContext.snapshot`. Loose `unknown` here because the body now
+   * crosses every scope (site → PageContext, content → ContentSnapshot,
+   * …); each scope's tool handlers cast at the boundary.
    */
-  snapshot: PageContext
+  snapshot: unknown
 }
 
 interface AgentModulePropOptionContext {

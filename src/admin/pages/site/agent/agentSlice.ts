@@ -35,9 +35,7 @@ import type {
 } from '@core/module-engine/types'
 import { Type } from '@core/utils/typeboxHelpers'
 import type { Page } from '@core/page-tree'
-import { executeAgentTool } from './executor'
 import {
-  AGENT_API_PATH,
   AGENT_TOOL_RESULT_PATH,
   AI_CONVERSATIONS_PATH,
   AI_DEFAULTS_PATH,
@@ -54,6 +52,41 @@ import type {
   ServerStreamEvent,
   PageContext,
 } from './types'
+
+// ---------------------------------------------------------------------------
+// Scope-agnostic config — the site editor and the content workspace each
+// supply their own. See `createAgentSlice(config)` below.
+// ---------------------------------------------------------------------------
+
+export type AgentToolScope = 'site' | 'content' | 'data' | 'plugin'
+
+export interface AgentSliceConfig {
+  /**
+   * Conversation scope. Used in URL paths (`/admin/api/ai/chat/${scope}`,
+   * `?scope=${scope}`), conversation-create body, and the per-scope default
+   * lookup. Keep it aligned with `server/ai/runtime/types.ts → ToolScope`.
+   */
+  readonly scope: AgentToolScope
+  /**
+   * Build the per-request snapshot. The slice has no knowledge of the host
+   * store's shape; the config closure pulls from whatever store the host
+   * mounted the agent in (site editor reads page tree; content workspace
+   * reads active doc + collections).
+   */
+  buildSnapshot(): unknown
+  /**
+   * Dispatch a write-tool request. The slice forwards the server's
+   * `toolRequest` event to this function and POSTs the result back; the
+   * config's implementation talks to the host's bridge (executor.ts for
+   * site, contentBridge.ts for content, …).
+   */
+  dispatchTool(toolName: string, input: unknown): Promise<AgentActionResult>
+  /**
+   * Optional copy override for the "no AI provider configured" error so
+   * each scope can point the user at the right /admin/ai page.
+   */
+  readonly noProviderMessage?: string
+}
 
 // ---------------------------------------------------------------------------
 // Stream-event schema
@@ -373,19 +406,19 @@ function rehydrateMessages(
   return out
 }
 
-interface SiteDefaultEntry {
+interface ScopeDefaultEntry {
   credentialId: string
   modelId: string
 }
 
-async function fetchSiteDefault(): Promise<SiteDefaultEntry | null> {
+async function fetchScopeDefault(scope: AgentToolScope): Promise<ScopeDefaultEntry | null> {
   try {
     const res = await fetch(AI_DEFAULTS_PATH)
     if (!res.ok) return null
-    const body = await res.json() as { defaults?: Record<string, SiteDefaultEntry> }
-    return body.defaults?.site ?? null
+    const body = await res.json() as { defaults?: Record<string, ScopeDefaultEntry> }
+    return body.defaults?.[scope] ?? null
   } catch (err) {
-    console.error('[AgentSlice] Failed to fetch site default:', err)
+    console.error(`[AgentSlice] Failed to fetch ${scope} default:`, err)
     return null
   }
 }
@@ -394,7 +427,8 @@ interface CreatedConversation {
   id: string
 }
 
-async function createSiteConversation(
+async function createConversationForScope(
+  scope: AgentToolScope,
   credentialId: string,
   modelId: string,
   contextJson: string | undefined,
@@ -403,7 +437,7 @@ async function createSiteConversation(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      scope: 'site',
+      scope,
       credentialId,
       modelId,
       ...(contextJson ? { contextJson } : {}),
@@ -429,7 +463,14 @@ declare module '@site/store/types' {
   interface EditorStore extends AgentSlice {}
 }
 
-export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) => {
+/**
+ * Slice factory — site editor + content workspace each call this with their
+ * own scope/snapshot/dispatcher config. Returns a Zustand state creator the
+ * host store composes via the usual `...createAgentSlice(config)(...args)`
+ * spread.
+ */
+export function createAgentSlice(config: AgentSliceConfig): EditorStoreSliceCreator<AgentSlice> {
+  return (set, get) => {
   // AbortController held in closure (not reactive — intentional, not needed in UI)
   let _abortController: AbortController | null = null
 
@@ -545,7 +586,7 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
 
     async loadAgentConversations() {
       try {
-        const res = await fetch(`${AI_CONVERSATIONS_PATH}?scope=site`)
+        const res = await fetch(`${AI_CONVERSATIONS_PATH}?scope=${config.scope}`)
         if (!res.ok) return
         const body = await res.json() as { conversations: AgentConversationSummary[] }
         set({ agentConversations: body.conversations })
@@ -646,10 +687,10 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
       const bridge: AgentBridgeRuntime = { bridgeId: null }
 
       try {
-        const pageContext = buildCurrentPageContext(get)
+        const snapshot = config.buildSnapshot()
 
         // Ensure we have a conversation row before streaming. Created lazily
-        // from the staged picker values OR the site default. If neither, we
+        // from the staged picker values OR the scope default. If neither, we
         // surface a clear actionable error.
         let conversationId = get().agentConversationId
         if (!conversationId) {
@@ -660,11 +701,12 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
           let credentialId = staged.credentialId
           let modelId = staged.modelId
           if (!credentialId || !modelId) {
-            const siteDefault = await fetchSiteDefault()
-            if (!siteDefault) {
+            const scopeDefault = await fetchScopeDefault(config.scope)
+            if (!scopeDefault) {
               set({
                 agentError:
-                  'No AI provider configured for the site editor. Open /admin/ai/providers to add a credential, then /admin/ai/defaults to pick one for the "site" scope.',
+                  config.noProviderMessage
+                  ?? `No AI provider configured for the "${config.scope}" scope. Open /admin/ai/providers to add a credential, then /admin/ai/defaults to pick one.`,
               })
               set((state) => {
                 const msg = state.agentMessages.find((m) => m.id === assistantId)
@@ -674,13 +716,14 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
               })
               return
             }
-            credentialId = siteDefault.credentialId
-            modelId = siteDefault.modelId
+            credentialId = scopeDefault.credentialId
+            modelId = scopeDefault.modelId
           }
-          const conv = await createSiteConversation(
+          const conv = await createConversationForScope(
+            config.scope,
             credentialId,
             modelId,
-            JSON.stringify(pageContext),
+            JSON.stringify(snapshot),
           )
           conversationId = conv.id
           set({
@@ -693,9 +736,9 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
         const body: AgentRequestBody = {
           conversationId,
           prompt: content,
-          snapshot: pageContext,
+          snapshot,
         }
-        const res = await fetch(AGENT_API_PATH, {
+        const res = await fetch(`/admin/api/ai/chat/${config.scope}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -744,6 +787,7 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
               set,
               bridge,
               _abortController?.signal ?? null,
+              config.dispatchTool,
             )
           }
         }
@@ -778,6 +822,7 @@ export const createAgentSlice: EditorStoreSliceCreator<AgentSlice> = (set, get) 
       }
     },
   }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -791,6 +836,7 @@ export async function processStreamEvent(
   set: EditorStoreSet,
   bridge: AgentBridgeRuntime,
   signal: AbortSignal | null,
+  dispatchTool: (toolName: string, input: unknown) => Promise<AgentActionResult>,
 ): Promise<void> {
   switch (event.type) {
     case 'text': {
@@ -804,14 +850,14 @@ export async function processStreamEvent(
     }
 
     case 'toolRequest': {
-      // Defensive: executeAgentTool already converts caught throws into
+      // Defensive: the dispatcher already converts caught throws into
       // `{ success: false, error }`, but if anything ever escapes (or if
-      // executor evolves) we still need to ALWAYS POST a result so the
+      // the bridge evolves) we still need to ALWAYS POST a result so the
       // server's bridge resolver fires and the driver loop sees a tool
       // error rather than hanging forever.
       let result: AgentActionResult
       try {
-        result = await executeAgentTool(event.toolName, event.input)
+        result = await dispatchTool(event.toolName, event.input)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         console.error(`[AgentSlice] tool ${event.toolName} threw unexpectedly:`, err)
@@ -996,7 +1042,12 @@ export function buildPageContext(
   }
 }
 
-function buildCurrentPageContext(get: () => EditorStore): PageContext {
+/**
+ * Convenience wrapper around `buildPageContext` — looks up the active
+ * page on the store and forwards it. Exported so the site editor's
+ * agent-slice config can drop it straight into `buildSnapshot`.
+ */
+export function buildCurrentPageContext(get: () => EditorStore): PageContext {
   const storeState = get()
   const activePage = storeState.site?.pages.find(
     (p) => p.id === storeState.activePageId,
