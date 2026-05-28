@@ -36,7 +36,13 @@
  * of `@openai/agents` in the repo.
  */
 
-import { Agent, Runner, tool, type RunStreamEvent } from '@openai/agents'
+import {
+  Agent,
+  MaxTurnsExceededError,
+  Runner,
+  tool,
+  type RunStreamEvent,
+} from '@openai/agents'
 import { OpenAIProvider } from '@openai/agents'
 import { parseValue } from '@core/utils/typeboxHelpers'
 
@@ -153,6 +159,14 @@ async function* runOpenAiStream(req: AiStreamRequest): AsyncIterable<AiStreamEve
     const result = await runner.run(agent, input, {
       stream: true,
       signal: req.signal,
+      // No cap on tool-call iterations. The SDK defaults to 10
+      // (DEFAULT_MAX_TURNS in @openai/agents-core/runner/constants),
+      // which is a silent safety belt that surfaces as a confusing
+      // mid-build error. Passing `null` disables the check at
+      // turnPreparation.mjs:15. The model itself decides when to stop;
+      // cost is bounded by the user's token budget + the abort button
+      // in the UI, not by an arbitrary turn count.
+      maxTurns: null,
     })
     for await (const event of result) {
       const translated = translateEvent(event)
@@ -161,12 +175,17 @@ async function* runOpenAiStream(req: AiStreamRequest): AsyncIterable<AiStreamEve
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'OpenAI stream failed.'
     console.error('[ai/openai] stream error:', detail)
-    // Prefer the classified message (auth / billing / quota → actionable
-    // copy with a deep-link to /admin/ai/providers), but fall back to the
-    // raw SDK message so the admin can see WHY the stream failed instead
-    // of a content-free "session ended" placeholder. This is an
-    // admin-only surface (capability gated) — info-disclosure concerns
-    // don't apply.
+    // MaxTurnsExceeded should be unreachable now that maxTurns is null,
+    // but keep the catch in case a future SDK change re-enables an
+    // internal cap. Surface the limit verbatim without prescribing what
+    // the user should do — model + prompt are theirs to choose.
+    if (err instanceof MaxTurnsExceededError) {
+      yield {
+        type: 'error',
+        message: `AI stopped: ${detail}.`,
+      }
+      return
+    }
     const classified = classifyAuthOrBillingError(err)
     yield {
       type: 'error',

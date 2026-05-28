@@ -40,6 +40,7 @@ import { useContentMediaPicker } from './hooks/useContentMediaPicker'
 import { useContentWorkspace } from './hooks/useContentWorkspace'
 import { publicContentPath } from './utils/contentEntryUtils'
 import { useAuthenticatedAdminUser } from '@admin/sessionContext'
+import { ContentAgentMount } from './agent/ContentAgentMount'
 import {
   canCreateContent,
   canEditAnyContent,
@@ -591,6 +592,20 @@ export function ContentPage() {
         mount it here anchored to a stable wrapper element and forward the
         chosen token to `bodyEditorRef.current?.insertText`.
       */}
+
+      {/* AI Assistant — content-scope. Mounts the AgentPanel + a floating
+          toggle button + registers the ContentBridgeHandle for the write
+          tools to call into. Self-contained — only depends on the live
+          workspace + draft state we pass in. */}
+      <ContentAgentMount
+        workspace={workspace}
+        draft={draft}
+        currentUser={{
+          id: permissionUser.id,
+          displayName: permissionUser.displayName ?? permissionUser.email,
+          email: permissionUser.email,
+        }}
+      />
     </>
   )
 }

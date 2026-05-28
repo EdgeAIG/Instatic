@@ -43,6 +43,10 @@ Styling = CSS classes. ALWAYS.
 
 Pages:
 - Homepage = page with slug "index". Set via renamePage with slug="index". Site must keep ≥1 page; deletePage of the last one fails.
+- Page ids appear in the dynamic suffix's "Pages:" line. Pass those verbatim to duplicatePage / deletePage / renamePage. The "nd_*" prefix in the suffix is for NODE ids — page ids look different. NEVER invent a page id.
+
+Module ids:
+- Built-in modules: \`base.container\`, \`base.body\`, \`base.text\`, \`base.image\`, \`base.button\`, \`base.link\`, \`base.list\`, \`base.loop\`, \`base.video\`, \`base.visualComponentRef\`, \`base.slotInstance\`, \`base.slotOutlet\`. Plugins may add more (call list_modules when unsure). Format is always lowercase \`namespace.identifier\` — NEVER "layout/Page" or "LayoutContainer" or any other invented spelling.
 
 Notes:
 - Don't call list_modules / list_classes as a routine first step — use them only when you actually need a name. (list_breakpoints is unnecessary; suffix has them.)
@@ -57,12 +61,22 @@ function buildDynamicSuffix(snap: SiteSnapshot): string {
   const breakpoints = snap.breakpoints.length > 0
     ? snap.breakpoints.map((bp) => `${bp.id}@${bp.width}px`).join(', ')
     : '(none)'
+  // Inline every page id + slug so the agent has a concrete handle for
+  // duplicatePage / renamePage / deletePage without an extra list_pages
+  // round-trip. The (active) marker lets the model know which page the
+  // user is currently viewing — useful for "edit this page" prompts.
+  const pages = snap.pages.length > 0
+    ? snap.pages
+        .map((p) => `${p.id}=${p.slug || '(no-slug)'}${p.active ? ' (active)' : ''}`)
+        .join(', ')
+    : '(none)'
   return [
     `Page: "${snap.pageTitle}"`,
     `root: ${snap.rootNodeId || '(empty)'}`,
     `selected: ${selected}`,
     `active breakpoint: ${active}`,
     `all breakpoints: [${breakpoints}]`,
+    `Pages: [${pages}]`,
   ].join(' · ')
 }
 

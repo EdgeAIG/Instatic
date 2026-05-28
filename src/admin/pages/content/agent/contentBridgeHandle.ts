@@ -22,12 +22,75 @@ import type {
   DataTable,
 } from '@core/data/schemas'
 
+// ---------------------------------------------------------------------------
+// Snapshot shape — wire format the agent receives.
+//
+// Mirrors `server/ai/tools/content/snapshot.ts → ContentSnapshot`. Defined
+// structurally here (not imported) so the frontend doesn't reach into
+// `server/` — same convention as `PageContext` for the site editor.
+// Keep the two in sync.
+// ---------------------------------------------------------------------------
+
+export interface ContentAgentCurrentUser {
+  id: string
+  displayName: string
+  email: string
+}
+
+export interface ContentAgentCollectionSummary {
+  id: string
+  slug: string
+  label: string
+  kind: string
+  docCount: number
+}
+
+export interface ContentAgentFieldInfo {
+  id: string
+  label: string
+  type: string
+  required: boolean
+  builtIn: boolean
+  options?: Array<{ value: string; label: string }>
+  targetTableSlug?: string
+  mediaKind?: string
+  allowMultiple?: boolean
+}
+
+export interface ContentAgentActiveDocument {
+  id: string
+  tableId: string
+  title: string
+  slug: string
+  status: 'draft' | 'unpublished' | 'published' | 'scheduled'
+  fields: Record<string, unknown>
+  schema: ContentAgentFieldInfo[]
+  authorUserId: string | null
+  updatedAt: string
+}
+
+export interface ContentAgentSnapshot {
+  collections: ContentAgentCollectionSummary[]
+  activeTableId: string | null
+  activeDocument: ContentAgentActiveDocument | null
+  currentUser: ContentAgentCurrentUser
+}
+
 /**
  * Imperative surface ContentPage exposes to the agent bridge. Every method
  * mutates the live workspace state and returns the resulting shape (or
  * throws on validation failures the dispatcher converts to tool errors).
  */
 export interface ContentBridgeHandle {
+  /**
+   * Per-request snapshot the agent-slice config feeds to the server
+   * (becomes ContentSnapshot in the system prompt + tool ctx). Built
+   * from the LIVE workspace state at call time, so the agent always
+   * sees what the user sees. The handle owns the currentUser closure
+   * via its own ref so the config layer doesn't need to thread it.
+   */
+  buildSnapshot(): ContentAgentSnapshot
+
   /** Snapshot of every (postType/page) collection — light projection. */
   listCollections(): DataTable[]
   /** Active collection in the sidebar; null when none selected. */
