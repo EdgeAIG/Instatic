@@ -3,21 +3,26 @@ export type {
   PublishedPageRuntimeAssets,
   RuntimePackageDependencyUsage,
   RuntimePackageImportmap,
+  SiteAssetScope,
   SiteDependencyLock,
   SiteRuntimeDiagnostic,
   SiteScriptPlacement,
-  SiteScriptScope,
+  SiteScriptRuntimeConfig,
   SiteScriptTiming,
+  SiteStyleRuntimeConfig,
 } from './schemas'
 export {
   DEFAULT_SCRIPT_RUNTIME_CONFIG,
+  DEFAULT_STYLE_RUNTIME_CONFIG,
   DEFAULT_SITE_RUNTIME,
+  assetScopeAppliesToPage,
   cloneSiteRuntimeConfig,
+  collectAppliedStyles,
   collectRuntimeScripts,
   normalizeScriptRuntimeConfig,
+  normalizeStyleRuntimeConfig,
   normalizeSiteRuntimeConfig,
-  scriptAppliesToPage,
-} from './scriptConfig'
+} from './runtimeConfig'
 export {
   analyzeRuntimeScriptImports,
   extractRuntimeImportSpecifiers,

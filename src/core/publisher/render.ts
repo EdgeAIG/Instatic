@@ -171,6 +171,7 @@ function buildStyleHead(
   cssEmission: 'inline' | 'external',
   options: PublishPageOptions,
   site: SiteDocument,
+  page: Page,
   cssMap: Map<string, string>,
 ): string {
   if (cssEmission === 'external') {
@@ -200,7 +201,7 @@ function buildStyleHead(
   const frameworkCss = buildSiteFrameworkCss(site)
   const moduleCss = Array.from(cssMap.values()).join('\n')
   const classCss = collectClassCSS(site)
-  const userCss = collectUserStylesheetCss(site)
+  const userCss = collectUserStylesheetCss(site, page)
   // Same cascade order as the external-link path: user CSS comes last so it
   // wins specificity ties against the class registry.
   const allCss = [PUBLISHER_RESET_CSS, frameworkCss, moduleCss, classCss, userCss]
@@ -340,8 +341,11 @@ function buildRuntimeAssetsBlock(
   // was actually rendered during the walk (tracked via ctx.holeNodeIds) — no
   // idle JS for fully-static pages.
   const hasHoles = (ctx.holeNodeIds?.size ?? 0) > 0
+  // Version the runtime URL with publishVersion so a CMS update busts the
+  // browser cache (the asset is served `max-age=3600`); the runtime endpoint
+  // ignores the query string.
   const holeRuntimeScript = hasHoles
-    ? `  <script type="module" src="/_pb/hole-runtime.js" defer></script>`
+    ? `  <script type="module" src="/_pb/hole-runtime.js?v=${ctx.publishVersion ?? 0}" defer></script>`
     : ''
 
   // Site-dependency importmap. When present we emit a `<script type="importmap">`
@@ -489,7 +493,7 @@ export function publishPage(
   // Cascade order (both inline/external): reset → framework (tokens +
   // generated utilities + module CSS) → user class CSS. User classes load
   // last so they win specificity ties on identically-specific selectors.
-  const styleHeadHtml = buildStyleHead(options.cssEmission ?? 'inline', options, site, cssMap)
+  const styleHeadHtml = buildStyleHead(options.cssEmission ?? 'inline', options, site, page, cssMap)
 
   const meta = buildDocumentMetaTags(site, page)
   const runtime = buildRuntimeAssetsBlock(options, ctx)

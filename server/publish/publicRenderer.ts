@@ -43,6 +43,14 @@ export interface RenderPublishedSnapshotContext {
   db: DbClient
   /** Optional request URL — when present, drives per-loop pagination. */
   url?: URL
+  /**
+   * Publish version to stamp into `<pb-hole data-pb-version>` placeholders.
+   * Defaults to the live `getPublishVersion()`. The full/incremental publish
+   * bakes shells BEFORE bumping the version, so it passes the next version
+   * (`getPublishVersion() + 1`) here — otherwise every baked hole would carry
+   * a stale version and the hole endpoint would refuse to hydrate it.
+   */
+  publishVersion?: number
 }
 
 export async function renderPublishedSnapshot(
@@ -51,7 +59,7 @@ export async function renderPublishedSnapshot(
 ): Promise<RendererOutput> {
   const page = snapshot.site.pages.find((candidate) => candidate.id === snapshot.pageRowId)
   if (!page) throw new Error(`Published page "${snapshot.pageRowId}" not found in snapshot`)
-  const cssBundle = buildSiteCssBundle(snapshot.site, registry)
+  const cssBundle = buildSiteCssBundle(snapshot.site, registry, page)
   const [loopData, mediaAssets] = await Promise.all([
     prefetchLoopData(page, snapshot.site, ctx.db, ctx.url),
     prefetchMediaAssets(page, registry, ctx.db),
@@ -65,7 +73,7 @@ export async function renderPublishedSnapshot(
     loopData,
     mediaAssets,
     loopEndpointBaseUrl: LOOP_ENDPOINT_BASE_URL,
-    publishVersion: getPublishVersion(),
+    publishVersion: ctx.publishVersion ?? getPublishVersion(),
     // Seed route frame from the actual request URL (when available) so
     // `{route.slug}` / `{route.path}` bindings resolve to live values.
     // publishPage falls back to the page permalink if no templateContext
@@ -85,7 +93,7 @@ export async function renderPublishedDataRowTemplate(
   const template = selectEntryTemplate(snapshot.site, row.tableSlug)
   if (!template) return null
 
-  const cssBundle = buildSiteCssBundle(snapshot.site, registry)
+  const cssBundle = buildSiteCssBundle(snapshot.site, registry, template)
   const [loopData, mediaAssets] = await Promise.all([
     prefetchLoopData(template, snapshot.site, ctx.db, ctx.url),
     prefetchMediaAssets(template, registry, ctx.db),
@@ -108,7 +116,7 @@ export async function renderPublishedDataRowTemplate(
     loopData,
     mediaAssets,
     loopEndpointBaseUrl: LOOP_ENDPOINT_BASE_URL,
-    publishVersion: getPublishVersion(),
+    publishVersion: ctx.publishVersion ?? getPublishVersion(),
   }).html
   return { html, pageId: template.id, slug: template.slug, siteId: snapshot.site.id }
 }

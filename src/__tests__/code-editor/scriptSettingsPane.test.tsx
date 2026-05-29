@@ -67,9 +67,17 @@ describe('Script runtime settings pane', () => {
     })
     expect(useEditorStore.getState().siteRuntime.scripts['script-1'].timing).toBe('idle')
 
+    // Switching to "Specific pages" starts with an empty selection, then each
+    // page chip toggles membership — no more lossy "current page" snapshot.
     fireEvent.change(screen.getByRole('combobox', { name: 'Script scope' }), {
-      target: { value: 'current-page' },
+      target: { value: 'pages' },
     })
+    expect(useEditorStore.getState().siteRuntime.scripts['script-1'].scope).toEqual({
+      type: 'pages',
+      pageIds: [],
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }))
     expect(useEditorStore.getState().siteRuntime.scripts['script-1'].scope).toEqual({
       type: 'pages',
       pageIds: ['page-home'],

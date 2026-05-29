@@ -19,7 +19,6 @@ import type { PublishedRuntimePackageImportmap } from '@core/publisher/render'
 import type { PluginPageSummary } from '@core/plugin-sdk'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
 import { registry } from '@core/module-engine/registry'
-import { isFullyStaticPage } from '@core/publisher/staticAnalysis'
 import type { DbClient } from '../db/client'
 import { loadDraftSite } from './site'
 import { listDataRows } from './data'
@@ -35,8 +34,9 @@ import {
 import { savePublishedRuntimeAssets } from './runtimeAsset'
 import { renderPublishedSnapshot } from '../publish/publicRenderer'
 import { applyPublishedHtmlPipeline } from '../publish/publishedHtmlPipeline'
-import { prepareInactiveSlot, writeArtefact, swapSlot } from '../publish/staticArtefact'
-import { bumpPublishVersion } from '../publish/renderCache'
+import { prepareInactiveSlot, writeArtefact, writeStaticAsset, swapSlot } from '../publish/staticArtefact'
+import { buildSiteCssBundle } from '../publish/siteCssBundle'
+import { bumpPublishVersion, getPublishVersion } from '../publish/renderCache'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -183,7 +183,7 @@ export async function publishDraftSite(
   adminUserId: string,
   uploadsDir?: string,
 ): Promise<PublishResult> {
-  const { publishedPages, snapshots } = await db.transaction(async (tx) => {
+  const { publishedPages, snapshots, runtimeAssetFiles } = await db.transaction(async (tx) => {
     const shell = await loadDraftSite(tx)
     if (!shell) throw new Error('draft site not found')
 
@@ -224,6 +224,9 @@ export async function publishDraftSite(
     }
 
     const snapshots: PublishedPageSnapshot[] = []
+    // Runtime JS bytes for every page, collected for the Layer A disk write so
+    // published pages serve their scripts straight off disk (not the DB).
+    const runtimeAssetFiles: Array<{ publicPath: string; bytes: Uint8Array }> = []
     for (const page of publishedSite.pages) {
       const version = await nextVersionNumber(tx, page.id)
       const versionId = nanoid()
@@ -261,6 +264,9 @@ export async function publishDraftSite(
         )
       `
       await savePublishedRuntimeAssets(tx, versionId, runtimeBuild.files)
+      for (const file of runtimeBuild.files) {
+        runtimeAssetFiles.push({ publicPath: file.publicPath, bytes: file.bytes })
+      }
       await tx`
         update data_rows
         set active_version_id = ${versionId},
@@ -274,25 +280,74 @@ export async function publishDraftSite(
       `
     }
 
-    return { publishedPages: publishedSite.pages.length, snapshots }
+    return { publishedPages: publishedSite.pages.length, snapshots, runtimeAssetFiles }
   })
 
   // Layer A: write static artefacts outside the transaction. Disk artefacts
   // are derived state — a write failure is logged but does not roll back the
   // DB publish. Visitors fall through to the live renderer until the next
   // full publish rebuilds the slot.
+  //
+  // Complete static publishing: alongside each page's HTML we bake the CSS
+  // bundles and runtime JS into the same slot under their public paths
+  // (`/_pb/css/...`, `/_pb/assets/...`). The visitor router serves these off
+  // disk, so a published page never hits the server to (re)generate its CSS
+  // or JS — the slot is a self-contained static export.
+  //
+  // EVERY page is baked: fully-static pages bake to a complete document; pages
+  // with dynamic nodes bake their static SHELL with `<pb-hole>` placeholders
+  // (the hole runtime lazy-fetches each fragment from `/_pb/hole/`). Either way
+  // the HTML + CSS + JS are served from disk — only the hole fragment touches
+  // the server. The shells are stamped with `nextPublishVersion` (the version
+  // that becomes current the instant `bumpPublishVersion()` runs after the
+  // swap) so their `<pb-hole data-pb-version>` matches what the hole endpoint
+  // expects; otherwise every baked hole would be rejected as stale.
+  const nextPublishVersion = getPublishVersion() + 1
   if (uploadsDir) {
     try {
       const { slot, slotDir } = await prepareInactiveSlot(uploadsDir)
+
+      // Every distinct static asset referenced by ANY published page.
+      // Content-hashed filenames dedupe identical bytes across pages to a
+      // single write.
+      const assetsByPath = new Map<string, Uint8Array>()
+      const encoder = new TextEncoder()
       for (const snapshot of snapshots) {
         const page = snapshot.site.pages.find((p) => p.id === snapshot.pageRowId)
         if (!page) continue
-        if (!isFullyStaticPage(page, snapshot.site, registry)) continue
+        const cssBundle = buildSiteCssBundle(snapshot.site, registry, page)
+        for (const file of [cssBundle.reset, cssBundle.framework, cssBundle.style, cssBundle.userStyles]) {
+          if (file.content.length === 0) continue
+          const publicPath = `/_pb/css/${file.filename}`
+          if (!assetsByPath.has(publicPath)) assetsByPath.set(publicPath, encoder.encode(file.content))
+        }
+      }
+      for (const asset of runtimeAssetFiles) {
+        if (!assetsByPath.has(asset.publicPath)) assetsByPath.set(asset.publicPath, asset.bytes)
+      }
+      for (const [publicPath, bytes] of assetsByPath) {
+        await writeStaticAsset(slotDir, publicPath, bytes)
+      }
+
+      // HTML artefacts (or hole shells) for every page. A page that fails to
+      // render (e.g. a VC ref cycle) is skipped and falls through to the live
+      // renderer at request time — one bad page never aborts the whole bake.
+      for (const snapshot of snapshots) {
+        const page = snapshot.site.pages.find((p) => p.id === snapshot.pageRowId)
+        if (!page) continue
         const urlPath = page.slug === 'index' ? '/' : `/${page.slug}`
-        const syntheticUrl = new URL(`http://localhost${urlPath}`)
-        const rendered = await renderPublishedSnapshot(snapshot, { db, url: syntheticUrl })
-        const html = await applyPublishedHtmlPipeline(rendered, db)
-        await writeArtefact(slotDir, urlPath, html)
+        try {
+          const syntheticUrl = new URL(`http://localhost${urlPath}`)
+          const rendered = await renderPublishedSnapshot(snapshot, {
+            db,
+            url: syntheticUrl,
+            publishVersion: nextPublishVersion,
+          })
+          const html = await applyPublishedHtmlPipeline(rendered, db)
+          await writeArtefact(slotDir, urlPath, html)
+        } catch (err) {
+          console.error('[publish:site] failed to bake artefact for', urlPath, '(falls through to live renderer):', err)
+        }
       }
       await swapSlot(uploadsDir, slot)
     } catch (err) {
@@ -301,7 +356,10 @@ export async function publishDraftSite(
   }
 
   // Layer B: invalidate the in-memory render cache so the next visitor request
-  // re-renders against the freshly committed snapshot.
+  // re-renders against the freshly committed snapshot. This is the SYNCHRONOUS
+  // statement right after the swap — no `await` between them — so there is no
+  // window where the freshly-swapped shells (stamped nextPublishVersion) are
+  // live while the version counter still reads the old value.
   bumpPublishVersion()
 
   return { publishedPages }

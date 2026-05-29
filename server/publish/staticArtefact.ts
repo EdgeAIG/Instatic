@@ -85,16 +85,16 @@ function urlToDiskRelPath(urlPath: string): string {
 }
 
 /**
- * Validate a URL path and return its relative disk path.
- *
- * Rejects:
+ * Decode + validate a URL path, returning the safe (leading-slash-stripped)
+ * relative path. Rejects:
  *   - `..` segments after URL-decoding (catches `%2e%2e` and similar)
  *   - Paths that resolve to an absolute path after stripping the leading `/`
  *
- * Throws on any violation. Called by `resolveArtefactPath` (for write/remove
- * paths) and directly by `readArtefact` (for read paths).
+ * Throws on any violation. The raw relative path is what asset files
+ * (CSS/JS bundles) map to; HTML artefacts run it through `urlToDiskRelPath`
+ * for the `.html` / `index.html` mapping.
  */
-function computeDiskRelPath(urlPath: string): string {
+function safeRelPath(urlPath: string): string {
   // Decode URL-encoded characters so %2e%2e is treated the same as ..
   let decoded: string
   try {
@@ -115,7 +115,17 @@ function computeDiskRelPath(urlPath: string): string {
     throw new Error(`Artefact URL path "${urlPath}" contains an embedded absolute path`)
   }
 
-  return urlToDiskRelPath(decoded)
+  return stripped
+}
+
+/**
+ * Validate a URL path and return its relative disk path for an HTML artefact.
+ *
+ * Called by `resolveArtefactPath` (for write/remove paths) and directly by
+ * `readArtefact` (for read paths).
+ */
+function computeDiskRelPath(urlPath: string): string {
+  return urlToDiskRelPath(`/${safeRelPath(urlPath)}`)
 }
 
 /**
@@ -389,4 +399,74 @@ export async function removeArtefactInPlace(
 
   // force: true makes this a no-op if the file doesn't exist
   await rm(filePath, { force: true })
+}
+
+// ---------------------------------------------------------------------------
+// Static asset IO (CSS bundles + runtime JS) — complete static publishing
+//
+// Published pages reference their CSS at `/_pb/css/<bundle>-<hash>.css` and
+// their JS at `/_pb/assets/<versionId>/...`. To make the published slot a
+// self-contained, server-independent static export, the full publish writes
+// those exact files into the slot under the same path. The visitor router
+// then serves them straight off disk (no DB, no per-request rebuild). The
+// content hash in each filename keeps `Cache-Control: immutable` correct
+// across slot swaps.
+// ---------------------------------------------------------------------------
+
+/**
+ * Write an asset (CSS/JS) into a slot directory at the relative path derived
+ * from its public URL path (e.g. `/_pb/css/style-abc123.css`). Mirrors
+ * `writeArtefact`'s tmp + `rename(2)` atomicity. No-op-safe to call repeatedly
+ * with identical content-hashed filenames across pages.
+ */
+export async function writeStaticAsset(
+  slotDir: string,
+  publicPath: string,
+  bytes: Uint8Array,
+): Promise<void> {
+  const relPath = safeRelPath(publicPath)
+  const finalPath = join(slotDir, relPath)
+  const rel = relative(slotDir, finalPath)
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error(`Static asset path "${publicPath}" escapes the publish root`)
+  }
+  const tmpPath = `${finalPath}.tmp`
+  await mkdir(dirname(finalPath), { recursive: true })
+  await writeFile(tmpPath, bytes)
+  await rename(tmpPath, finalPath)
+}
+
+/**
+ * Read a static asset from the active publish slot through the `current`
+ * symlink. Returns the raw bytes, or `null` on any miss (no symlink, file
+ * absent, unsafe path). Shares `readArtefact`'s retry loop so it survives the
+ * brief slot-swap window on every OS.
+ */
+export async function readStaticAsset(uploadsDir: string, publicPath: string): Promise<Uint8Array | null> {
+  let relPath: string
+  try {
+    relPath = safeRelPath(publicPath)
+  } catch {
+    return null
+  }
+  if (relPath === '' || relPath.endsWith('/')) return null
+
+  const filePath = join(getPublishedDir(uploadsDir), 'current', relPath)
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const buffer = await readFile(filePath)
+      return new Uint8Array(buffer)
+    } catch (err) {
+      const code = isNodeError(err) ? err.code : null
+      if (code !== 'ENOENT' && code !== 'ENOTDIR' && code !== 'EINVAL') {
+        return null
+      }
+      if (attempt < 4) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      }
+    }
+  }
+
+  return null
 }

@@ -32,6 +32,7 @@ import { PanelHeader } from '@admin/shared/PanelHeader'
 import { useDraggablePanel } from '@site/hooks/useDraggablePanel'
 import { ImagePreview } from './ImagePreview'
 import { ScriptSettingsPane } from './ScriptSettingsPane'
+import { StyleSettingsPane } from './StyleSettingsPane'
 import { EmptyState } from '@ui/components/EmptyState'
 import { cn } from '@ui/cn'
 import styles from './CodeEditorPanel.module.css'
@@ -120,6 +121,7 @@ export const CodeEditorPanel = memo(function CodeEditorPanel() {
   const isNonImageAsset = isAsset && !isImageAsset
   const isTextFile = activeFile && !isAsset
   const isScriptFile = activeFile?.type === 'script'
+  const isStyleFile = activeFile?.type === 'style'
 
   // Panel title: show filename when a file is active
   const panelTitle = activeFile
@@ -166,6 +168,7 @@ export const CodeEditorPanel = memo(function CodeEditorPanel() {
             /* Text file — lazy-load the heavy CodeMirror 6 bundle */
             <div className={styles.editorWorkspace}>
               {isScriptFile && <ScriptSettingsPane file={activeFile} />}
+              {isStyleFile && <StyleSettingsPane file={activeFile} />}
               <div className={styles.editorSurface}>
                 <Suspense fallback={<CodeEditorSkeleton />}>
                   <CodeMirrorEditor

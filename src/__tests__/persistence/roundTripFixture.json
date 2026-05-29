@@ -305,6 +305,13 @@
         "scope": { "type": "all-pages" },
         "priority": 100
       }
+    },
+    "styles": {
+      "style-1": {
+        "enabled": true,
+        "scope": { "type": "pages", "pageIds": ["page-home"] },
+        "priority": 50
+      }
     }
   }
 }

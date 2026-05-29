@@ -66,10 +66,14 @@ const SiteScriptTimingSchema = Type.Union([
 export type SiteScriptTiming = Static<typeof SiteScriptTimingSchema>
 
 // ---------------------------------------------------------------------------
-// SiteScriptScope — discriminated union on `type`
+// SiteAssetScope — discriminated union on `type`
+//
+// Shared by scripts AND stylesheets: both can target all pages, an explicit
+// list of pages, or an explicit list of template pages. The page-builder UI
+// drives both through the same multi-select scope picker.
 // ---------------------------------------------------------------------------
 
-const SiteScriptScopeSchema = withFallback(
+const SiteAssetScopeSchema = withFallback(
   Type.Union([
     Type.Object({ type: Type.Literal('all-pages') }),
     Type.Object({ type: Type.Literal('pages'), pageIds: Type.Array(Type.String()) }),
@@ -78,7 +82,7 @@ const SiteScriptScopeSchema = withFallback(
   { type: 'all-pages' as const },
 )
 
-export type SiteScriptScope = Static<typeof SiteScriptScopeSchema>
+export type SiteAssetScope = Static<typeof SiteAssetScopeSchema>
 
 // ---------------------------------------------------------------------------
 // SiteScriptRuntimeConfig
@@ -89,11 +93,29 @@ const SiteScriptRuntimeConfigSchema = Type.Object({
   runInCanvas: Type.Boolean(),
   placement: SiteScriptPlacementSchema,
   timing: SiteScriptTimingSchema,
-  scope: SiteScriptScopeSchema,
+  scope: SiteAssetScopeSchema,
   priority: Type.Number(),
 })
 
 export type SiteScriptRuntimeConfig = Static<typeof SiteScriptRuntimeConfigSchema>
+
+// ---------------------------------------------------------------------------
+// SiteStyleRuntimeConfig
+//
+// User-authored stylesheets (`site.files[type === 'style']`) carry the same
+// targeting + ordering controls as scripts, minus placement/timing — those
+// are script-only concepts (a `<link>` always lives in `<head>`). Cascade
+// order within the published `userStyles` bundle is driven by `priority`
+// (ascending), with `path` breaking ties.
+// ---------------------------------------------------------------------------
+
+const SiteStyleRuntimeConfigSchema = Type.Object({
+  enabled: Type.Boolean(),
+  scope: SiteAssetScopeSchema,
+  priority: Type.Number(),
+})
+
+export type SiteStyleRuntimeConfig = Static<typeof SiteStyleRuntimeConfigSchema>
 
 // ---------------------------------------------------------------------------
 // RuntimePackageImportmap
@@ -123,6 +145,8 @@ export type RuntimePackageImportmap = Static<typeof RuntimePackageImportmapSchem
 export const SiteRuntimeConfigSchema = Type.Object({
   dependencyLock: SiteDependencyLockSchema,
   scripts: Type.Record(Type.String(), SiteScriptRuntimeConfigSchema),
+  /** Per-stylesheet targeting + cascade config, keyed by SiteFile id. */
+  styles: Type.Record(Type.String(), SiteStyleRuntimeConfigSchema),
   /**
    * Stored alongside the lock so the editor can reach for the iframe's
    * import map without a round-trip — `setSiteDependencyLock` writes both

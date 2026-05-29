@@ -2,6 +2,7 @@ import { tryHandleAi } from './ai/handlers'
 import { handleCmsRequest } from './handlers/cms'
 import type { DbClient } from './db/client'
 import { renderPublicResolution } from './publish/publicRouter'
+import { readStaticAsset } from './publish/staticArtefact'
 import { getLatestPublishedSiteSnapshot } from './repositories/publish'
 import { getSetupStatus } from './repositories/setup'
 import { getPublishedRuntimeAsset } from './repositories/runtimeAsset'
@@ -164,6 +165,26 @@ function tryServeHole(req: Request, runtime: ServerRuntime, url: URL, pathname: 
 
 async function tryServeRuntimeAsset(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response | null> {
   if (req.method !== 'GET' || !pathname.startsWith('/_pb/assets/')) return null
+
+  // Disk-first: a full publish bakes the runtime JS into the active slot, so
+  // published pages serve their scripts straight off disk (no DB round-trip,
+  // no rebuild). Content-hashed filenames keep `immutable` caching correct.
+  if (runtime.uploadsDir) {
+    const bytes = await readStaticAsset(runtime.uploadsDir, pathname)
+    if (bytes) {
+      const body = new ArrayBuffer(bytes.byteLength)
+      new Uint8Array(body).set(bytes)
+      return new Response(body, {
+        headers: {
+          'content-type': contentTypeForAssetPath(pathname),
+          'cache-control': 'public, max-age=31536000, immutable',
+        },
+      })
+    }
+  }
+
+  // Fallback: assets stored in the DB (preview, or a publish whose disk write
+  // failed). The live renderer keeps working off these.
   const runtimeAsset = await getPublishedRuntimeAsset(runtime.db, pathname)
   if (!runtimeAsset) return null
   const body = new ArrayBuffer(runtimeAsset.bytes.byteLength)
@@ -174,6 +195,22 @@ async function tryServeRuntimeAsset(req: Request, runtime: ServerRuntime, _url: 
       'cache-control': 'public, max-age=31536000, immutable',
     },
   })
+}
+
+/** Derive a response content-type for a baked static asset from its extension. */
+function contentTypeForAssetPath(pathname: string): string {
+  if (pathname.endsWith('.js') || pathname.endsWith('.mjs')) return 'text/javascript; charset=utf-8'
+  if (pathname.endsWith('.css')) return 'text/css; charset=utf-8'
+  if (pathname.endsWith('.map') || pathname.endsWith('.json')) return 'application/json; charset=utf-8'
+  if (pathname.endsWith('.svg')) return 'image/svg+xml'
+  if (pathname.endsWith('.png')) return 'image/png'
+  if (pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) return 'image/jpeg'
+  if (pathname.endsWith('.gif')) return 'image/gif'
+  if (pathname.endsWith('.webp')) return 'image/webp'
+  if (pathname.endsWith('.woff2')) return 'font/woff2'
+  if (pathname.endsWith('.woff')) return 'font/woff'
+  if (pathname.endsWith('.ttf')) return 'font/ttf'
+  return 'application/octet-stream'
 }
 
 /**
@@ -206,7 +243,7 @@ async function tryServeRuntimePackageNamespace(req: Request, _runtime: ServerRun
  */
 async function tryServeSiteCssNamespace(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response | null> {
   if (req.method !== 'GET' || !pathname.startsWith('/_pb/css/')) return null
-  return (await serveSiteCss(runtime.db, pathname)) ?? new Response('Not found', { status: 404 })
+  return (await serveSiteCss(runtime.db, pathname, runtime.uploadsDir)) ?? new Response('Not found', { status: 404 })
 }
 
 /**
@@ -419,41 +456,68 @@ function adminUiNotBuiltResponse(pathname: string): Response {
  *
  * The URL path is `/_pb/css/<bundle>-<hash>.css` where `<bundle>` is the
  * logical layer name and `<hash>` is the 12-hex SHA-256 prefix that
- * `buildSiteCssBundle` produces. We rebuild the bundle from the latest
- * published snapshot on every request, which is fine because:
+ * `buildSiteCssBundle` produces.
  *
- *  - Bundles are tiny (kB) and the build is microseconds (deduped by moduleId).
- *  - Browsers / CDNs cache the response for a year (`immutable`), so this
- *    handler only fires for the FIRST visitor of a given hash.
- *  - When a hash changes (the site or its classes were edited), HTML pages
- *    re-render with the new `<link href>` referencing the new filename, and
- *    visitors fetch the new bundle exactly once.
+ * Disk-first: a full publish bakes every referenced CSS file into the active
+ * slot, so this handler reads it straight off disk — no DB, no rebuild. The
+ * DB rebuild below is a fallback for preview (pre-publish) or a publish whose
+ * disk write failed.
+ *
+ *  - Browsers / CDNs cache the response for a year (`immutable`).
+ *  - When a hash changes (the site, its classes, or a stylesheet was edited),
+ *    HTML pages re-render with the new `<link href>` and visitors fetch the
+ *    new file exactly once.
  *
  * Stale hash → 404 so the browser falls back to refetching the HTML, which
  * carries the current hash. Returning the new content under the old name
  * would defeat `immutable` caching by serving different bytes for the same
  * URL across the cache lifetime.
+ *
+ * `reset`/`framework`/`style` are page-invariant; `userStyles` is page-scoped
+ * (each stylesheet targets a subset of pages), so the fallback walks the
+ * published pages until one produces the requested hash.
  */
-async function serveSiteCss(db: DbClient, pathname: string): Promise<Response | null> {
+async function serveSiteCss(db: DbClient, pathname: string, uploadsDir?: string): Promise<Response | null> {
   const filename = pathname.slice('/_pb/css/'.length)
   const match = filename.match(/^(reset|framework|style|userStyles)-([a-f0-9]{12})\.css$/)
   if (!match) return null
 
   const [, requestedBundle, requestedHash] = match
+  const bundleId = requestedBundle as SiteCssBundleId
+
+  // Disk-first.
+  if (uploadsDir) {
+    const bytes = await readStaticAsset(uploadsDir, pathname)
+    if (bytes) {
+      const buffer = new ArrayBuffer(bytes.byteLength)
+      new Uint8Array(buffer).set(bytes)
+      return cssResponse(buffer, requestedHash)
+    }
+  }
+
+  // Fallback: rebuild from the latest published snapshot.
   const snapshot = await getLatestPublishedSiteSnapshot(db)
   if (!snapshot) return new Response('Not found', { status: 404 })
 
-  const bundle = buildSiteCssBundle(snapshot.site, registry)
-  const file: CssBundleFile = bundle[requestedBundle as SiteCssBundleId]
-  if (file.hash !== requestedHash) {
-    return new Response('Not found', { status: 404 })
+  const pages = bundleId === 'userStyles' ? snapshot.site.pages : snapshot.site.pages.slice(0, 1)
+  for (const page of pages) {
+    const file: CssBundleFile = buildSiteCssBundle(snapshot.site, registry, page)[bundleId]
+    if (file.hash === requestedHash) return cssResponse(file.content, file.hash)
   }
+  // Page-agnostic view (every enabled stylesheet) — covers a hash that
+  // predates a scope change but is still referenced somewhere.
+  const fallback: CssBundleFile = buildSiteCssBundle(snapshot.site, registry)[bundleId]
+  if (fallback.hash === requestedHash) return cssResponse(fallback.content, fallback.hash)
 
-  return new Response(file.content, {
+  return new Response('Not found', { status: 404 })
+}
+
+function cssResponse(body: BodyInit, hash: string): Response {
+  return new Response(body, {
     headers: {
       'content-type': 'text/css; charset=utf-8',
       'cache-control': 'public, max-age=31536000, immutable',
-      etag: `"${file.hash}"`,
+      etag: `"${hash}"`,
     },
   })
 }

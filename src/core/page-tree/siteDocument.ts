@@ -17,7 +17,7 @@
  *   RESILIENT (fallback to default):
  *     settings → DEFAULT_SITE_SETTINGS
  *     packageJson → { dependencies: {}, devDependencies: {} }
- *     runtime → { dependencyLock: { version: 1, packages: {}, updatedAt: 0 }, scripts: {} }
+ *     runtime → normalizeSiteRuntimeConfig (tolerant: fills scripts/styles/lock)
  *
  *   Per-entry leniency:
  *     classes — entries missing id/name are silently dropped
@@ -32,6 +32,7 @@ import { CSSClassSchema, parseClassRegistry } from './cssClass'
 import { SiteSettingsSchema, parseSiteSettings } from './siteSettings'
 import { SiteFileSchema, type SiteFile, type SiteFileType } from '@core/files/schemas'
 import { SiteRuntimeConfigSchema, type SiteRuntimeConfig } from '@core/site-runtime/schemas'
+import { normalizeSiteRuntimeConfig } from '@core/site-runtime/runtimeConfig'
 import { SitePackageJsonSchema, type SitePackageJson } from '@core/site-dependencies/manifest'
 import { type VisualComponent } from '@core/visualComponents/schemas'
 import type { Page } from './page'
@@ -123,11 +124,6 @@ function parseSiteFile(raw: unknown): SiteFile | null {
   }
 }
 
-const DEFAULT_RUNTIME: SiteRuntimeConfig = {
-  dependencyLock: { version: 1 as const, packages: {}, updatedAt: 0 },
-  scripts: {},
-}
-
 const DEFAULT_PACKAGE_JSON: SitePackageJson = { dependencies: {}, devDependencies: {} }
 
 /**
@@ -186,10 +182,9 @@ export function parseSiteDocument(raw: unknown): SiteShell {
     ? (r.packageJson as SitePackageJson)
     : DEFAULT_PACKAGE_JSON
 
-  // Runtime — resilient, falls back to DEFAULT_RUNTIME
-  const runtime: SiteRuntimeConfig = Value.Check(SiteRuntimeConfigSchema, r.runtime)
-    ? (r.runtime as SiteRuntimeConfig)
-    : DEFAULT_RUNTIME
+  // Runtime — tolerant normalize: fills missing/partial fields (e.g. a site
+  // persisted before `styles` existed) while preserving valid scripts/lock.
+  const runtime: SiteRuntimeConfig = normalizeSiteRuntimeConfig(r.runtime)
 
   return {
     id: r.id,

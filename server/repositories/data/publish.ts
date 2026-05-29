@@ -20,8 +20,6 @@ import type { DbClient } from '../../db/client'
 import type { DataRow, DataRowVersion, DataRowRedirect, PublishedDataRow } from '@core/data/schemas'
 import { normalizeRouteBase } from '@core/templates/templateMatching'
 import { selectEntryTemplate } from '@core/templates/templateMatching'
-import { isFullyStaticPage } from '@core/publisher/staticAnalysis'
-import { registry } from '@core/module-engine/registry'
 import { readFeaturedMediaCell } from '@core/data/cells'
 import { getDataRow } from './rows'
 import { getLatestPublishedSiteSnapshot } from '../publish'
@@ -30,7 +28,7 @@ import {
 } from '../../publish/publicRenderer'
 import { applyPublishedHtmlPipeline } from '../../publish/publishedHtmlPipeline'
 import { removeArtefactInPlace, updateArtefactInPlace } from '../../publish/staticArtefact'
-import { bumpPublishVersion } from '../../publish/renderCache'
+import { bumpPublishVersion, getPublishVersion } from '../../publish/renderCache'
 
 // ---------------------------------------------------------------------------
 // Internal row shapes
@@ -205,7 +203,11 @@ export async function publishDataRow(
   // Disk artefacts are derived state — errors are logged but do not fail
   // the publish. The next full publish (publishDraftSite) will rebuild.
   if (uploadsDir) {
-    await writeDataRowArtefactIfStatic(db, uploadsDir, result.row, capturedPreviousRoute).catch((err) => {
+    // Bake with the NEXT publish version — `bumpPublishVersion()` below is the
+    // synchronous statement right after this await resolves, so a hole-shell
+    // baked here carries the version that becomes current with no gap.
+    const nextPublishVersion = getPublishVersion() + 1
+    await writeDataRowArtefact(db, uploadsDir, result.row, capturedPreviousRoute, nextPublishVersion).catch((err) => {
       console.error('[publish:row] static artefact write failed (live renderer remains active):', err)
     })
   }
@@ -218,21 +220,26 @@ export async function publishDataRow(
 }
 
 /**
- * After a successful `publishDataRow` transaction, write (or remove) the
- * disk artefact for the row's entry-template page if that template is fully
- * static.
+ * After a successful `publishDataRow` transaction, write (or remove) the disk
+ * artefact for the row's entry-template page.
+ *
+ * The artefact is baked whether or not the template is fully static: a static
+ * template bakes a complete document; a template with dynamic nodes bakes its
+ * static SHELL with `<pb-hole>` placeholders (the hole runtime hydrates each
+ * fragment from `/_pb/hole/`). Either way HTML + CSS + JS come from disk.
  *
  * Steps:
  *   1. Remove the old artefact if the slug changed (old URL no longer valid).
  *   2. Look up the table route info and site snapshot.
- *   3. If the entry template is fully static, render through the template
- *      and write the new artefact into the active slot.
+ *   3. Render through the template (stamping `publishVersion`) and write the
+ *      artefact into the active slot.
  */
-async function writeDataRowArtefactIfStatic(
+async function writeDataRowArtefact(
   db: DbClient,
   uploadsDir: string,
   publishedRow: DataRow,
   previousRoute: PreviousPublishedRouteRow | null,
+  publishVersion: number,
 ): Promise<void> {
   const tableInfo = await getRowTableRouteInfo(db, publishedRow.id)
   if (!tableInfo) return
@@ -245,13 +252,12 @@ async function writeDataRowArtefactIfStatic(
     })
   }
 
-  // Find the entry template and check whether it is fully static.
+  // Find the entry template for this row's table.
   const siteSnapshot = await getLatestPublishedSiteSnapshot(db)
   if (!siteSnapshot) return
 
   const template = selectEntryTemplate(siteSnapshot.site, tableInfo.tableSlug)
   if (!template) return
-  if (!isFullyStaticPage(template, siteSnapshot.site, registry)) return
 
   // Fetch the full PublishedDataRow (needed for templateContext + media path).
   const publishedDataRow = await getPublishedDataRowByRoute(db, tableInfo.tableRouteBase, publishedRow.slug)
@@ -259,7 +265,11 @@ async function writeDataRowArtefactIfStatic(
 
   const newPath = publicDataPath(tableInfo.tableRouteBase, publishedRow.slug)
   const syntheticUrl = new URL(`http://localhost${newPath}`)
-  const rendered = await renderPublishedDataRowTemplate(siteSnapshot, publishedDataRow, { db, url: syntheticUrl })
+  const rendered = await renderPublishedDataRowTemplate(siteSnapshot, publishedDataRow, {
+    db,
+    url: syntheticUrl,
+    publishVersion,
+  })
   if (!rendered) return
 
   const html = await applyPublishedHtmlPipeline(rendered, db)
@@ -268,7 +278,7 @@ async function writeDataRowArtefactIfStatic(
 
 /**
  * Fetch the `route_base` and `slug` of the `data_tables` row that owns
- * the given data row. Used by `writeDataRowArtefactIfStatic` to resolve
+ * the given data row. Used by `writeDataRowArtefact` to resolve
  * the public URL path without joining the table into every other query.
  */
 async function getRowTableRouteInfo(

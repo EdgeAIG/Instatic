@@ -51,6 +51,7 @@ const TEST_SHELL: SiteShell = {
   runtime: {
     dependencyLock: { version: 1, packages: {}, updatedAt: 0 },
     scripts: {},
+    styles: {},
   },
   createdAt: Date.now(),
   updatedAt: Date.now(),

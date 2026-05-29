@@ -206,7 +206,7 @@ handlePublishRoute / publishDataRow
 
 The `PublishedPageSnapshot` in `data_row_versions.snapshot_json` is the canonical audit record. After it's written, the publisher routes through the three-layer pipeline:
 
-- **Layer A** — if the page (for `pages` rows) or matched entry template (for postType rows) is `isFullyStaticPage`, the publisher renders it, runs the full `applyPublishedHtmlPipeline`, and writes the final HTML to `uploads/published/<inactive-slot>/<route>.html`. After all pages are written the symlink `current` atomic-flips to the new slot.
+- **Layer A** — the publisher renders **every** page (for postType rows, the matched entry template), runs the full `applyPublishedHtmlPipeline`, and writes the final HTML to `uploads/published/<inactive-slot>/<route>.html` — a fully-static page bakes a complete document, a page with dynamic nodes bakes a static shell with `<pb-hole>` placeholders. The CSS bundles + runtime JS are baked into the same slot. After all pages are written the symlink `current` atomic-flips to the new slot. Served entirely from disk — no DB for HTML/CSS/JS.
 - **Layer B** — the in-memory render cache evicts lazily via `bumpPublishVersion()`.
 - **Layer C** — when a page contains dynamic nodes (auto-detected from binding sources, loop sources, module flags, VC refs), the publisher emits `<pb-hole>` placeholders in the rendered HTML; the hole runtime fetches each fragment lazily from `/_pb/hole/<nodeId>?v=<publishVersion>`.
 

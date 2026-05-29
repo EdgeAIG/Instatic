@@ -193,20 +193,36 @@ publishDraftSite / publishDataRow (server/repositories/...)
 - [x] `applyPublishedHtmlPipeline` is invoked **only** at publish-time
 - [x] Disk artefacts include plugin frontend-asset injection (baked at
       publish, not at request)
-- [x] Tests gate that pages with `base.loop` / request-dependent
-      bindings / dynamic modules do **not** get a disk artefact (they
-      fall through to Layer B / C)
 - [x] Stale disk files for removed routes are absent from the new slot
       (built fresh each full publish)
 - [x] Architecture test: `applyPublishedHtmlPipeline` is not called from
       `server/publish/publicRouter.ts` or any file in the request hot
       path
+- [x] **Complete static publishing**: `publishDraftSite` bakes the CSS
+      bundles (`/_pb/css/<bundle>-<hash>.css`) and runtime JS
+      (`/_pb/assets/<versionId>/…`) into the slot via `writeStaticAsset`.
+      `serveSiteCss` and `tryServeRuntimeAsset` read disk-first
+      (`readStaticAsset`), so a published page never hits the server to
+      (re)generate CSS/JS. CSS/JS are written for **every** page, deduped by
+      content-hashed filename.
+- [x] **Hole shells baked too**: `publishDraftSite` and `publishDataRow` bake
+      **every** page's HTML — fully-static pages as a complete document, pages
+      with dynamic nodes as a static **shell** with `<pb-hole>` placeholders.
+      The shell + CSS + JS serve from disk with zero DB; only the
+      `/_pb/hole/<id>` fragment fetch (Layer C) reads the DB. Shells are
+      stamped with the *next* publish version (bump runs synchronously right
+      after the swap) so their `data-pb-version` is never stale. A page that
+      throws while rendering is skipped (per-page try/catch) and falls through
+      to the live renderer.
 
 ### Goal
 
-For routes whose rendered output cannot vary by request, write the final
-HTML (post `applyPublishedHtmlPipeline`) to disk at publish time. The
-visitor router streams the file with `content-type: text/html`.
+Write the final HTML (post `applyPublishedHtmlPipeline`) to disk at publish
+time for **every** page. Pages whose output cannot vary by request bake a
+complete document; pages with request-dependent nodes bake a static **shell**
+in which those nodes are `<pb-hole>` placeholders (Layer C). The visitor router
+streams the file with `content-type: text/html`; the only request that varies
+per visitor is the `/_pb/hole/` fragment fetch.
 
 ### Atomic publish protocol — the two-slot symlink swap
 

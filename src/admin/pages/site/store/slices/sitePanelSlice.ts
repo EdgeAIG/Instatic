@@ -25,6 +25,7 @@ import type {
   SiteDependencyLock,
   SiteRuntimeConfig,
   SiteScriptRuntimeConfig,
+  SiteStyleRuntimeConfig,
 } from '@core/site-runtime/schemas'
 import {
   clonePackageJson,
@@ -36,6 +37,7 @@ import {
   cloneSiteRuntimeConfig,
   DEFAULT_SITE_RUNTIME,
   normalizeScriptRuntimeConfig,
+  normalizeStyleRuntimeConfig,
   normalizeSiteRuntimeConfig,
 } from '@core/site-runtime'
 import { resolveCmsRuntimeDependencies } from '@core/persistence/cmsRuntime'
@@ -119,6 +121,21 @@ export interface SitePanelSlice {
    * Remove stored runtime settings for a script file.
    */
   removeScriptRuntimeConfig: (fileId: string) => void
+
+  /**
+   * Replace the runtime config for a stylesheet file.
+   */
+  setStyleRuntimeConfig: (fileId: string, config: SiteStyleRuntimeConfig) => void
+
+  /**
+   * Patch the runtime config for a stylesheet file.
+   */
+  patchStyleRuntimeConfig: (fileId: string, patch: Partial<SiteStyleRuntimeConfig>) => void
+
+  /**
+   * Remove stored runtime settings for a stylesheet file.
+   */
+  removeStyleRuntimeConfig: (fileId: string) => void
 
   /**
    * Replace the self-hosted dependency lock + (optionally) the prebuilt
@@ -251,6 +268,42 @@ export const createSitePanelSlice: EditorStoreSliceCreator<SitePanelSlice> = (se
     const scripts = { ...currentRuntime.scripts }
     delete scripts[fileId]
     commitSiteRuntime({ ...currentRuntime, scripts }, true)
+  },
+
+  setStyleRuntimeConfig: (fileId, config) => {
+    const site = get().site
+    if (!site?.files.some((file) => file.id === fileId && file.type === 'style')) return
+
+    const currentRuntime = get().siteRuntime
+    const nextConfig = normalizeStyleRuntimeConfig(config)
+    const currentConfig = currentRuntime.styles[fileId]
+    if (JSON.stringify(currentConfig) === JSON.stringify(nextConfig)) return
+
+    const nextRuntime = {
+      ...currentRuntime,
+      styles: {
+        ...currentRuntime.styles,
+        [fileId]: nextConfig,
+      },
+    }
+    commitSiteRuntime(nextRuntime, true)
+  },
+
+  patchStyleRuntimeConfig: (fileId, patch) => {
+    const current = get().siteRuntime.styles[fileId] ?? normalizeStyleRuntimeConfig(undefined)
+    get().setStyleRuntimeConfig(fileId, {
+      ...current,
+      ...patch,
+    })
+  },
+
+  removeStyleRuntimeConfig: (fileId) => {
+    const currentRuntime = get().siteRuntime
+    if (!(fileId in currentRuntime.styles)) return
+
+    const styles = { ...currentRuntime.styles }
+    delete styles[fileId]
+    commitSiteRuntime({ ...currentRuntime, styles }, true)
   },
 
   setSiteDependencyLock: (lock, packageImportmap) => {

@@ -22,7 +22,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import type { SiteDocument } from '@core/page-tree'
+import type { Page, SiteDocument } from '@core/page-tree'
 import type { IModuleRegistry } from '@core/module-engine/types'
 import { PUBLISHER_RESET_CSS } from '@core/publisher/reset'
 import { collectClassCSS } from '@core/publisher/cssCollector'
@@ -36,21 +36,29 @@ import type {
 } from '@core/publisher/siteCssBundle'
 
 /**
- * Build the three site CSS files from a `SiteDocument`.
+ * Build the four site CSS files from a `SiteDocument`.
  *
- * Pure-ish: depends only on `site` and `registry` content. Determinism +
- * content-hashed filenames mean two calls with the same inputs always return
- * identical filenames — safe to call on every request without memoisation.
+ * `reset`, `framework`, and `style` are page-invariant — they depend only on
+ * the site + registry. `userStyles` is page-scoped: each stylesheet's
+ * `SiteStyleRuntimeConfig` decides whether it targets `page`, and `priority`
+ * orders the cascade. Passing different pages therefore yields different
+ * `userStyles` content (and hash); omitting `page` includes every enabled
+ * stylesheet (authoring/export view).
+ *
+ * Determinism + content-hashed filenames mean two calls with the same inputs
+ * always return identical filenames — safe to call on every request without
+ * memoisation.
  */
 export function buildSiteCssBundle(
   site: SiteDocument,
   registry: IModuleRegistry,
+  page?: Page,
 ): SiteCssBundle {
   return {
     reset: makeBundleFile('reset', PUBLISHER_RESET_CSS),
     framework: makeBundleFile('framework', buildFrameworkCss(site, registry)),
     style: makeBundleFile('style', collectClassCSS(site)),
-    userStyles: makeBundleFile('userStyles', collectUserStylesheetCss(site)),
+    userStyles: makeBundleFile('userStyles', collectUserStylesheetCss(site, page)),
   }
 }
 

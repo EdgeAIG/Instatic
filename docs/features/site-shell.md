@@ -143,7 +143,7 @@ type SiteFile = {
 }
 ```
 
-- `'css'` files are concatenated into the published bundle via `userStylesheets.ts`.
+- `'css'` files are concatenated into the page-scoped `userStyles` bundle via `userStylesheets.ts`, honouring each stylesheet's `SiteRuntimeConfig.styles[id]` (enable / scope / priority).
 - `'js'` files are exposed to module render functions through `props._siteScripts`.
 - Other types are stored but not auto-emitted; modules can read them via `ctx.siteFiles`.
 
@@ -165,17 +165,38 @@ The Site → Dependencies panel edits this `package.json`. Saving triggers a `bu
 ### `SiteRuntimeConfig`
 
 ```ts
+type SiteAssetScope =
+  | { type: 'all-pages' }
+  | { type: 'pages'; pageIds: string[] }
+  | { type: 'templates'; templatePageIds: string[] }
+
 type SiteRuntimeConfig = {
   dependencyLock: {
     version:   1
     packages:  Record<string, { resolved: string; integrity?: string }>
     updatedAt: number
   }
-  scripts: Record<string, string>
+  // Per-script targeting + load behaviour, keyed by SiteFile id.
+  scripts: Record<string, {
+    enabled: boolean
+    runInCanvas: boolean
+    placement: 'head' | 'body-end'
+    timing: 'immediate' | 'dom-ready' | 'idle'
+    scope: SiteAssetScope
+    priority: number
+  }>
+  // Per-stylesheet targeting + cascade, keyed by SiteFile id.
+  styles: Record<string, {
+    enabled: boolean
+    scope: SiteAssetScope
+    priority: number
+  }>
 }
 ```
 
 `dependencyLock` is the resolved snapshot from the last successful `bun install` — the publisher uses it to build the `<script type="importmap">` entries that map bare specifiers (`three`) to `/_pb/runtime/cache/<hash>/...` URLs.
+
+`scripts` and `styles` share the `SiteAssetScope` shape and the `assetScopeAppliesToPage` helper, so a script and a stylesheet target pages identically. Scripts additionally carry `placement`/`timing`/`runInCanvas` (a `<link>` has no execution model, so stylesheets omit those). Both are edited from the floating code editor's left rail (`ScriptSettingsPane` / `StyleSettingsPane`).
 
 ---
 

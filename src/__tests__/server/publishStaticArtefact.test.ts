@@ -31,6 +31,7 @@ import { handleServerRequest } from '../../../server/router'
 import {
   getActiveSlot,
   readArtefact,
+  readStaticAsset,
 } from '../../../server/publish/staticArtefact'
 import { createFakeDb } from './dbTestFake'
 import { makePage, makeSite } from '../publisher/helpers'
@@ -315,13 +316,44 @@ describe('publishDraftSite — Layer A static artefacts', () => {
     expect(staticHtml).not.toBeNull()
     expect(staticHtml).toContain('Hello static world')
 
-    // Dynamic page artefact does NOT exist
+    // Dynamic page is ALSO baked — as a static SHELL with a <pb-hole>
+    // placeholder for the request-dependent loop. Everything except the hole
+    // fragment is on disk; the hole runtime hydrates the loop at request time.
     const dynamicHtml = await readArtefact(uploadsDir, '/news')
-    expect(dynamicHtml).toBeNull()
+    expect(dynamicHtml).not.toBeNull()
+    expect(dynamicHtml).toContain('<pb-hole')
+    expect(dynamicHtml).toContain('/_pb/hole-runtime.js')
+    // The loop's items are NOT inlined — they come from the hole fetch.
 
     // Symlink exists and points to a slot
     const activeSlot = await getActiveSlot(uploadsDir)
     expect(['a', 'b']).toContain(activeSlot)
+
+    // Complete static publishing: the CSS bundles the page links must be
+    // baked to disk so the page never needs the server to regenerate them.
+    const cssHrefs = [...(staticHtml ?? '').matchAll(/href="(\/_pb\/css\/[^"]+\.css)"/g)].map((m) => m[1])
+    expect(cssHrefs.length).toBeGreaterThan(0) // reset + framework at minimum
+    for (const href of cssHrefs) {
+      const bytes = await readStaticAsset(uploadsDir, href)
+      expect(bytes).not.toBeNull()
+      expect(bytes!.byteLength).toBeGreaterThan(0)
+    }
+
+    // And the router serves that CSS off disk (200, text/css) without ever
+    // touching a DB snapshot.
+    let snapshotLookupCalled = false
+    const diskCssDb = createFakeDb(async (sql: string): Promise<DbResult> => {
+      const s = sql.toLowerCase()
+      if (s.includes('snapshot_json')) snapshotLookupCalled = true
+      return { rows: [], rowCount: 0 }
+    })
+    const cssRes = await handleServerRequest(
+      new Request(`http://localhost${cssHrefs[0]}`),
+      { db: diskCssDb, uploadsDir },
+    )
+    expect(cssRes.status).toBe(200)
+    expect(cssRes.headers.get('content-type')).toContain('text/css')
+    expect(snapshotLookupCalled).toBe(false)
   })
 
   it('does NOT write disk artefact when uploadsDir is not provided', async () => {
@@ -437,6 +469,100 @@ describe('publicRouter — Layer A disk fast-path', () => {
     expect(res.headers.get('content-type')).toContain('text/html')
     expect(await res.text()).toContain('Baked about page')
     expect(snapshotLookupCalled).toBe(false)
+  })
+
+  it('serves a static page (HTML + CSS + JS) entirely from disk with ZERO database queries', async () => {
+    // Pre-bake a full static page: HTML that links a CSS bundle and a JS chunk,
+    // plus those two assets baked into the slot — exactly what a full publish
+    // produces for a fully-static page.
+    const { prepareInactiveSlot, writeArtefact, writeStaticAsset, swapSlot } =
+      await import('../../../server/publish/staticArtefact')
+    const enc = new TextEncoder()
+    const cssPath = '/_pb/css/reset-abc123abc123.css'
+    const jsPath = '/_pb/assets/v1/entries/app-deadbeefcafe.js'
+    const html =
+      `<!DOCTYPE html><html><head>` +
+      `<link rel="stylesheet" href="${cssPath}">` +
+      `</head><body><h1>Static</h1>` +
+      `<script type="module" src="${jsPath}"></script>` +
+      `</body></html>`
+
+    const { slot, slotDir } = await prepareInactiveSlot(uploadsDir)
+    await writeArtefact(slotDir, '/about', html)
+    await writeStaticAsset(slotDir, cssPath, enc.encode('body{margin:0}'))
+    await writeStaticAsset(slotDir, jsPath, enc.encode('console.log("hi")'))
+    await swapSlot(uploadsDir, slot)
+
+    // A DB that throws on ANY query — the only way the three requests below can
+    // succeed is if NOTHING touches the database.
+    let dbQueried = false
+    const throwingDb = createFakeDb(async (sql: string): Promise<DbResult> => {
+      dbQueried = true
+      throw new Error(`unexpected DB query during static serve: ${sql.slice(0, 80)}`)
+    })
+
+    // No staticDir → the admin static handler is a no-op; the public/asset
+    // handlers own these paths.
+    const htmlRes = await handleServerRequest(new Request('http://localhost/about'), { db: throwingDb, uploadsDir })
+    expect(htmlRes.status).toBe(200)
+    expect(htmlRes.headers.get('content-type')).toContain('text/html')
+    expect(await htmlRes.text()).toContain('<h1>Static</h1>')
+
+    const cssRes = await handleServerRequest(new Request(`http://localhost${cssPath}`), { db: throwingDb, uploadsDir })
+    expect(cssRes.status).toBe(200)
+    expect(cssRes.headers.get('content-type')).toContain('text/css')
+    expect(await cssRes.text()).toBe('body{margin:0}')
+
+    const jsRes = await handleServerRequest(new Request(`http://localhost${jsPath}`), { db: throwingDb, uploadsDir })
+    expect(jsRes.status).toBe(200)
+    expect(jsRes.headers.get('content-type')).toContain('javascript')
+    expect(await jsRes.text()).toBe('console.log("hi")')
+
+    // The hard guarantee: not a single DB query was issued for any of the three.
+    expect(dbQueried).toBe(false)
+  })
+
+  it('serves a hole-page SHELL (HTML + CSS) from disk with ZERO DB — only the /_pb/hole fragment is dynamic', async () => {
+    // A page with a hole bakes a static shell: real HTML + a <pb-hole>
+    // placeholder + the hole runtime. The shell and its CSS are on disk; only
+    // the hole fragment fetch (/_pb/hole/<id>) touches the server at runtime.
+    const { prepareInactiveSlot, writeArtefact, writeStaticAsset, swapSlot } =
+      await import('../../../server/publish/staticArtefact')
+    const cssPath = '/_pb/css/style-feedfeedfeed.css'
+    const shell =
+      `<!DOCTYPE html><html><head>` +
+      `<link rel="stylesheet" href="${cssPath}">` +
+      `<script type="module" src="/_pb/hole-runtime.js?v=3" defer></script>` +
+      `</head><body><h1>Blog</h1>` +
+      `<pb-hole id="hole-loop1" data-pb-hole="loop1" data-pb-version="3" style="display:contents"></pb-hole>` +
+      `</body></html>`
+
+    const { slot, slotDir } = await prepareInactiveSlot(uploadsDir)
+    await writeArtefact(slotDir, '/blog', shell)
+    await writeStaticAsset(slotDir, cssPath, new TextEncoder().encode('h1{color:#000}'))
+    await swapSlot(uploadsDir, slot)
+
+    let dbQueried = false
+    const throwingDb = createFakeDb(async (sql: string): Promise<DbResult> => {
+      dbQueried = true
+      throw new Error(`unexpected DB query serving hole-shell: ${sql.slice(0, 80)}`)
+    })
+
+    const htmlRes = await handleServerRequest(new Request('http://localhost/blog'), { db: throwingDb, uploadsDir })
+    expect(htmlRes.status).toBe(200)
+    const body = await htmlRes.text()
+    expect(body).toContain('<h1>Blog</h1>')
+    expect(body).toContain('<pb-hole') // the dynamic part is deferred to a hole
+    expect(body).toContain('/_pb/hole-runtime.js')
+
+    const cssRes = await handleServerRequest(new Request(`http://localhost${cssPath}`), { db: throwingDb, uploadsDir })
+    expect(cssRes.status).toBe(200)
+    expect(cssRes.headers.get('content-type')).toContain('text/css')
+
+    // The shell + CSS were served entirely from disk — zero DB. (The hole
+    // fragment endpoint, exercised in holeRouteHandler.test.ts, is the only
+    // request that reads the DB.)
+    expect(dbQueried).toBe(false)
   })
 
   it('falls through to the live renderer when URL has a query string', async () => {

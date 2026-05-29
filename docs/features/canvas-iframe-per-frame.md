@@ -216,7 +216,10 @@ When the iframe path is the default:
 
 What stays: `UserStylesheetInjector` (still injects user CSS, now targeting
 each iframe's document instead of the editor doc), `ClassStyleInjector` (same),
-`collectUserStylesheetCss` (shared between publisher and canvas).
+`collectUserStylesheetCss` (shared between publisher and canvas). The injector
+calls `collectUserStylesheetCss(site, activePage)` so the canvas loads exactly
+the stylesheets that target the active page — same scope, priority, and enable
+state the published page gets.
 
 ## Remaining work
 

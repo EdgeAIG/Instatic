@@ -150,17 +150,28 @@ See [docs/features/loops.md](loops.md) for sources, filters, and registration.
 
 ## CSS pipeline
 
-A published page ends up with exactly one CSS bundle, hashed for cache-busting:
+A published page links **four** hashed CSS bundles (`buildSiteCssBundle`), in
+cascade order. Source order resolves specificity ties: user CSS wins over the
+class registry, which wins over framework, which wins over reset.
 
 ```text
-/_pb/css/style-<hash>.css = (
-    PUBLISHER_RESET_CSS                  ← reset.ts (cross-browser baseline)
-  + buildSiteFrameworkCss(site)          ← frameworkCss.ts (spacing scale, typography, ...)
-  + collectModuleCSS(via CssCollector)   ← deduped per-moduleId CSS
-  + collectClassCSS(site)                ← user-defined CSSClass entries
-  + collectUserStylesheetCss(site)       ← arbitrary user CSS
-)
+reset-<hash>.css       = PUBLISHER_RESET_CSS                       ← reset.ts (cross-browser baseline)
+framework-<hash>.css   = buildSiteFrameworkCss(site)               ← frameworkCss.ts (spacing, typography, …)
+                       + collectModuleCSS(via CssCollector)        ← deduped per-moduleId CSS
+style-<hash>.css       = collectClassCSS(site)                     ← user-defined CSSClass entries
+userStyles-<hash>.css  = collectUserStylesheetCss(site, page)      ← author stylesheets, scoped to this page
 ```
+
+`reset` / `framework` / `style` are page-invariant — every page on the site
+shares the same hash. `userStyles` is **page-scoped**: each author stylesheet
+(`site.files[type === 'style']`) carries a `SiteStyleRuntimeConfig` (in
+`site.runtime.styles[fileId]`) with an enable flag, a page/template scope, and
+a cascade priority. `collectUserStylesheetCss(site, page)` selects the
+stylesheets that target `page`, orders them by `priority` then `path`, and
+concatenates them — so two pages with different stylesheet targeting get
+different `userStyles` content (and hash). This mirrors how scripts are scoped
+per page; the shared `assetScopeAppliesToPage` helper decides targeting for
+both.
 
 ### CSS dedup via `CssCollector`
 
@@ -178,14 +189,41 @@ This is what shrinks published CSS by ~60–80% on typical pages (Decision #308)
 
 ### Hashed bundle filenames
 
-The server's `siteCssBundle.ts` and the client's `siteCssBundle.ts` together name each bundle file `<group>-<contentHash>.css`. The publisher emits `<link rel="stylesheet" href="/_pb/css/style-<hash>.css">` into the HTML. `Cache-Control: immutable` (1 year) is safe because the hash changes whenever the content does.
+The server's `siteCssBundle.ts` and the client's `siteCssBundle.ts` together name each bundle file `<group>-<contentHash>.css`. The publisher emits `<link rel="stylesheet" href="/_pb/css/<bundle>-<hash>.css">` per non-empty bundle. `Cache-Control: immutable` (1 year) is safe because the hash changes whenever the content does.
 
-Three bundles per site (each hashed independently):
-- `reset-<hash>.css` — `PUBLISHER_RESET_CSS`
-- `framework-<hash>.css` — `buildSiteFrameworkCss(site)`
-- `style-<hash>.css` — module CSS + class CSS + user stylesheets (page-specific)
+Four bundles per page (each hashed independently): `reset`, `framework`,
+`style`, `userStyles` — see the cascade table above.
 
-The exclusive namespace `/_pb/css/*` is served by `serveSiteCss` in the router — unknown paths under it 404 rather than falling through.
+### Static publishing — everything baked to disk
+
+A full publish (`publishDraftSite`) bakes **every page** plus all of its assets
+into the publish slot:
+
+- **HTML** — fully-static pages bake to a complete document; pages with dynamic
+  nodes bake their static **shell** with `<pb-hole>` placeholders (the hole
+  runtime hydrates each fragment from `/_pb/hole/`). Either way the HTML is on
+  disk. A page that fails to render (e.g. a VC ref cycle) is skipped and falls
+  through to the live renderer.
+- **CSS bundles** — `/_pb/css/<bundle>-<hash>.css`, for every page.
+- **Runtime JS** — `/_pb/assets/<versionId>/…`, for every page.
+
+The visitor router serves all of these straight off disk (`readArtefact` /
+`readStaticAsset`) — no DB round-trip, no per-request rebuild. The slot is a
+self-contained static export: **a published page never hits the server to
+generate its HTML, CSS, or JS. The only request that touches the DB is the
+`/_pb/hole/` fragment fetch** for a page's dynamic islands.
+
+Hole shells are stamped with the *next* publish version (`getPublishVersion() +
+1`) at bake time, because `bumpPublishVersion()` runs as the synchronous
+statement right after the slot swap — so a baked `<pb-hole data-pb-version>`
+always matches what the hole endpoint expects (a mismatch would make the
+endpoint refuse to hydrate).
+
+The exclusive namespaces `/_pb/css/*` (`serveSiteCss`) and `/_pb/assets/*`
+(`tryServeRuntimeAsset`) are served **disk-first**, falling back to a rebuild
+(`serveSiteCss`) or the DB (`published_runtime_assets`) only for preview or a
+publish whose disk write failed. Unknown paths under either prefix 404 rather
+than falling through.
 
 ---
 
@@ -275,12 +313,14 @@ publishDraftSite (server/repositories/publish.ts)
     ├─→ insert into data_row_versions with snapshot_json = that snapshot
     ├─→ flip data_rows.status = 'published', set active_version_id
     │
-    ├─→ Layer A bake (for each page where isFullyStaticPage):
-    │     ├── renderPublishedSnapshot(snapshot, { db, url }) → HTML
+    ├─→ Layer A bake — CSS bundles + runtime JS → writeStaticAsset(<slot>)
+    │
+    ├─→ Layer A bake — every page (complete doc, or static shell with <pb-hole>):
+    │     ├── renderPublishedSnapshot(snapshot, { db, url, publishVersion }) → HTML
     │     ├── applyPublishedHtmlPipeline(rendered, db) → final HTML
     │     │   (plugin filters + frontend asset injection baked in)
     │     └── writeArtefact(<inactiveSlot>, urlPath, html)
-    │         (atomic per-file: tmp + rename)
+    │         (atomic per-file: tmp + rename; per-page try/catch)
     │
     ├─→ swapSlot(uploadsDir, newActiveSlot)
     │     uploads/published/current → flips atomically (rename of a symlink

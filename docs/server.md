@@ -353,11 +353,11 @@ See [docs/reference/database-dialects.md](reference/database-dialects.md) for th
 
 Three-layer model: **static-by-default, dynamic-by-auto-detection**.
 
-- **Layer A — static-to-disk.** Pages whose tree is fully static (no dynamic modules, no request-dependent bindings, no request-dependent loop sources, no VC refs to dynamic VCs) are rendered ONCE at publish time, run through `applyPublishedHtmlPipeline`, and written to `uploads/published/current/<route>.html`. The visitor router reads these files directly with a single `fs.readFile`. TTFB ≤ 1.5 ms.
-- **Layer B — in-memory LRU.** Pages that vary per request (loops with `?page=N`, request-dependent bindings) render live but are memoised by `(urlPath, queryString, publishVersion)`. Single-flight. Every publish bumps `publishVersion` so the entire cache evicts lazily.
-- **Layer C — server islands ("holes").** When `findDynamicNodeIds(...)` classifies a node as dynamic (module flagged `dynamic: true`, or its bindings/loop source declare `requestDependent: true`, or it's a VC ref to a dynamic VC), the publisher emits a `<pb-hole>` placeholder with an optional `staticPlaceholder(props)` skeleton. A ~668 B `IntersectionObserver` runtime fetches `/_pb/hole/<nodeId>?v=<publishVersion>` lazily as the placeholder enters the viewport. Hole responses are also cached via Layer B's LRU.
+- **Layer A — static-to-disk.** **Every** page is baked at publish time. A fully-static page (no dynamic modules, no request-dependent bindings/loop sources, no VC refs to dynamic VCs) bakes a complete document; a page with dynamic nodes bakes its static **shell** with `<pb-hole>` placeholders (the dynamic nodes are Layer C holes). HTML is written to `uploads/published/current/<route>.html`, and the CSS bundles (`/_pb/css/…`) and runtime JS (`/_pb/assets/…`) are baked into the same slot. The visitor router reads all of these directly off disk (`readArtefact` / `readStaticAsset`) — **a published page never touches the DB for HTML, CSS, or JS.** TTFB ≤ 1.5 ms.
+- **Layer B — in-memory LRU.** Requests that vary by query string (loops with `?page=N`, request-dependent bindings) bypass the disk fast-path and render live, memoised by `(urlPath, queryString, publishVersion)`. Single-flight. Every publish bumps `publishVersion` so the entire cache evicts lazily.
+- **Layer C — server islands ("holes").** When `findDynamicNodeIds(...)` classifies a node as dynamic (module flagged `dynamic: true`, or its bindings/loop source declare `requestDependent: true`, or it's a VC ref to a dynamic VC), the publisher emits a `<pb-hole>` placeholder with an optional `staticPlaceholder(props)` skeleton. A ~668 B `IntersectionObserver` runtime fetches `/_pb/hole/<nodeId>?v=<publishVersion>` lazily as the placeholder enters the viewport. **The hole fragment is the only request that reads the DB for an otherwise-static page.** Hole responses are cached via Layer B's LRU.
 
-Authors don't toggle anything. `src/core/publisher/dynamicDetection.ts:findDynamicNodesWithReasons` is the single walker that powers Layer A's "is bakeable" predicate, Layer C's placeholder emission, and the diagnostic `staticReasons` helper. The rules live in exactly one file.
+Authors don't toggle anything. `src/core/publisher/dynamicDetection.ts:findDynamicNodesWithReasons` is the single walker that powers Layer A's shell-vs-complete bake, Layer C's placeholder emission, and the diagnostic `staticReasons` helper. The rules live in exactly one file.
 
 ```text
                             on publish
@@ -365,7 +365,8 @@ Authors don't toggle anything. `src/core/publisher/dynamicDetection.ts:findDynam
             publishDraftSite / publishDataRow
                                 │
               ├── write PublishedPageSnapshot → data_row_versions.snapshot_json
-              ├── for each isFullyStaticPage:
+              ├── bake CSS bundles + runtime JS → writeStaticAsset(inactiveSlot)
+              ├── for each page (complete doc, or static shell with <pb-hole>):
               │     publishPage + applyPublishedHtmlPipeline
               │     writeArtefact(inactiveSlot, urlPath, html)
               ├── swapSlot — atomic symlink rename of uploads/published/current
@@ -399,7 +400,7 @@ Server-side publishing helpers live in `server/publish/`:
 | `renderCache.ts`                  | Layer B. Bounded LRU keyed by `(urlPath, queryString, publishVersion)`. Single-flight on cache miss. `bumpPublishVersion()` invalidates. |
 | `holeRuntime.ts`                  | Layer C client-side runtime (~668 B). Exported as `HOLE_RUNTIME_JS`. |
 | `publicRenderer.ts`               | `renderPublishedSnapshot`, `renderPublishedDataRowTemplate` — snapshot-aware wrappers around `publishPage`. |
-| `publishedHtmlPipeline.ts`        | Plugin frontend-asset injection + `publish.html` filter chain. Runs at publish time for static routes (baked into disk artefact); runs in the Layer B factory for dynamic routes (cached). |
+| `publishedHtmlPipeline.ts`        | Plugin frontend-asset injection + `publish.html` filter chain. Runs at publish time for every baked page (complete doc or hole shell); also runs in the Layer B factory for query-string / live renders (cached). |
 | `siteCssBundle.ts`                | Per-site reset / framework / style CSS bundles (hashed filenames).  |
 | `republish.ts`                    | Bulk re-publish (after a settings change touches all pages).        |
 | `publishScheduler.ts`             | Scheduled publish jobs.                                             |

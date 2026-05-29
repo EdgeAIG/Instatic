@@ -4,11 +4,12 @@ import type { SiteFile } from '@core/files/schemas'
 import type {
   LockedSiteDependency,
   RuntimePackageImportmap,
+  SiteAssetScope,
   SiteDependencyLock,
   SiteRuntimeConfig,
   SiteRuntimeTarget,
   SiteScriptRuntimeConfig,
-  SiteScriptScope,
+  SiteStyleRuntimeConfig,
 } from './schemas'
 
 /**
@@ -21,6 +22,13 @@ export interface CollectRuntimeScriptsInput {
   runtime: SiteRuntimeConfig
   page: Page
   target: SiteRuntimeTarget
+}
+
+/** Input shape for `collectAppliedStyles` — the stylesheet analogue. */
+export interface CollectAppliedStylesInput {
+  files: SiteFile[]
+  runtime: SiteRuntimeConfig
+  page: Page
 }
 
 const DEFAULT_SITE_DEPENDENCY_LOCK: SiteDependencyLock = {
@@ -38,9 +46,16 @@ export const DEFAULT_SCRIPT_RUNTIME_CONFIG: SiteScriptRuntimeConfig = {
   priority: 100,
 }
 
+export const DEFAULT_STYLE_RUNTIME_CONFIG: SiteStyleRuntimeConfig = {
+  enabled: true,
+  scope: { type: 'all-pages' },
+  priority: 100,
+}
+
 export const DEFAULT_SITE_RUNTIME: SiteRuntimeConfig = {
   dependencyLock: DEFAULT_SITE_DEPENDENCY_LOCK,
   scripts: {},
+  styles: {},
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -55,11 +70,16 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
-function normalizeScriptScope(raw: unknown): SiteScriptScope {
-  if (!isRecord(raw)) return DEFAULT_SCRIPT_RUNTIME_CONFIG.scope
+/**
+ * Normalise the shared scope union used by both scripts and stylesheets.
+ * Unknown / malformed input collapses to `all-pages` — the safe default that
+ * applies an asset everywhere.
+ */
+function normalizeAssetScope(raw: unknown): SiteAssetScope {
+  if (!isRecord(raw)) return { type: 'all-pages' }
   if (raw.type === 'pages') return { type: 'pages', pageIds: stringArray(raw.pageIds) }
   if (raw.type === 'templates') return { type: 'templates', templatePageIds: stringArray(raw.templatePageIds) }
-  return DEFAULT_SCRIPT_RUNTIME_CONFIG.scope
+  return { type: 'all-pages' }
 }
 
 export function normalizeScriptRuntimeConfig(raw: unknown): SiteScriptRuntimeConfig {
@@ -74,8 +94,18 @@ export function normalizeScriptRuntimeConfig(raw: unknown): SiteScriptRuntimeCon
     timing: raw.timing === 'immediate' || raw.timing === 'dom-ready' || raw.timing === 'idle'
       ? raw.timing
       : DEFAULT_SCRIPT_RUNTIME_CONFIG.timing,
-    scope: normalizeScriptScope(raw.scope),
+    scope: normalizeAssetScope(raw.scope),
     priority: finiteNumberOr(raw.priority, DEFAULT_SCRIPT_RUNTIME_CONFIG.priority),
+  }
+}
+
+export function normalizeStyleRuntimeConfig(raw: unknown): SiteStyleRuntimeConfig {
+  if (!isRecord(raw)) return { ...DEFAULT_STYLE_RUNTIME_CONFIG }
+
+  return {
+    enabled: typeof raw.enabled === 'boolean' ? raw.enabled : DEFAULT_STYLE_RUNTIME_CONFIG.enabled,
+    scope: normalizeAssetScope(raw.scope),
+    priority: finiteNumberOr(raw.priority, DEFAULT_STYLE_RUNTIME_CONFIG.priority),
   }
 }
 
@@ -136,7 +166,9 @@ function normalizePackageImportmap(raw: unknown): RuntimePackageImportmap | unde
 }
 
 export function normalizeSiteRuntimeConfig(raw: unknown): SiteRuntimeConfig {
-  if (!isRecord(raw)) return { dependencyLock: { ...DEFAULT_SITE_DEPENDENCY_LOCK, packages: {} }, scripts: {} }
+  if (!isRecord(raw)) {
+    return { dependencyLock: { ...DEFAULT_SITE_DEPENDENCY_LOCK, packages: {} }, scripts: {}, styles: {} }
+  }
 
   const scripts: Record<string, SiteScriptRuntimeConfig> = {}
   if (isRecord(raw.scripts)) {
@@ -145,10 +177,18 @@ export function normalizeSiteRuntimeConfig(raw: unknown): SiteRuntimeConfig {
     }
   }
 
+  const styles: Record<string, SiteStyleRuntimeConfig> = {}
+  if (isRecord(raw.styles)) {
+    for (const [fileId, value] of Object.entries(raw.styles)) {
+      if (fileId.trim()) styles[fileId] = normalizeStyleRuntimeConfig(value)
+    }
+  }
+
   const packageImportmap = normalizePackageImportmap(raw.packageImportmap)
   return {
     dependencyLock: normalizeDependencyLock(raw.dependencyLock),
     scripts,
+    styles,
     ...(packageImportmap ? { packageImportmap } : {}),
   }
 }
@@ -157,13 +197,18 @@ export function cloneSiteRuntimeConfig(runtime: SiteRuntimeConfig = DEFAULT_SITE
   return normalizeSiteRuntimeConfig(runtime)
 }
 
-export function scriptAppliesToPage(
-  config: Pick<SiteScriptRuntimeConfig, 'scope'>,
+/**
+ * Whether an asset (script or stylesheet) with the given scope applies to a
+ * page. Shared by `collectRuntimeScripts` and `collectAppliedStyles` so the
+ * two surfaces can never drift on "does this target page X?".
+ */
+export function assetScopeAppliesToPage(
+  scope: SiteAssetScope,
   page: { id: string; template?: unknown },
 ): boolean {
-  if (config.scope.type === 'all-pages') return true
-  if (config.scope.type === 'pages') return config.scope.pageIds.includes(page.id)
-  return Boolean(page.template) && config.scope.templatePageIds.includes(page.id)
+  if (scope.type === 'all-pages') return true
+  if (scope.type === 'pages') return scope.pageIds.includes(page.id)
+  return Boolean(page.template) && scope.templatePageIds.includes(page.id)
 }
 
 export function collectRuntimeScripts({
@@ -180,7 +225,32 @@ export function collectRuntimeScripts({
     }))
     .filter(({ config }) => config.enabled)
     .filter(({ config }) => target !== 'canvas' || config.runInCanvas)
-    .filter(({ config }) => scriptAppliesToPage(config, page))
+    .filter(({ config }) => assetScopeAppliesToPage(config.scope, page))
+    .sort((a, b) => {
+      const priority = a.config.priority - b.config.priority
+      return priority || a.file.path.localeCompare(b.file.path)
+    })
+}
+
+/**
+ * Select the user stylesheets that apply to `page`, ordered for the cascade:
+ * ascending `priority` first, then `path` for stable tie-breaking. Disabled
+ * stylesheets and ones whose scope excludes the page are dropped. Empty-bodied
+ * files are skipped — an empty `<link>`/concatenation entry is wasted bytes.
+ */
+export function collectAppliedStyles({
+  files,
+  runtime,
+  page,
+}: CollectAppliedStylesInput): Array<{ file: SiteFile; config: SiteStyleRuntimeConfig }> {
+  return files
+    .filter((file) => file.type === 'style' && typeof file.content === 'string' && file.content.length > 0)
+    .map((file) => ({
+      file,
+      config: runtime.styles[file.id] ?? { ...DEFAULT_STYLE_RUNTIME_CONFIG },
+    }))
+    .filter(({ config }) => config.enabled)
+    .filter(({ config }) => assetScopeAppliesToPage(config.scope, page))
     .sort((a, b) => {
       const priority = a.config.priority - b.config.priority
       return priority || a.file.path.localeCompare(b.file.path)

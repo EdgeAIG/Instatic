@@ -98,7 +98,7 @@ export async function handleRowPreview(
   // resolution, etc.) operate against this seed.
   const draftPublishedRow: PublishedDataRow = synthesisePublishedRow(row, table, draftCells)
 
-  const cssBundle = buildSiteCssBundle(snapshot.site, registry)
+  const cssBundle = buildSiteCssBundle(snapshot.site, registry, template)
   const [loopData, mediaAssets] = await Promise.all([
     prefetchLoopData(template, snapshot.site, db),
     prefetchMediaAssets(template, registry, db),

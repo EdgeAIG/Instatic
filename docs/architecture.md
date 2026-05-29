@@ -212,11 +212,12 @@ Editor state (Zustand store)
 publishDraftSite / publishDataRow      ← server/repositories/publish.ts
     │
     │  1. write PublishedPageSnapshot to data_row_versions.snapshot_json
-    │  2. for each page where isFullyStaticPage(page, site, registry):
+    │  2. bake CSS bundles + runtime JS to the slot (writeStaticAsset)   ← Layer A
+    │  3. for each page (complete doc, or static shell with <pb-hole>):
     │       render via publishPage + applyPublishedHtmlPipeline
     │       writeArtefact(<inactive slot>, urlPath, html)   ← Layer A
-    │  3. swapSlot — atomic symlink flip of uploads/published/current
-    │  4. bumpPublishVersion()  → invalidates Layer B cache
+    │  4. swapSlot — atomic symlink flip of uploads/published/current
+    │  5. bumpPublishVersion()  → invalidates Layer B cache
     │
     ▼
 visitor request → server/router.ts → tryServePublicRoute
