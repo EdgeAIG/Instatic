@@ -166,7 +166,7 @@ describe('executeAgentTool — insertHtml', () => {
     )
     expect(cls).toBeDefined()
     expect(cls!.styles.fontSize).toBe('56px')
-    expect(cls!.breakpointStyles.mobile.fontSize).toBe('32px')
+    expect(cls!.contextStyles.mobile.fontSize).toBe('32px')
   })
 
   it('returns failure for missing html (schema validation)', async () => {
@@ -495,8 +495,8 @@ describe('executeAgentTool — createClass', () => {
     expect(result.success).toBe(true)
     const cls = useEditorStore.getState().site!.styleRules[result.nodeId!]
     expect(cls.styles.fontSize).toBe('64px')
-    expect(cls.breakpointStyles.mobile.fontSize).toBe('40px')
-    expect(cls.breakpointStyles.mobile.lineHeight).toBe('1.05')
+    expect(cls.contextStyles.mobile.fontSize).toBe('40px')
+    expect(cls.contextStyles.mobile.lineHeight).toBe('1.05')
   })
 })
 
@@ -615,8 +615,8 @@ describe('executeAgentTool — class identifier resolution', () => {
     const classes = useEditorStore.getState().site!.styleRules
     const cls = Object.values(classes).find((c) => c.name === 'responsive-card')!
     expect(cls.styles.gridTemplateColumns).toBe('1fr 1fr')
-    expect(cls.breakpointStyles.mobile.gridTemplateColumns).toBe('1fr')
-    expect(cls.breakpointStyles.mobile.gap).toBe('16px')
+    expect(cls.contextStyles.mobile.gridTemplateColumns).toBe('1fr')
+    expect(cls.contextStyles.mobile.gap).toBe('16px')
   })
 
   it('fails when updateClassStyles targets an unknown breakpoint', async () => {
@@ -634,7 +634,7 @@ describe('executeAgentTool — class identifier resolution', () => {
 
     const cls = Object.values(useEditorStore.getState().site!.styleRules).find((c) => c.name === 'responsive-card')!
     expect(cls.styles.padding).toBe('24px')
-    expect(cls.breakpointStyles.watch).toBeUndefined()
+    expect(cls.contextStyles.watch).toBeUndefined()
   })
 })
 

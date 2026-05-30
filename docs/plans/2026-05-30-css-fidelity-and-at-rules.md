@@ -100,6 +100,14 @@ This is the Webflow/Framer pattern: nice controls for the common case, a raw edi
 
 ## Part 2 — Arbitrary @-rules
 
+> **Superseded (Category A).** The per-rule `conditionalLayers` design below was
+> implemented (Phase 2a/2b) and then **replaced** by the unified editing-context
+> model — see [2026-05-30-unified-condition-axis.md](2026-05-30-unified-condition-axis.md).
+> `breakpointStyles` + `conditionalLayers` are now one `StyleRule.contextStyles`
+> map keyed by context id, and custom conditions are a reusable site-level
+> registry (`site.conditions`) rather than embedded per rule. Category B
+> (`@keyframes` / `@font-face` registries) is unaffected and still pending.
+
 ### The two categories
 
 Every `@`-rule is one of:

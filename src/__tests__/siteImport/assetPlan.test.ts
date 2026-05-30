@@ -93,10 +93,10 @@ describe('buildAssetPlan — CSS url() normalisation', () => {
     expect(assets.some((a) => a.sourcePath === 'images/bg.png')).toBe(true)
   })
 
-  it('normalises a url() inside a conditional layer (@media) and records the asset', () => {
-    // Regression: background-image inside an @media block lived in a
-    // conditional layer, whose url() was previously never rewritten (the
-    // asset uploaded but the layer kept the source path → broken link).
+  it('normalises a url() inside a custom-condition context (@media) and records the asset', () => {
+    // Regression: background-image inside an @media block lives in a
+    // per-context override bag, whose url() must be rewritten (else the asset
+    // uploads but the context keeps the source path → broken link).
     const css = `@media (max-width: 600px) { .hero { background-image: url('img/bg.png') } }`
     const fileMap = makeFileMap({
       'styles.css': { bytes: txt(css), mimeType: 'text/css' },
@@ -107,9 +107,8 @@ describe('buildAssetPlan — CSS url() normalisation', () => {
       [], [{ cssPath: 'styles.css', rules, assetRefs }], fileMap,
     )
     const hero = normalizedStyleRules.find((r) => r.selector === '.hero')!
-    const layer = hero.conditionalLayers![0]
-    const bg = (layer.styles as Record<string, string>)['backgroundImage']
-    expect(bg).toContain(`url('img/bg.png')`)         // normalised to FileMap key
+    const bag = Object.values(hero.contextStyles)[0] as Record<string, string>
+    expect(bag['backgroundImage']).toContain(`url('img/bg.png')`)  // normalised to FileMap key
     expect(assets.some((a) => a.sourcePath === 'img/bg.png')).toBe(true) // uploaded
   })
 
@@ -126,7 +125,7 @@ describe('buildAssetPlan — CSS url() normalisation', () => {
     expect(heroAssets).toHaveLength(1)
   })
 
-  it('normalises url() in breakpointStyles', () => {
+  it('normalises url() in a breakpoint context bag', () => {
     const css = `@media (max-width: 768px) { body { background-image: url('images/hero.png') } }`
     const fileMap = makeFileMap({
       'main.css': { bytes: txt(css) },
@@ -140,7 +139,7 @@ describe('buildAssetPlan — CSS url() normalisation', () => {
       fileMap,
     )
     const bodyRule = normalizedStyleRules.find((r) => r.selector === 'body')
-    const mobileBg = (bodyRule?.breakpointStyles['mobile'] as Record<string, string> | undefined)?.[
+    const mobileBg = (bodyRule?.contextStyles['mobile'] as Record<string, string> | undefined)?.[
       'backgroundImage'
     ]
     expect(mobileBg).toContain(`url('images/hero.png')`)

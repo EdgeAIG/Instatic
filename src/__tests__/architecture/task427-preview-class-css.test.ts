@@ -59,7 +59,7 @@ function makeClass(id: string, styles: StyleRule['styles'] = {}): StyleRule {
     id,
     name: id,
     styles,
-    breakpointStyles: {},
+    contextStyles: {},
     createdAt: 0,
     updatedAt: 0,
   }
@@ -430,7 +430,7 @@ describe('Gate 8 — class breakpoint overrides emit @media blocks in published 
         [classId]: {
           id: classId, name: classId,
           styles: { fontSize: '1rem' },
-          breakpointStyles: {
+          contextStyles: {
             [bpId]: { fontSize: '0.875rem' },
           },
           createdAt: 0, updatedAt: 0,
@@ -458,7 +458,7 @@ describe('Gate 8 — class breakpoint overrides emit @media blocks in published 
         [classId]: {
           id: classId, name: classId,
           styles: { color: 'black' },
-          breakpointStyles: { [bpId]: { color: 'white' } },
+          contextStyles: { [bpId]: { color: 'white' } },
           createdAt: 0, updatedAt: 0,
         },
       },

@@ -22,8 +22,10 @@ import { SmartphoneSolidIcon } from 'pixel-art-icons/icons/smartphone-solid'
 import { CommandIcon } from 'pixel-art-icons/icons/command'
 import { UploadIcon } from 'pixel-art-icons/icons/upload'
 import { SlidersHorizontalIcon } from 'pixel-art-icons/icons/sliders-horizontal'
+import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
 import { GeneralSection } from './sections/GeneralSection'
 import { BreakpointsSection } from './sections/BreakpointsSection'
+import { ConditionsSection } from './sections/ConditionsSection'
 import { PagesSection } from './sections/PagesSection'
 import { PublishingSection } from './sections/PublishingSection'
 import { ShortcutsSection } from './sections/ShortcutsSection'
@@ -36,6 +38,7 @@ const NAV_ITEMS = [
   { id: 'general',     label: 'General',     icon: SettingsCogSolidIcon       },
   { id: 'pages',       label: 'Pages',       icon: FileTextSolidIcon          },
   { id: 'breakpoints', label: 'Breakpoints', icon: SmartphoneSolidIcon        },
+  { id: 'conditions',  label: 'Conditions',  icon: LayoutSolidIcon            },
   { id: 'shortcuts',   label: 'Shortcuts',   icon: CommandIcon           },
   { id: 'publishing',  label: 'Publishing',  icon: UploadIcon            },
   { id: 'preferences', label: 'Preferences', icon: SlidersHorizontalIcon },
@@ -208,6 +211,7 @@ export function SettingsModal() {
             {activeSection === 'general'     && <GeneralSection />}
             {activeSection === 'pages'       && <PagesSection />}
             {activeSection === 'breakpoints' && <BreakpointsSection />}
+            {activeSection === 'conditions'  && <ConditionsSection />}
             {activeSection === 'shortcuts'   && <ShortcutsSection />}
             {activeSection === 'publishing'  && <PublishingSection />}
             {activeSection === 'preferences' && <PreferencesSection />}

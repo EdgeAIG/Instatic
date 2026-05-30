@@ -48,7 +48,7 @@ function planWith(
             selector: 'body',
             order: 0,
             styles: cssStyles,
-            breakpointStyles: {},
+            contextStyles: {},
           },
         ]
       : [],
@@ -137,7 +137,7 @@ describe('applyAssetRewrites — CSS styles', () => {
     )
   })
 
-  it('rewrites url() in breakpointStyles', () => {
+  it('rewrites url() in contextStyles', () => {
     const basePlan: ImportPlan = {
       pages: [],
       styleRules: [
@@ -147,7 +147,7 @@ describe('applyAssetRewrites — CSS styles', () => {
           selector: 'body',
           order: 0,
           styles: {},
-          breakpointStyles: {
+          contextStyles: {
             mobile: { backgroundImage: `url('images/hero.png')` },
           },
         },
@@ -160,7 +160,7 @@ describe('applyAssetRewrites — CSS styles', () => {
       unusedCss: [],
     }
     const result = applyAssetRewrites(basePlan, REWRITE_MAP)
-    const mobileStyle = result.styleRules[0].breakpointStyles['mobile'] as Record<string, string>
+    const mobileStyle = result.styleRules[0].contextStyles['mobile'] as Record<string, string>
     expect(mobileStyle['backgroundImage']).toBe(`url('/media/abc123.png')`)
   })
 
@@ -216,7 +216,7 @@ describe('applyAssetRewrites — end-to-end via buildImportPlan', () => {
     for (const rule of rewritten.styleRules) {
       const allBags = [
         rule.styles as Record<string, string>,
-        ...Object.values(rule.breakpointStyles) as Record<string, string>[],
+        ...Object.values(rule.contextStyles) as Record<string, string>[],
       ]
       for (const bag of allBags) {
         for (const [, val] of Object.entries(bag)) {

@@ -15,6 +15,7 @@
 import { describe, it, expect } from 'bun:test'
 import { bagToCSS, generateClassCSS } from '@core/publisher/classCss'
 import { collectClassCSS } from '@core/publisher/cssCollector'
+import { makeConditionDef } from '@core/page-tree'
 import type { StyleRule, Page, PageNode, SiteDocument } from '@core/page-tree'
 
 // ---------------------------------------------------------------------------
@@ -24,14 +25,14 @@ import type { StyleRule, Page, PageNode, SiteDocument } from '@core/page-tree'
 function makeClass(
   id: string,
   styles: StyleRule['styles'],
-  breakpointStyles: StyleRule['breakpointStyles'] = {},
+  contextStyles: StyleRule['contextStyles'] = {},
   name = id,
 ): StyleRule {
   return {
     id,
     name,
     styles,
-    breakpointStyles,
+    contextStyles,
     createdAt: 0,
     updatedAt: 0,
   }
@@ -278,24 +279,26 @@ describe('bagToCSS', () => {
 // generateClassCSS
 // ---------------------------------------------------------------------------
 
-describe('generateClassCSS — conditional layers (Part 2a)', () => {
-  it('emits @media / @container / @supports layers, then width-breakpoint @media', () => {
-    const rule = {
-      ...makeClass('foo', { color: 'red' }, { mobile: { color: 'green' } }),
-      conditionalLayers: [
-        { id: 'm1', condition: { kind: 'media' as const, query: '(orientation: landscape)' }, styles: { color: 'blue' }, order: 0 },
-        { id: 'c1', condition: { kind: 'container' as const, name: 'sidebar', query: 'min-width: 400px' }, styles: { display: 'grid' }, order: 1 },
-        { id: 's1', condition: { kind: 'supports' as const, query: '(display: grid)' }, styles: { gap: '8px' }, order: 2 },
-      ],
-    }
-    const css = generateClassCSS({ foo: rule }, [{ id: 'mobile', width: 375 }])
+describe('generateClassCSS — custom conditions (unified contextStyles)', () => {
+  const mediaCond = makeConditionDef({ kind: 'media', query: '(orientation: landscape)' })
+  const containerCond = makeConditionDef({ kind: 'container', name: 'sidebar', query: 'min-width: 400px' })
+  const supportsCond = makeConditionDef({ kind: 'supports', query: '(display: grid)' })
+
+  it('emits @media / @container / @supports, then width-breakpoint @media', () => {
+    const rule = makeClass('foo', { color: 'red' }, {
+      mobile: { color: 'green' },
+      [mediaCond.id]: { color: 'blue' },
+      [containerCond.id]: { display: 'grid' },
+      [supportsCond.id]: { gap: '8px' },
+    })
+    const css = generateClassCSS({ foo: rule }, [{ id: 'mobile', width: 375 }], [mediaCond, containerCond, supportsCond])
 
     expect(css).toContain('@media (orientation: landscape) {')
     expect(css).toContain('@container sidebar (min-width: 400px) {')
     expect(css).toContain('@supports (display: grid) {')
     expect(css).toContain('@media (max-width: 375px) {')
 
-    // Cascade order: base → conditional layers → breakpoint @media.
+    // Cascade order: base → custom conditions (registry order) → breakpoint @media.
     const base = css.indexOf('.foo {')
     const landscape = css.indexOf('@media (orientation: landscape)')
     const container = css.indexOf('@container')
@@ -306,43 +309,37 @@ describe('generateClassCSS — conditional layers (Part 2a)', () => {
   })
 
   it('does not double-wrap a supports query that already has parens', () => {
-    const rule = {
-      ...makeClass('foo', {}),
-      conditionalLayers: [
-        { id: 's1', condition: { kind: 'supports' as const, query: '(display: grid)' }, styles: { gap: '8px' }, order: 0 },
-      ],
-    }
-    const css = generateClassCSS({ foo: rule }, [])
+    const rule = makeClass('foo', {}, { [supportsCond.id]: { gap: '8px' } })
+    const css = generateClassCSS({ foo: rule }, [], [supportsCond])
     expect(css).toContain('@supports (display: grid) {')
     expect(css).not.toContain('((display: grid))')
   })
 
-  it('drops a layer whose query would break out of the @-block or <style> (injection guard)', () => {
-    const evil = (query: string) => ({
-      ...makeClass('foo', { color: 'red' }),
-      conditionalLayers: [
-        { id: 'x', condition: { kind: 'media' as const, query }, styles: { color: 'blue' }, order: 0 },
-      ],
-    })
+  it('drops a condition whose query would break out of the @-block or <style> (injection guard)', () => {
     for (const q of ['(max-width: 1px) {} body', '(x) </style', '(x); color: red']) {
-      const css = generateClassCSS({ foo: evil(q) }, [])
-      // The base rule still emits; the unsafe layer is dropped entirely.
+      const cond = makeConditionDef({ kind: 'media', query: q })
+      const rule = makeClass('foo', { color: 'red' }, { [cond.id]: { color: 'blue' } })
+      const css = generateClassCSS({ foo: rule }, [], [cond])
+      // The base rule still emits; the unsafe condition is dropped entirely.
       expect(css).toContain('.foo {')
       expect(css).not.toContain('color: blue')
       expect(css).not.toContain('</style')
     }
   })
 
-  it('drops a container layer with an unsafe container name', () => {
-    const rule = {
-      ...makeClass('foo', { color: 'red' }),
-      conditionalLayers: [
-        { id: 'c', condition: { kind: 'container' as const, name: 'evil {} body', query: 'min-width: 1px' }, styles: { color: 'blue' }, order: 0 },
-      ],
-    }
-    const css = generateClassCSS({ foo: rule }, [])
+  it('drops a container condition with an unsafe container name', () => {
+    const cond = makeConditionDef({ kind: 'container', name: 'evil {} body', query: 'min-width: 1px' })
+    const rule = makeClass('foo', { color: 'red' }, { [cond.id]: { color: 'blue' } })
+    const css = generateClassCSS({ foo: rule }, [], [cond])
     expect(css).not.toContain('color: blue')
     expect(css).not.toContain('@container evil')
+  })
+
+  it('skips an orphaned context key not in the breakpoints or conditions registry', () => {
+    const rule = makeClass('foo', { color: 'red' }, { 'media:(orphan)': { color: 'blue' } })
+    const css = generateClassCSS({ foo: rule }, [], [])
+    expect(css).toContain('.foo {')
+    expect(css).not.toContain('color: blue')
   })
 })
 

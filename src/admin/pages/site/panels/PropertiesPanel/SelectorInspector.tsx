@@ -87,7 +87,7 @@ export function SelectorInspector({ cls, activeBreakpointId }: SelectorInspector
   }
 
   const activeTab = getActiveStyleTab(activeBreakpointId)
-  const storedStyles = activeTab !== 'base' ? (cls.breakpointStyles[activeTab] ?? {}) : cls.styles
+  const storedStyles = activeTab !== 'base' ? (cls.contextStyles[activeTab] ?? {}) : cls.styles
   const sectionSetCounts = getClassStyleSectionSetCounts(storedStyles)
 
   return (

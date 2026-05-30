@@ -3,7 +3,7 @@ import { PUBLISHER_RESET_CSS } from '@core/publisher/reset'
 import { generateFrameworkRootCss } from '@core/framework/generate'
 import { generateFontsCss } from '@core/fonts/css'
 import { styleRuleSelector } from '@core/page-tree/classNames'
-import type { StyleRule } from '@core/page-tree'
+import type { StyleRule, Condition, ConditionDef } from '@core/page-tree'
 import type { SiteFontsSettings } from '@core/fonts/schemas'
 import type {
   FrameworkColorSettings,
@@ -15,6 +15,7 @@ import type {
 export function generateCanvasClassCSS(
   classes: Record<string, StyleRule>,
   breakpoints: Array<{ id: string; width: number }>,
+  conditions: ReadonlyArray<ConditionDef> = [],
   frameworkColors?: FrameworkColorSettings | null,
   frameworkTypography?: FrameworkTypographySettings | null,
   frameworkSpacing?: FrameworkSpacingSettings | null,
@@ -55,32 +56,41 @@ export function generateCanvasClassCSS(
     return ao - bo
   })
 
+  const breakpointIds = new Set(breakpoints.map((bp) => bp.id))
+  // Condition id → (condition, registry index) for stable ordering.
+  const conditionById = new Map<string, { condition: Condition; index: number }>(
+    conditions.map((c, index) => [c.id, { condition: c.condition, index }]),
+  )
+
   for (const cls of orderedClasses) {
     const baseDecls = bagToCSS(cls.styles)
     if (baseDecls) {
       blocks.push(`${styleRuleSelector(cls)} {\n${baseDecls}\n}`)
     }
 
-    for (const [bpId, bpStyles] of Object.entries(cls.breakpointStyles)) {
-      const decls = bagToCSS(bpStyles)
+    // Unified contextStyles: a key is either a width breakpoint (simulated via
+    // the [data-breakpoint-id] frame attribute) or a custom condition (emitted
+    // as a REAL @-rule wrapper, evaluated by the canvas frame's own engine
+    // against its actual viewport / container / support so the canvas matches
+    // published output). Keys matching neither registry are skipped.
+    const conditionEntries: Array<{ bag: Record<string, unknown>; condition: Condition; index: number }> = []
+    for (const [contextId, bag] of Object.entries(cls.contextStyles ?? {})) {
+      const cond = conditionById.get(contextId)
+      if (cond) {
+        conditionEntries.push({ bag, condition: cond.condition, index: cond.index })
+        continue
+      }
+      if (!breakpointIds.has(contextId)) continue
+      const decls = bagToCSS(bag)
       if (!decls) continue
-      if (!breakpoints.some((breakpoint) => breakpoint.id === bpId)) continue
-      blocks.push(`[data-breakpoint-id="${escapeCssAttribute(bpId)}"] ${styleRuleSelector(cls)} {\n${decls}\n}`)
+      blocks.push(`[data-breakpoint-id="${escapeCssAttribute(contextId)}"] ${styleRuleSelector(cls)} {\n${decls}\n}`)
     }
 
-    // Conditional layers (custom @media / @container / @supports) emit as REAL
-    // @-rule wrappers — unlike width breakpoints (which are simulated via the
-    // [data-breakpoint-id] frame attribute), these are evaluated by the canvas
-    // frame's own engine against its actual viewport / container / support, so
-    // the canvas matches the published output. A `breakpoint`-kind condition
-    // is skipped here (those ride the data-breakpoint-id scoping above).
-    const layerWidthById = new Map(breakpoints.map((bp) => [bp.id, bp.width]))
-    const layers = (cls.conditionalLayers ?? []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    for (const layer of layers) {
-      if (layer.condition.kind === 'breakpoint') continue
-      const decls = bagToCSS(layer.styles)
+    conditionEntries.sort((a, b) => a.index - b.index)
+    for (const { bag, condition } of conditionEntries) {
+      const decls = bagToCSS(bag)
       if (!decls) continue
-      const prelude = conditionPrelude(layer.condition, layerWidthById)
+      const prelude = conditionPrelude(condition)
       if (!prelude) continue
       blocks.push(`${prelude} {\n  ${styleRuleSelector(cls)} {\n${decls}\n  }\n}`)
     }

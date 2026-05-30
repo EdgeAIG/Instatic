@@ -45,7 +45,7 @@ interface DefinePackConfig {
    * Map of `className -> styles`. The class id is auto-namespaced to
    * `<pluginId>/<className>`, the CSS classname is `<pluginId-snake>-<className>`
    * (snake-cased plugin id so vendor.product → vendor-product-class). Use
-   * the longer object form `{ name?, styles, breakpointStyles? }` to
+   * the longer object form `{ name?, styles, contextStyles? }` to
    * override the derived classname.
    */
   classes?: Record<string, ClassPackEntry>
@@ -56,7 +56,7 @@ type ClassPackEntry =
   | {
       name?: string
       styles: Record<string, unknown>
-      breakpointStyles?: Record<string, Record<string, unknown>>
+      contextStyles?: Record<string, Record<string, unknown>>
       description?: string
       tags?: string[]
     }
@@ -77,7 +77,7 @@ function defaultCssName(pluginId: string, className: string): string {
 function isExpandedEntry(value: ClassPackEntry): value is {
   name?: string
   styles: Record<string, unknown>
-  breakpointStyles?: Record<string, Record<string, unknown>>
+  contextStyles?: Record<string, Record<string, unknown>>
   description?: string
   tags?: string[]
 } {
@@ -103,7 +103,7 @@ export function definePack(config: DefinePackConfig): PluginPackContents {
       order: 0,
       ...(expanded.description ? { description: expanded.description } : {}),
       styles: expanded.styles ?? {},
-      breakpointStyles: expanded.breakpointStyles ?? {},
+      contextStyles: expanded.contextStyles ?? {},
       ...(expanded.tags ? { tags: expanded.tags } : {}),
       createdAt: 0,
       updatedAt: 0,

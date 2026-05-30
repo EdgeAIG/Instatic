@@ -35,7 +35,7 @@ import { CanvasTransformLayer } from './CanvasTransformLayer'
 import { CanvasPreviewSurface } from './CanvasPreviewSurface'
 import { CanvasNotch } from './CanvasNotch'
 import { CanvasModeToggle } from './CanvasModeToggle'
-import { CanvasBreakpointSelector } from './CanvasBreakpointSelector'
+import { CanvasContextSelector } from './CanvasContextSelector'
 import { CanvasSelectionContext, CanvasViewportActionsContext } from './CanvasContexts'
 // Class / user-stylesheet injectors are now mounted per breakpoint frame
 // (inside each iframe's document) by `IframeFrameSurface`. CanvasRoot no
@@ -343,16 +343,12 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
             this also hosts inline breakpoint switcher buttons. */}
           <CanvasModeToggle />
 
-          {/* The breakpoint switcher targets per-breakpoint style overrides,
-              so it's only meaningful for callers who can edit style or
-              structure. Content-only Clients and pure Viewers get the
-              same plain frames without this affordance. */}
+          {/* The editing-context switcher targets per-context style overrides
+              (viewports + custom conditions), so it's only meaningful for
+              callers who can edit style or structure. Content-only Clients and
+              pure Viewers get the same plain frames without this affordance. */}
           {!isPreview && rightSidebarExpanded && (permissions.canEditStyle || permissions.canEditStructure) && (
-            <CanvasBreakpointSelector
-              breakpoints={breakpoints}
-              activeBreakpointId={activeBreakpointId}
-              onBreakpointChange={setActiveBreakpoint}
-            />
+            <CanvasContextSelector />
           )}
 
           {/*

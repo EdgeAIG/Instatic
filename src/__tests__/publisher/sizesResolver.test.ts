@@ -6,7 +6,7 @@
  *   - Single max-width-constrained container wraps the image.
  *   - Constraint pinned directly on the image node itself.
  *   - Multiple ancestors with caps — innermost wins (outer can't loosen).
- *   - Per-breakpoint `breakpointStyles.maxWidth` shrinks `sizes` at narrower
+ *   - Per-breakpoint `contextStyles.maxWidth` shrinks `sizes` at narrower
  *     viewports.
  *   - Non-pixel units (%, vw, auto) ignored.
  *   - Multi-class on one node: latest declaration wins.
@@ -21,7 +21,7 @@ function makeClass(id: string, partial: Partial<StyleRule> = {}): StyleRule {
     id,
     name: id,
     styles: {},
-    breakpointStyles: {},
+    contextStyles: {},
     createdAt: 0,
     updatedAt: 0,
     ...partial,
@@ -147,7 +147,7 @@ describe('resolveAutoSizes — per-breakpoint overrides', () => {
       styleRules: {
         shrinks: makeClass('shrinks', {
           styles: { maxWidth: '1200px' },
-          breakpointStyles: { mobile: { maxWidth: '320px' } },
+          contextStyles: { mobile: { maxWidth: '320px' } },
         }),
       },
     })
@@ -175,7 +175,7 @@ describe('resolveAutoSizes — per-breakpoint overrides', () => {
       styleRules: {
         tiered: makeClass('tiered', {
           styles: { maxWidth: '1400px' },
-          breakpointStyles: {
+          contextStyles: {
             desktop: { maxWidth: '1200px' },
             tablet: { maxWidth: '700px' },
             mobile: { maxWidth: '320px' },

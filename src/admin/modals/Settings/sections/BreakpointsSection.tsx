@@ -4,7 +4,7 @@
  * Changes reflect on the canvas immediately because CanvasRoot reads
  * `site.breakpoints` from the store.
  */
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { SmartphoneSolidIcon } from 'pixel-art-icons/icons/smartphone-solid'
 import { TabletSolidIcon } from 'pixel-art-icons/icons/tablet-solid'
@@ -15,6 +15,7 @@ import { PlusIcon } from 'pixel-art-icons/icons/plus'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { Select } from '@ui/components/Select'
+import { Switch } from '@ui/components/Switch'
 import { SkeletonBlock } from '@ui/components/Skeleton'
 import type { Breakpoint } from '@core/page-tree'
 import s from '../SettingsModal.module.css'
@@ -39,9 +40,12 @@ export function BreakpointsSection() {
   const [editLabel, setEditLabel] = useState('')
   const [editWidth, setEditWidth] = useState(0)
   const [editIcon, setEditIcon] = useState('monitor')
+  const [editPreviewFrame, setEditPreviewFrame] = useState(true)
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
 
   const confirmBtnRef = useRef<HTMLButtonElement>(null)
+  const editFrameId = useId()
+  const newFrameId = useId()
 
   useEffect(() => {
     if (confirmRemoveId) confirmBtnRef.current?.focus()
@@ -50,18 +54,20 @@ export function BreakpointsSection() {
   const [newLabel, setNewLabel] = useState('')
   const [newWidth, setNewWidth] = useState(375)
   const [newIcon, setNewIcon] = useState('smartphone')
+  const [newPreviewFrame, setNewPreviewFrame] = useState(true)
 
   const handleStartEdit = (bp: Breakpoint) => {
     setEditingId(bp.id)
     setEditLabel(bp.label)
     setEditWidth(bp.width)
     setEditIcon(bp.icon)
+    setEditPreviewFrame(bp.previewFrame !== false)
   }
 
   const handleSaveEdit = () => {
     if (!editingId) return
     if (editLabel.trim() && editWidth > 0) {
-      updateBreakpoint(editingId, { label: editLabel.trim(), width: editWidth, icon: editIcon })
+      updateBreakpoint(editingId, { label: editLabel.trim(), width: editWidth, icon: editIcon, previewFrame: editPreviewFrame })
     }
     setEditingId(null)
   }
@@ -69,10 +75,11 @@ export function BreakpointsSection() {
   const handleAdd = () => {
     const label = newLabel.trim()
     if (!label || newWidth <= 0) return
-    addBreakpoint({ label, width: newWidth, icon: newIcon })
+    addBreakpoint({ label, width: newWidth, icon: newIcon, previewFrame: newPreviewFrame })
     setNewLabel('')
     setNewWidth(375)
     setNewIcon('smartphone')
+    setNewPreviewFrame(true)
   }
 
   const handleRemove = (id: string) => {
@@ -122,6 +129,15 @@ export function BreakpointsSection() {
                   aria-label="Icon"
                   options={ICON_OPTIONS}
                 />
+                <div className={s.row}>
+                  <label htmlFor={editFrameId} className={s.fieldFlex}>Preview frame on canvas</label>
+                  <Switch
+                    id={editFrameId}
+                    checked={editPreviewFrame}
+                    onCheckedChange={setEditPreviewFrame}
+                    aria-label="Show preview frame on canvas"
+                  />
+                </div>
                 <div className={s.bpEditActions}>
                   <Button variant="primary" size="md" onClick={handleSaveEdit}>Save</Button>
                   <Button variant="secondary" size="md" onClick={() => setEditingId(null)}>Cancel</Button>
@@ -244,6 +260,15 @@ export function BreakpointsSection() {
             <PlusIcon size={13} aria-hidden="true" />
             Add
           </Button>
+        </div>
+        <div className={s.row}>
+          <label htmlFor={newFrameId} className={s.fieldFlex}>Preview frame on canvas</label>
+          <Switch
+            id={newFrameId}
+            checked={newPreviewFrame}
+            onCheckedChange={setNewPreviewFrame}
+            aria-label="Show preview frame on canvas for new breakpoint"
+          />
         </div>
       </div>
     </div>

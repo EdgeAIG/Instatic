@@ -274,7 +274,7 @@ export function createFrameworkScaleModule<
           selector: classKindSelector(className),
           order: 0,
           styles,
-          breakpointStyles: {},
+          contextStyles: {},
           generated: {
             origin: 'framework',
             family,

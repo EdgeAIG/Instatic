@@ -174,15 +174,6 @@ const ALLOWLIST = new Set([
   // grid-cell day buttons (bespoke positioned hit area, custom selected
   // state). These are the only bare <button>s in the file.
   'admin/pages/site/panels/PropertiesPanel/BorderControl/BorderControl.tsx',
-
-  // ── §8.6 ARIA tablist tabs (ConditionTabs) ──────────────────────────────
-  // The conditional-layer tab strip renders role="tab" buttons inside a
-  // role="tablist" (Base + one tab per @media / @container / @supports layer),
-  // each a compact pill with an inline remove (×) sub-button and an ellipsised
-  // label. Same pattern class as §8.6 (CanvasModeToggle / ContentModeToggle):
-  // a segmented-tab look with aria-selected that Button's token sizing and
-  // lack of role override cannot represent.
-  'admin/pages/site/panels/PropertiesPanel/ConditionTabs.tsx',
 ])
 
 // ---------------------------------------------------------------------------

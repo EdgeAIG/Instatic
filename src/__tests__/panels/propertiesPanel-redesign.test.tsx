@@ -559,7 +559,7 @@ describe('PP-11 — Editing a text-type class property via TextControl updates c
 
     const updatedCls = useEditorStore.getState().site!.styleRules[cls.id]
     expect(updatedCls.styles.fontFamily).toBe('serif')
-    expect(updatedCls.breakpointStyles.mobile.fontFamily).toBe('Inter, sans-serif')
+    expect(updatedCls.contextStyles.mobile.fontFamily).toBe('Inter, sans-serif')
   })
 
   it('does not render a panel-local class style breakpoint picker', () => {
@@ -1368,7 +1368,7 @@ describe('PP-20 — Property search adds class-backed styles to the active class
 
     const updatedCls = useEditorStore.getState().site!.styleRules[cls.id]
     expect(updatedCls.styles.fontFamily).toBeUndefined()
-    expect(updatedCls.breakpointStyles.mobile.fontFamily).toBe('serif')
+    expect(updatedCls.contextStyles.mobile.fontFamily).toBe('serif')
   })
 
 })

@@ -39,14 +39,21 @@ interface StyleRule {
     role:   'module-style'
   }
   styles:           Record<string, unknown>          // base CSS properties (CSSPropertyBag-shaped at write time)
-  breakpointStyles?: Record<string, Record<string, unknown>>  // per-breakpoint styles
+  contextStyles:     Record<string, Record<string, unknown>>  // per-context overrides, keyed by context id
   generated?:    GeneratedClassMetadata               // framework-generated flags
   createdAt?:   number
   updatedAt?:   number
 }
 ```
 
-`styles` and `breakpointStyles` are typed `Record<string, unknown>` at the persistence boundary — narrowing happens at the publisher's `bagToCSS` (`classCss.ts`). The WRITE API (class slice, framework generators) uses the typed `CSSPropertyBag` shape from `src/core/page-tree/cssPropertyBag.ts`.
+`contextStyles` is the **unified editing-context map** (see [docs/plans/2026-05-30-unified-condition-axis.md](../plans/2026-05-30-unified-condition-axis.md)). Each key is a *context id* that is **either**:
+
+- a **width breakpoint id** (from `site.breakpoints`) → the publisher emits `@media (max-width: Npx)`; **or**
+- a **custom condition id** (from `site.conditions`, the reusable `@media`/`@container`/`@supports` registry) → the publisher emits that condition's `@`-prelude.
+
+This one map replaces the old split between `breakpointStyles` (width breakpoints) and `conditionalLayers` (everything else) — they were the same axis modelled twice. `parseStyleRule` migrates both legacy fields into `contextStyles`; the site-level `conditions` registry is reconstructed from legacy `conditionalLayers` in `parseSiteDocument`.
+
+`styles` and `contextStyles` are typed `Record<string, unknown>` at the persistence boundary — narrowing happens at the publisher's `bagToCSS` (`classCss.ts`). The WRITE API (class slice, framework generators) uses the typed `CSSPropertyBag` shape from `src/core/page-tree/cssPropertyBag.ts`.
 
 ---
 
@@ -91,12 +98,17 @@ For each rule in registry (sorted by order):
   base CSS  = bagToCSS(rule.styles)
   emit:     '${selector} { ${base CSS} }'
 
-  for each (breakpointId, bag) in rule.breakpointStyles:
-    breakpoint = site.breakpoints[breakpointId]
-    media query = '@media (min-width: ${minWidth}px) and (max-width: ${maxWidth}px)'
-    bp CSS = bagToCSS(bag)
-    emit: '${media query} { ${selector} { ${bp CSS} } }'
+  for each (contextId, bag) in rule.contextStyles:
+    if contextId is a custom condition (site.conditions):  // emitted first
+      prelude = '@media <query>' | '@container [name] (<query>)' | '@supports (<query>)'
+    else if contextId is a width breakpoint (site.breakpoints):  // emitted after, width-sorted
+      prelude = '@media (max-width: ${width}px)'
+    else:  // orphaned key — skipped
+      continue
+    emit: '${prelude} { ${selector} { ${bagToCSS(bag)} } }'
 ```
+
+Cascade order within a rule: base → custom conditions (registry order) → width breakpoints (widest first, narrowest last).
 
 The compiled string is part of the per-page CSS bundle (see [docs/features/publisher.md](../features/publisher.md) → CSS pipeline).
 
@@ -212,7 +224,7 @@ useEditorStore.getState().setNodeClassIds(nodeId, ['hero-button'])
 
 The class names appear on the rendered element via `classNamesForClassIds`.
 
-### Per-breakpoint styles
+### Per-context styles (breakpoints + custom conditions)
 
 ```ts
 {
@@ -221,15 +233,16 @@ The class names appear on the rendered element via `classNamesForClassIds`.
   kind:  'class',
   selector: '.card',
   order: 0,
-  styles:           { padding: 16, 'border-radius': 8 },
-  breakpointStyles: {
-    mobile:  { padding: 8 },         // narrower padding on mobile
-    desktop: { padding: 24 },        // wider on desktop
+  styles:        { padding: 16, 'border-radius': 8 },
+  contextStyles: {
+    mobile:  { padding: 8 },                       // width breakpoint id
+    desktop: { padding: 24 },                      // width breakpoint id
+    'media:(orientation: landscape)': { padding: 12 },  // custom condition id (site.conditions)
   },
 }
 ```
 
-The publisher wraps each per-breakpoint style block in the matching `@media (min-width: ...)` query.
+The publisher wraps each context block in the matching `@media (max-width: …)` (width breakpoint) or the custom condition's `@media`/`@container`/`@supports` prelude.
 
 ### Scoped rule for one node
 

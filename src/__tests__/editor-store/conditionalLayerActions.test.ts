@@ -1,12 +1,14 @@
 /**
- * Store actions for conditional style layers (CSS fidelity Phase 2b).
+ * Store actions for the unified editing-context model.
  *
- * addConditionalLayer / updateConditionalLayerStyles / removeConditionalLayer
- * on the style-rule slice.
+ * Custom conditions are site-level (`site.conditions`); a class carries an
+ * override bag per context in `contextStyles`. Actions: addClassCondition /
+ * setClassContextStyles / removeClassContext / addCondition / removeCondition.
  */
 
 import { describe, it, expect } from 'bun:test'
 import { useEditorStore } from '@site/store/store'
+import { conditionId } from '@core/page-tree'
 import '@modules/base'
 
 function freshStore() {
@@ -33,102 +35,114 @@ function classId(): string {
   return useEditorStore.getState().createClass('card').id
 }
 
-describe('addConditionalLayer', () => {
-  it('creates a media layer and returns its id', () => {
+describe('addClassCondition', () => {
+  it('registers the condition and opens an override bag on the class', () => {
     freshStore()
     const id = classId()
-    const layerId = useEditorStore.getState().addConditionalLayer(id, {
+    const cid = useEditorStore.getState().addClassCondition(id, {
       kind: 'media',
       query: '(max-width: 860px)',
     })
-    expect(layerId).toBeTruthy()
-    const cls = useEditorStore.getState().site!.styleRules[id]
-    expect(cls.conditionalLayers).toHaveLength(1)
-    expect(cls.conditionalLayers![0].condition).toEqual({ kind: 'media', query: '(max-width: 860px)' })
+    expect(cid).toBe(conditionId({ kind: 'media', query: '(max-width: 860px)' }))
+    const site = useEditorStore.getState().site!
+    expect(site.conditions).toHaveLength(1)
+    expect(site.conditions![0].condition).toEqual({ kind: 'media', query: '(max-width: 860px)' })
+    expect(site.styleRules[id].contextStyles[cid!]).toEqual({})
   })
 
-  it('reuses the existing layer for an identical condition', () => {
+  it('reuses the existing condition id for an identical condition', () => {
     freshStore()
     const id = classId()
-    const a = useEditorStore.getState().addConditionalLayer(id, { kind: 'media', query: '(min-width: 1px)' })
-    const b = useEditorStore.getState().addConditionalLayer(id, { kind: 'media', query: '(min-width: 1px)' })
+    const a = useEditorStore.getState().addClassCondition(id, { kind: 'media', query: '(min-width: 1px)' })
+    const b = useEditorStore.getState().addClassCondition(id, { kind: 'media', query: '(min-width: 1px)' })
     expect(a).toBe(b)
-    expect(useEditorStore.getState().site!.styleRules[id].conditionalLayers).toHaveLength(1)
+    expect(useEditorStore.getState().site!.conditions).toHaveLength(1)
   })
 
   it('container conditions distinguish by name', () => {
     freshStore()
     const id = classId()
-    useEditorStore.getState().addConditionalLayer(id, { kind: 'container', query: '(min-width: 400px)', name: 'a' })
-    useEditorStore.getState().addConditionalLayer(id, { kind: 'container', query: '(min-width: 400px)', name: 'b' })
-    expect(useEditorStore.getState().site!.styleRules[id].conditionalLayers).toHaveLength(2)
+    useEditorStore.getState().addClassCondition(id, { kind: 'container', query: '(min-width: 400px)', name: 'a' })
+    useEditorStore.getState().addClassCondition(id, { kind: 'container', query: '(min-width: 400px)', name: 'b' })
+    expect(useEditorStore.getState().site!.conditions).toHaveLength(2)
   })
 })
 
-describe('updateConditionalLayerStyles', () => {
-  it('merges a style patch into the layer', () => {
+describe('setClassContextStyles', () => {
+  it('merges a style patch into the context bag', () => {
     freshStore()
     const id = classId()
-    const layerId = useEditorStore.getState().addConditionalLayer(id, { kind: 'media', query: '(max-width: 860px)' })!
-    useEditorStore.getState().updateConditionalLayerStyles(id, layerId, { color: 'red' })
-    useEditorStore.getState().updateConditionalLayerStyles(id, layerId, { fontSize: '14px' })
-    const layer = useEditorStore.getState().site!.styleRules[id].conditionalLayers![0]
-    expect(layer.styles).toMatchObject({ color: 'red', fontSize: '14px' })
+    const cid = useEditorStore.getState().addClassCondition(id, { kind: 'media', query: '(max-width: 860px)' })!
+    useEditorStore.getState().setClassContextStyles(id, cid, { color: 'red' })
+    useEditorStore.getState().setClassContextStyles(id, cid, { fontSize: '14px' })
+    expect(useEditorStore.getState().site!.styleRules[id].contextStyles[cid]).toMatchObject({
+      color: 'red',
+      fontSize: '14px',
+    })
   })
 
-  it('an undefined value deletes the property from the layer', () => {
+  it('an undefined value deletes the property from the context bag', () => {
     freshStore()
     const id = classId()
-    const layerId = useEditorStore.getState().addConditionalLayer(id, { kind: 'media', query: '(max-width: 860px)' })!
-    useEditorStore.getState().updateConditionalLayerStyles(id, layerId, { color: 'red' })
-    useEditorStore.getState().updateConditionalLayerStyles(id, layerId, { color: undefined })
-    expect(useEditorStore.getState().site!.styleRules[id].conditionalLayers![0].styles).not.toHaveProperty('color')
-  })
-})
-
-describe('removeConditionalLayer', () => {
-  it('removes the layer; clears the array when empty', () => {
-    freshStore()
-    const id = classId()
-    const layerId = useEditorStore.getState().addConditionalLayer(id, { kind: 'media', query: '(max-width: 860px)' })!
-    useEditorStore.getState().removeConditionalLayer(id, layerId)
-    expect(useEditorStore.getState().site!.styleRules[id].conditionalLayers).toBeUndefined()
+    const cid = useEditorStore.getState().addClassCondition(id, { kind: 'media', query: '(max-width: 860px)' })!
+    useEditorStore.getState().setClassContextStyles(id, cid, { color: 'red' })
+    useEditorStore.getState().setClassContextStyles(id, cid, { color: undefined })
+    expect(useEditorStore.getState().site!.styleRules[id].contextStyles[cid]).not.toHaveProperty('color')
   })
 })
 
-describe('duplicateClass preserves conditional layers', () => {
-  it('deep-clones layers with fresh ids (no shared references)', () => {
+describe('removeClassContext', () => {
+  it('removes the override bag for that context', () => {
     freshStore()
     const id = classId()
-    const layerId = useEditorStore.getState().addConditionalLayer(id, { kind: 'media', query: '(max-width: 600px)' })!
-    useEditorStore.getState().updateConditionalLayerStyles(id, layerId, { color: 'red' })
+    const cid = useEditorStore.getState().addClassCondition(id, { kind: 'media', query: '(max-width: 860px)' })!
+    useEditorStore.getState().removeClassContext(id, cid)
+    expect(useEditorStore.getState().site!.styleRules[id].contextStyles).not.toHaveProperty(cid)
+  })
+})
+
+describe('removeCondition', () => {
+  it('drops the registry entry and clears it from every class', () => {
+    freshStore()
+    const id = classId()
+    const cid = useEditorStore.getState().addClassCondition(id, { kind: 'media', query: '(max-width: 600px)' })!
+    useEditorStore.getState().setClassContextStyles(id, cid, { color: 'red' })
+    useEditorStore.getState().removeCondition(cid)
+    const site = useEditorStore.getState().site!
+    expect(site.conditions ?? []).toHaveLength(0)
+    expect(site.styleRules[id].contextStyles).not.toHaveProperty(cid)
+  })
+})
+
+describe('duplicateClass preserves context overrides', () => {
+  it('deep-clones context bags (no shared references)', () => {
+    freshStore()
+    const id = classId()
+    const cid = useEditorStore.getState().addClassCondition(id, { kind: 'media', query: '(max-width: 600px)' })!
+    useEditorStore.getState().setClassContextStyles(id, cid, { color: 'red' })
 
     const copy = useEditorStore.getState().duplicateClass(id)!
-    const copyLayers = useEditorStore.getState().site!.styleRules[copy.id].conditionalLayers!
-    expect(copyLayers).toHaveLength(1)
-    expect(copyLayers[0].id).not.toBe(layerId)        // fresh id
-    expect(copyLayers[0].condition).toEqual({ kind: 'media', query: '(max-width: 600px)' })
-    expect(copyLayers[0].styles).toMatchObject({ color: 'red' })
+    const copyBag = useEditorStore.getState().site!.styleRules[copy.id].contextStyles[cid]
+    expect(copyBag).toMatchObject({ color: 'red' })
 
     // Mutating the copy must not touch the source (no shared reference).
-    useEditorStore.getState().updateConditionalLayerStyles(copy.id, copyLayers[0].id, { color: 'green' })
-    const sourceLayer = useEditorStore.getState().site!.styleRules[id].conditionalLayers![0]
-    expect(sourceLayer.styles).toMatchObject({ color: 'red' })
+    useEditorStore.getState().setClassContextStyles(copy.id, cid, { color: 'green' })
+    expect(useEditorStore.getState().site!.styleRules[id].contextStyles[cid]).toMatchObject({ color: 'red' })
   })
 })
 
-describe('removeClassStyleProperty clears conditional layers too', () => {
-  it('"clear everywhere" removes the property from a conditional layer', () => {
+describe('removeClassStyleProperty clears context overrides too', () => {
+  it('"clear everywhere" removes the property from a condition context', () => {
     freshStore()
     const id = classId()
     useEditorStore.getState().updateClassStyles(id, { display: 'flex' })
-    const layerId = useEditorStore.getState().addConditionalLayer(id, { kind: 'media', query: '(max-width: 600px)' })!
-    useEditorStore.getState().updateConditionalLayerStyles(id, layerId, { display: 'grid' })
+    const cid = useEditorStore.getState().addClassCondition(id, { kind: 'media', query: '(max-width: 600px)' })!
+    useEditorStore.getState().setClassContextStyles(id, cid, { display: 'grid' })
 
     useEditorStore.getState().removeClassStyleProperty(id, 'display')
 
     const cls = useEditorStore.getState().site!.styleRules[id]
     expect(cls.styles).not.toHaveProperty('display')
-    expect(cls.conditionalLayers![0].styles).not.toHaveProperty('display')
+    expect(cls.contextStyles[cid]).not.toHaveProperty('display')
   })
 })

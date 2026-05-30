@@ -24,7 +24,7 @@ function makeClass(name: string, id = `cls-${name}`): StyleRule {
     id,
     name,
     styles: {},
-    breakpointStyles: {},
+    contextStyles: {},
     createdAt: 0,
     updatedAt: 0,
   }

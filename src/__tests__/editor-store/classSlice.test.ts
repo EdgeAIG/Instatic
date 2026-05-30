@@ -3,7 +3,7 @@
  *
  * Covers:
  * - createClass / renameClass / deleteClass CRUD
- * - updateClassStyles / setClassBreakpointStyles patch semantics
+ * - updateClassStyles / setClassContextStyles patch semantics
  * - addNodeClass / removeNodeClass / reorderNodeClasses node assignment
  * - activeClassId state management
  * - deleteClass cascade (removes from all nodes, clears activeClassId)
@@ -67,7 +67,7 @@ describe('classSlice.createClass', () => {
     expect(classes[cls.id]).toBeDefined()
     expect(classes[cls.id].name).toBe('btn')
     expect(classes[cls.id].styles).toEqual({})
-    expect(classes[cls.id].breakpointStyles).toEqual({})
+    expect(classes[cls.id].contextStyles).toEqual({})
   })
 
   it('creates a class with initial styles', () => {
@@ -146,24 +146,24 @@ describe('classSlice.updateClassStyles', () => {
 })
 
 // ---------------------------------------------------------------------------
-// setClassBreakpointStyles
+// setClassContextStyles
 // ---------------------------------------------------------------------------
 
-describe('classSlice.setClassBreakpointStyles', () => {
+describe('classSlice.setClassContextStyles', () => {
   it('creates a breakpoint override entry and patches it', () => {
     setupSite()
     const cls = getStore().createClass('btn')
-    getStore().setClassBreakpointStyles(cls.id, 'mobile', { fontSize: '12px' })
-    const bpStyles = useEditorStore.getState().site!.styleRules[cls.id].breakpointStyles
+    getStore().setClassContextStyles(cls.id, 'mobile', { fontSize: '12px' })
+    const bpStyles = useEditorStore.getState().site!.styleRules[cls.id].contextStyles
     expect(bpStyles['mobile']?.fontSize).toBe('12px')
   })
 
   it('merges subsequent patches to the same breakpoint', () => {
     setupSite()
     const cls = getStore().createClass('btn')
-    getStore().setClassBreakpointStyles(cls.id, 'mobile', { fontSize: '12px' })
-    getStore().setClassBreakpointStyles(cls.id, 'mobile', { color: '#fff' })
-    const bp = useEditorStore.getState().site!.styleRules[cls.id].breakpointStyles['mobile']
+    getStore().setClassContextStyles(cls.id, 'mobile', { fontSize: '12px' })
+    getStore().setClassContextStyles(cls.id, 'mobile', { color: '#fff' })
+    const bp = useEditorStore.getState().site!.styleRules[cls.id].contextStyles['mobile']
     expect(bp?.fontSize).toBe('12px')
     expect(bp?.color).toBe('#fff')
   })
@@ -171,9 +171,9 @@ describe('classSlice.setClassBreakpointStyles', () => {
   it('removes a key from breakpoint styles when patched to null/undefined', () => {
     setupSite()
     const cls = getStore().createClass('btn')
-    getStore().setClassBreakpointStyles(cls.id, 'mobile', { fontSize: '12px' })
-    getStore().setClassBreakpointStyles(cls.id, 'mobile', { fontSize: null as unknown as undefined })
-    const bp = useEditorStore.getState().site!.styleRules[cls.id].breakpointStyles['mobile']
+    getStore().setClassContextStyles(cls.id, 'mobile', { fontSize: '12px' })
+    getStore().setClassContextStyles(cls.id, 'mobile', { fontSize: null as unknown as undefined })
+    const bp = useEditorStore.getState().site!.styleRules[cls.id].contextStyles['mobile']
     expect('fontSize' in (bp ?? {})).toBe(false)
   })
 
@@ -181,7 +181,7 @@ describe('classSlice.setClassBreakpointStyles', () => {
     setupSite()
     const cls = getStore().createClass('btn')
     getStore().updateClassStyles(cls.id, { fontSize: '14px' })
-    getStore().setClassBreakpointStyles(cls.id, 'mobile', { fontSize: '12px' })
+    getStore().setClassContextStyles(cls.id, 'mobile', { fontSize: '12px' })
     expect(useEditorStore.getState().site!.styleRules[cls.id].styles.fontSize).toBe('14px')
   })
 })
@@ -202,29 +202,29 @@ describe('classSlice.removeClassStyleProperty', () => {
   it('removes the property from every breakpoint override', () => {
     setupSite()
     const cls = getStore().createClass('btn')
-    getStore().setClassBreakpointStyles(cls.id, 'mobile', { display: 'block' })
-    getStore().setClassBreakpointStyles(cls.id, 'tablet', { display: 'inline' })
+    getStore().setClassContextStyles(cls.id, 'mobile', { display: 'block' })
+    getStore().setClassContextStyles(cls.id, 'tablet', { display: 'inline' })
     getStore().removeClassStyleProperty(cls.id, 'display')
     const c = useEditorStore.getState().site!.styleRules[cls.id]
-    expect(c.breakpointStyles['mobile']?.display).toBeUndefined()
-    expect(c.breakpointStyles['tablet']?.display).toBeUndefined()
+    expect(c.contextStyles['mobile']?.display).toBeUndefined()
+    expect(c.contextStyles['tablet']?.display).toBeUndefined()
   })
 
   it('removes the property from base AND all breakpoints in a single history entry', () => {
     setupSite()
     const cls = getStore().createClass('btn')
     getStore().updateClassStyles(cls.id, { display: 'grid' })
-    getStore().setClassBreakpointStyles(cls.id, 'mobile', { display: 'block' })
+    getStore().setClassContextStyles(cls.id, 'mobile', { display: 'block' })
     getStore().removeClassStyleProperty(cls.id, 'display')
     const c = useEditorStore.getState().site!.styleRules[cls.id]
     expect(c.styles.display).toBeUndefined()
-    expect(c.breakpointStyles['mobile']?.display).toBeUndefined()
+    expect(c.contextStyles['mobile']?.display).toBeUndefined()
     // One undo brings BOTH base and breakpoint back at once — confirms the
     // remove operation pushed exactly one history entry, not two.
     getStore().undo()
     const after = useEditorStore.getState().site!.styleRules[cls.id]
     expect(after.styles.display).toBe('grid')
-    expect(after.breakpointStyles['mobile']?.display).toBe('block')
+    expect(after.contextStyles['mobile']?.display).toBe('block')
   })
 
   it('preserves other properties when removing one', () => {
@@ -336,7 +336,7 @@ describe('classSlice.duplicateClass', () => {
   it('copies styles and breakpoint styles without copying node assignments', () => {
     const { childId } = setupSite()
     const original = getStore().createClass('card', { padding: '16px', color: '#111' })
-    getStore().setClassBreakpointStyles(original.id, 'mobile', { padding: '8px' })
+    getStore().setClassContextStyles(original.id, 'mobile', { padding: '8px' })
     getStore().addNodeClass(childId, original.id)
 
     const copy = getStore().duplicateClass(original.id)
@@ -345,7 +345,7 @@ describe('classSlice.duplicateClass', () => {
     expect(copy!.id).not.toBe(original.id)
     expect(copy!.name).toBe('card-copy')
     expect(copy!.styles).toEqual({ padding: '16px', color: '#111' })
-    expect(copy!.breakpointStyles).toEqual({ mobile: { padding: '8px' } })
+    expect(copy!.contextStyles).toEqual({ mobile: { padding: '8px' } })
     expect(useEditorStore.getState().site!.pages[0].nodes[childId].classIds).toEqual([original.id])
   })
 
@@ -589,14 +589,14 @@ describe('classSlice — undo / redo', () => {
     setupSite()
     const cls = getStore().createClass('responsive')
 
-    getStore().setClassBreakpointStyles(cls.id, 'mobile', { fontSize: '14px' })
-    expect(useEditorStore.getState().site!.styleRules[cls.id].breakpointStyles.mobile?.fontSize).toBe('14px')
+    getStore().setClassContextStyles(cls.id, 'mobile', { fontSize: '14px' })
+    expect(useEditorStore.getState().site!.styleRules[cls.id].contextStyles.mobile?.fontSize).toBe('14px')
 
     useEditorStore.getState().undo()
-    expect(useEditorStore.getState().site!.styleRules[cls.id].breakpointStyles.mobile?.fontSize).toBeUndefined()
+    expect(useEditorStore.getState().site!.styleRules[cls.id].contextStyles.mobile?.fontSize).toBeUndefined()
 
     useEditorStore.getState().redo()
-    expect(useEditorStore.getState().site!.styleRules[cls.id].breakpointStyles.mobile?.fontSize).toBe('14px')
+    expect(useEditorStore.getState().site!.styleRules[cls.id].contextStyles.mobile?.fontSize).toBe('14px')
   })
 
   it('node class assignments are undoable and redoable', () => {

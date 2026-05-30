@@ -345,12 +345,12 @@ export const createClipboardSlice: EditorStoreSliceCreator<ClipboardSlice> = (
               id: newId,
               scope: { ...cls.scope, nodeId: newScopeNodeId },
               styles: { ...cls.styles },
-              breakpointStyles: Object.fromEntries(
-                Object.entries(cls.breakpointStyles).map(([bp, s]) => [
-                  bp,
+              contextStyles: Object.fromEntries(
+                Object.entries(cls.contextStyles).map(([ctx, s]) => [
+                  ctx,
                   { ...s },
                 ]),
-              ),
+                ),
               createdAt: now,
               updatedAt: now,
             },
@@ -379,12 +379,12 @@ export const createClipboardSlice: EditorStoreSliceCreator<ClipboardSlice> = (
               cls: {
                 ...cls,
                 styles: { ...cls.styles },
-                breakpointStyles: Object.fromEntries(
-                  Object.entries(cls.breakpointStyles).map(([bp, s]) => [
-                    bp,
+                contextStyles: Object.fromEntries(
+                  Object.entries(cls.contextStyles).map(([ctx, s]) => [
+                    ctx,
                     { ...s },
                   ]),
-                ),
+                  ),
               },
             })
           }

@@ -6,13 +6,13 @@ import type { StyleRule } from '@core/page-tree'
 function makeClass(
   id: string,
   styles: StyleRule['styles'],
-  breakpointStyles: StyleRule['breakpointStyles'] = {},
+  contextStyles: StyleRule['contextStyles'] = {},
 ): StyleRule {
   return {
     id,
     name: id,
     styles,
-    breakpointStyles,
+    contextStyles,
     createdAt: 0,
     updatedAt: 0,
   }
@@ -91,6 +91,7 @@ describe('generateCanvasClassCSS', () => {
 
     const css = generateCanvasClassCSS(
       generateFrameworkColorUtilityClasses(colors),
+      [],
       [],
       colors,
     )

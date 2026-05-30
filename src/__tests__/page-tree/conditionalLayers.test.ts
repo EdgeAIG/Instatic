@@ -1,12 +1,16 @@
 /**
- * parseStyleRule — conditional style layers (CSS fidelity plan, Part 2a).
+ * parseStyleRule — unified contextStyles + legacy migration.
  *
- * Verifies the tolerant parser round-trips conditionalLayers, backfills the
- * absent field to undefined on legacy data, and drops malformed layers.
+ * The unified editing-context model folds the old `breakpointStyles` (width
+ * breakpoints) and `conditionalLayers` (custom @media/@container/@supports)
+ * into one `contextStyles` map keyed by context id. parseStyleRule migrates
+ * both legacy fields; the site-level condition registry is reconstructed in
+ * parseSiteDocument (covered separately).
  */
 
 import { describe, it, expect } from 'bun:test'
 import { parseStyleRule } from '@core/page-tree/styleRule'
+import { conditionId } from '@core/page-tree'
 
 function baseRaw(extra: Record<string, unknown> = {}) {
   return {
@@ -16,21 +20,35 @@ function baseRaw(extra: Record<string, unknown> = {}) {
     selector: '.foo',
     order: 0,
     styles: { color: 'red' },
-    breakpointStyles: {},
     createdAt: 0,
     updatedAt: 0,
     ...extra,
   }
 }
 
-describe('parseStyleRule — conditionalLayers', () => {
-  it('legacy rule without the field → conditionalLayers is absent', () => {
+describe('parseStyleRule — contextStyles', () => {
+  it('legacy rule without any context field → contextStyles is {}', () => {
     const rule = parseStyleRule(baseRaw())
     expect(rule).not.toBeNull()
-    expect(rule!.conditionalLayers).toBeUndefined()
+    expect(rule!.contextStyles).toEqual({})
   })
 
-  it('round-trips a media / container / supports layer set', () => {
+  it('round-trips the current contextStyles shape', () => {
+    const rule = parseStyleRule(
+      baseRaw({ contextStyles: { tablet: { color: 'blue' }, 'media:(orientation: landscape)': { gap: '8px' } } }),
+    )
+    expect(rule!.contextStyles).toEqual({
+      tablet: { color: 'blue' },
+      'media:(orientation: landscape)': { gap: '8px' },
+    })
+  })
+
+  it('migrates legacy breakpointStyles into contextStyles by breakpoint id', () => {
+    const rule = parseStyleRule(baseRaw({ breakpointStyles: { tablet: { fontSize: '14px' } } }))
+    expect(rule!.contextStyles.tablet).toEqual({ fontSize: '14px' })
+  })
+
+  it('migrates legacy conditionalLayers (media/container/supports) into contextStyles by condition id', () => {
     const rule = parseStyleRule(
       baseRaw({
         conditionalLayers: [
@@ -40,27 +58,24 @@ describe('parseStyleRule — conditionalLayers', () => {
         ],
       }),
     )
-    expect(rule!.conditionalLayers).toHaveLength(3)
-    expect(rule!.conditionalLayers![0].condition).toEqual({ kind: 'media', query: '(orientation: landscape)' })
-    expect(rule!.conditionalLayers![1].condition).toEqual({ kind: 'container', name: 'sidebar', query: 'min-width: 400px' })
-    expect(rule!.conditionalLayers![2].condition).toEqual({ kind: 'supports', query: '(display: grid)' })
+    expect(rule!.contextStyles[conditionId({ kind: 'media', query: '(orientation: landscape)' })]).toEqual({ color: 'blue' })
+    expect(rule!.contextStyles[conditionId({ kind: 'container', name: 'sidebar', query: 'min-width: 400px' })]).toEqual({ display: 'grid' })
+    expect(rule!.contextStyles[conditionId({ kind: 'supports', query: '(display: grid)' })]).toEqual({ gap: '8px' })
   })
 
-  it('drops layers with a missing id or unknown condition kind', () => {
+  it('drops legacy layers with an unknown condition kind, keeps valid ones', () => {
     const rule = parseStyleRule(
       baseRaw({
         conditionalLayers: [
-          { condition: { kind: 'media', query: '(x)' }, styles: {} },            // no id
-          { id: 'bad', condition: { kind: 'totally-made-up', query: '(x)' }, styles: {} }, // bad kind
+          { id: 'bad', condition: { kind: 'totally-made-up', query: '(x)' }, styles: { color: 'x' } },
           { id: 'ok', condition: { kind: 'media', query: '(min-width: 1px)' }, styles: { color: 'red' } },
         ],
       }),
     )
-    expect(rule!.conditionalLayers).toHaveLength(1)
-    expect(rule!.conditionalLayers![0].id).toBe('ok')
+    expect(Object.keys(rule!.contextStyles)).toEqual([conditionId({ kind: 'media', query: '(min-width: 1px)' })])
   })
 
-  it('a breakpoint-kind condition round-trips', () => {
+  it('a legacy breakpoint-kind layer migrates to contextStyles[breakpointId]', () => {
     const rule = parseStyleRule(
       baseRaw({
         conditionalLayers: [
@@ -68,6 +83,6 @@ describe('parseStyleRule — conditionalLayers', () => {
         ],
       }),
     )
-    expect(rule!.conditionalLayers![0].condition).toEqual({ kind: 'breakpoint', breakpointId: 'tablet' })
+    expect(rule!.contextStyles.tablet).toEqual({ color: 'red' })
   })
 })

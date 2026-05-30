@@ -12,7 +12,8 @@
 // and types (via Static<typeof X>).
 export { PageNodeSchema } from './pageNode'
 export { PageSchema } from './page'
-export { StyleRuleSchema, StyleRuleKindSchema, classKindSelector, StyleConditionSchema, ConditionalStyleLayerSchema } from './styleRule'
+export { StyleRuleSchema, StyleRuleKindSchema, classKindSelector } from './styleRule'
+export { ConditionSchema, ConditionDefSchema } from './condition'
 export { SiteShellSchema } from './siteDocument'
 
 // Types — derived from schemas. Schemas are the source of truth.
@@ -22,13 +23,17 @@ export type { PageTemplateConfig } from './pageTemplate'
 export type { PageNode } from './pageNode'
 export type { Page } from './page'
 export type { CSSPropertyBag } from './cssPropertyBag'
-export type { StyleRule, StyleRuleKind, StyleCondition, ConditionalStyleLayer } from './styleRule'
+export type { StyleRule, StyleRuleKind } from './styleRule'
+export type { Condition, ConditionDef } from './condition'
 export type { SiteSettings } from './siteSettings'
 export type { SiteShell, SiteDocument } from './siteDocument'
 
 // Defaults
 export { DEFAULT_BREAKPOINTS } from './breakpoint'
 export { DEFAULT_SITE_SETTINGS } from './siteSettings'
+
+// Condition helpers
+export { conditionId, conditionLabel, sameCondition, makeConditionDef, parseConditions } from './condition'
 
 // Tolerant parsers — boundary helpers for persisted data.
 export { parsePage } from './page'

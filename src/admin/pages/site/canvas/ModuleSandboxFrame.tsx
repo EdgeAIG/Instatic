@@ -40,7 +40,7 @@ function getNodeClassCSS(site: SiteDocument | null, classIds: string[] | undefin
   }
 
   if (Object.keys(classes).length === 0) return ''
-  return generateClassCSS(classes, site.breakpoints)
+  return generateClassCSS(classes, site.breakpoints, site.conditions ?? [])
 }
 
 export function ModuleSandboxFrame({

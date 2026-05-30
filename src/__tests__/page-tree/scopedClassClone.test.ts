@@ -32,7 +32,7 @@ function makeScopedClass(id: string, nodeId: string, name = id): StyleRule {
     description: 'Node-scoped module style layer',
     scope: { type: 'node', nodeId, role: 'module-style' },
     styles: { backgroundColor: 'red' },
-    breakpointStyles: {},
+    contextStyles: {},
     tags: ['module-instance'],
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_000_000,
@@ -44,7 +44,7 @@ function makeReusableClass(id: string, name = id): StyleRule {
     id,
     name,
     styles: { color: 'blue' },
-    breakpointStyles: {},
+    contextStyles: {},
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_000_000,
   }

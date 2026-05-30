@@ -157,7 +157,7 @@ describe('framework color store actions', () => {
     const classId = frameworkColorClassId(token.id, 'base', 'text')
 
     useEditorStore.getState().updateClassStyles(classId, { color: 'red' })
-    useEditorStore.getState().setClassBreakpointStyles(classId, 'mobile', { color: 'blue' })
+    useEditorStore.getState().setClassContextStyles(classId, 'mobile', { color: 'blue' })
     useEditorStore.getState().renameClass(classId, 'text-edited')
     const duplicate = useEditorStore.getState().duplicateClass(classId)
     useEditorStore.getState().deleteClass(classId)
@@ -167,7 +167,7 @@ describe('framework color store actions', () => {
     expect(state.site!.styleRules[classId]).toMatchObject({
       name: 'text-primary',
       styles: { color: 'var(--primary)' },
-      breakpointStyles: {},
+      contextStyles: {},
       generated: { locked: true },
     })
   })
@@ -217,7 +217,7 @@ describe('framework color store actions', () => {
           id: userClassId,
           name: 'text-primary-l-3',
           styles: { color: 'red' },
-          breakpointStyles: {},
+          contextStyles: {},
           createdAt: 0,
           updatedAt: 0,
         },
@@ -403,7 +403,7 @@ describe('framework color store actions', () => {
           id: orphanFrameworkId,
           name: 'text-primary-l-3',
           styles: { color: 'red' },
-          breakpointStyles: {},
+          contextStyles: {},
           createdAt: 0,
           updatedAt: 0,
         },

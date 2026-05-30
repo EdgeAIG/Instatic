@@ -22,6 +22,7 @@
  */
 
 import { useState, useRef, useEffect, type ReactNode } from 'react'
+import { useEditorStore } from '@site/store/store'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
 import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
 import { isGeneratedClassLocked } from '@core/page-tree/classUtils'
@@ -162,10 +163,21 @@ export function StyleSurface({
 
   const clearStyleQuery = () => setStyleQuery('')
 
-  // Rail dot badges from stored styles at the current breakpoint.
+  // Rail dot badges from stored styles at the active editing context. The
+  // context switcher (canvas toolbar) can target a custom condition, which
+  // wins over the viewport breakpoint; otherwise we fall back to the
+  // base/breakpoint resolved by the active viewport.
   const activeTab = getActiveStyleTab(activeBreakpointId)
+  // Validated active condition id (or null) — stale ids fall back to viewport.
+  const activeConditionId = useEditorStore((s) => {
+    const id = s.activeConditionId
+    if (id === null) return null
+    const cs = s.site?.conditions
+    return cs && cs.some((c) => c.id === id) ? id : null
+  })
+  const activeContextId = activeConditionId ?? (activeTab !== 'base' ? activeTab : null)
   const storedStyles: Record<string, unknown> = activeClass
-    ? (activeTab !== 'base' ? (activeClass.breakpointStyles[activeTab] ?? {}) : activeClass.styles)
+    ? (activeContextId ? (activeClass.contextStyles[activeContextId] ?? {}) : activeClass.styles)
     : {}
   const sectionSetCounts = getClassStyleSectionSetCounts(storedStyles)
 

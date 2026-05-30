@@ -1,4 +1,4 @@
-import type { StyleRule, StyleCondition } from '@core/page-tree'
+import type { StyleRule, Condition, ConditionDef } from '@core/page-tree'
 import { styleRuleSelector } from '@core/page-tree/classNames'
 import { sanitiseCssValue } from './utils'
 
@@ -161,28 +161,31 @@ export function bagToCSS(bag: Record<string, unknown>): string {
 
 /**
  * Generate the full CSS string for all classes in the registry.
- * Includes base styles and @media blocks for breakpoint overrides.
  *
- * Cascade order matters. We emit breakpoint @media blocks in DESCENDING
- * width order (widest first, narrowest last). All @media (max-width: N)
- * blocks have the same selector specificity, so the last-matching one in
- * source order wins. Desktop is widest → its rule applies at wider
- * viewports while shadowed by tablet/mobile when the viewport narrows.
+ * Each class has a base bag (`styles`) plus a unified `contextStyles` map keyed
+ * by *context id*. A context id is either a width-breakpoint id (from
+ * `breakpoints`) or a custom-condition id (from `conditions`). The two used to
+ * be separate fields (`breakpointStyles` + `conditionalLayers`); they are the
+ * same axis and are now one map.
  *
- * If we iterated `cls.breakpointStyles` in insertion order, the user's
- * editing sequence would silently determine which breakpoint "wins" at
- * any given viewport — e.g. mobile-then-desktop would let desktop styles
- * leak through to mobile widths because desktop's @media rule was last
- * in source. Sorting by width fixes that for good.
+ * Cascade order (precedence Q-A): base → custom conditions (registry order) →
+ * breakpoint @media (DESCENDING width: widest first, narrowest last). All
+ * `@media (max-width:N)` blocks share specificity, so the narrowest ends up
+ * last in source and wins as the viewport shrinks. Sorting by width — not the
+ * user's editing order — keeps that deterministic.
  */
 export function generateClassCSS(
   classes: Record<string, StyleRule>,
   breakpoints: Array<{ id: string; width: number }>,
+  conditions: ReadonlyArray<ConditionDef> = [],
 ): string {
   const blocks: string[] = []
-  // Map id → width once per call so we can sort breakpoint entries below
-  // without re-scanning the array per class.
   const widthById = new Map<string, number>(breakpoints.map((bp) => [bp.id, bp.width]))
+  // Condition id → (condition, registry index) so we can emit custom-condition
+  // overrides in stable registry order.
+  const conditionById = new Map<string, { condition: Condition; index: number }>(
+    conditions.map((c, index) => [c.id, { condition: c.condition, index }]),
+  )
 
   // Cascade order: rules with a smaller `order` are emitted first so a later,
   // more-specific override appears later in source and wins on equal
@@ -201,35 +204,35 @@ export function generateClassCSS(
       blocks.push(`${selector} {\n${baseDecls}\n}`)
     }
 
-    // Conditional layers (custom @media / @container / @supports) emit AFTER
-    // base but BEFORE the width-breakpoint @media blocks, so explicit width
-    // breakpoints keep winning at their widths (cascade precedence Q-A:
-    // base → conditional layers → breakpoint @media). Ordered by each
-    // layer's `order` so source order from the importer is preserved.
-    const layers = (cls.conditionalLayers ?? []).slice().sort((a, b) => {
-      const ao = typeof a.order === 'number' ? a.order : 0
-      const bo = typeof b.order === 'number' ? b.order : 0
-      return ao - bo
-    })
-    for (const layer of layers) {
-      const decls = bagToCSS(layer.styles)
+    // Partition contextStyles into custom-condition entries and width-breakpoint
+    // entries. Keys matching neither registry are skipped (orphaned overrides).
+    const conditionEntries: Array<{ bag: Record<string, unknown>; condition: Condition; index: number }> = []
+    const bpEntries: Array<{ bag: Record<string, unknown>; width: number }> = []
+    for (const [contextId, bag] of Object.entries(cls.contextStyles ?? {})) {
+      const cond = conditionById.get(contextId)
+      if (cond) {
+        conditionEntries.push({ bag, condition: cond.condition, index: cond.index })
+        continue
+      }
+      const width = widthById.get(contextId)
+      if (width !== undefined) bpEntries.push({ bag, width })
+    }
+
+    // Custom conditions emit AFTER base but BEFORE width breakpoints, so width
+    // breakpoints keep winning at their widths. Registry order is preserved.
+    conditionEntries.sort((a, b) => a.index - b.index)
+    for (const { bag, condition } of conditionEntries) {
+      const decls = bagToCSS(bag)
       if (!decls) continue
-      const prelude = conditionPrelude(layer.condition, widthById)
+      const prelude = conditionPrelude(condition)
       if (!prelude) continue
       blocks.push(`${prelude} {\n  ${selector} {\n${decls}\n  }\n}`)
     }
 
-    const bpEntries = Object.entries(cls.breakpointStyles)
-      .map(([bpId, bpStyles]) => ({ bpStyles, width: widthById.get(bpId) }))
-      .filter((entry): entry is { bpStyles: typeof entry.bpStyles; width: number } =>
-        entry.width !== undefined,
-      )
-      // Widest first → narrowest last. The narrowest matching @media rule
-      // ends up later in source and wins on equal specificity.
-      .sort((a, b) => b.width - a.width)
-
-    for (const { bpStyles, width } of bpEntries) {
-      const decls = bagToCSS(bpStyles)
+    // Widest first → narrowest last.
+    bpEntries.sort((a, b) => b.width - a.width)
+    for (const { bag, width } of bpEntries) {
+      const decls = bagToCSS(bag)
       if (!decls) continue
       blocks.push(`@media (max-width: ${width}px) {\n  ${selector} {\n${decls}\n  }\n}`)
     }
@@ -252,21 +255,13 @@ function isSafeConditionText(text: string): boolean {
 }
 
 /**
- * Build the `@<kind> <query>` prelude for a conditional layer's condition.
- * Returns null when:
- *   - a `breakpoint`-kind condition references an unknown breakpoint id, or
- *   - the query / container name fails the structural safety check (the layer
- *     is then dropped, not emitted).
+ * Build the `@<kind> <query>` prelude for a custom condition. Returns null when
+ * the query / container name fails the structural safety check (the override is
+ * then dropped, not emitted). Width breakpoints are NOT handled here — they
+ * emit `@media (max-width:N)` directly in `generateClassCSS`.
  */
-export function conditionPrelude(
-  condition: StyleCondition,
-  widthById: Map<string, number>,
-): string | null {
+export function conditionPrelude(condition: Condition): string | null {
   switch (condition.kind) {
-    case 'breakpoint': {
-      const width = widthById.get(condition.breakpointId)
-      return width === undefined ? null : `@media (max-width: ${width}px)`
-    }
     case 'media':
       return isSafeConditionText(condition.query) ? `@media ${condition.query}` : null
     case 'container': {
@@ -278,8 +273,6 @@ export function conditionPrelude(
     }
     case 'supports':
       return isSafeConditionText(condition.query) ? `@supports ${wrapParens(condition.query)}` : null
-    default:
-      return null
   }
 }
 

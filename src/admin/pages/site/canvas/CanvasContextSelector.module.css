@@ -1,0 +1,255 @@
+/**
+ * CanvasContextSelector — top-right editing-context control (viewports +
+ * custom conditions) and its add-condition dialog. The notch belongs to the
+ * black editor chrome; the select carries the mint accent.
+ */
+
+.shell {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 4px 4px 10px;
+    margin-right: 6px;
+    pointer-events: auto;
+    color: var(--editor-success-text);
+    background: var(--editor-mint-surface);
+    border-radius: var(--panel-radius);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+    font-size: 11px;
+    font-weight: 620;
+}
+
+.badgeLabel {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.badgeExit.badgeExit {
+    color: var(--editor-success-text-soft);
+}
+
+.notch {
+    --breakpoint-notch-bg: var(--editor-bg);
+    --breakpoint-notch-radius: 16px;
+    --breakpoint-notch-corner: 16px;
+    --breakpoint-notch-corner-cut: calc(var(--breakpoint-notch-corner) - 0.5px);
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    pointer-events: auto;
+    background: var(--breakpoint-notch-bg);
+    border: 0;
+    border-radius: 0 0 0 var(--breakpoint-notch-radius);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.notch > * {
+    position: relative;
+    z-index: 1;
+}
+
+.notch::before,
+.notch::after {
+    position: absolute;
+    z-index: 0;
+    width: var(--breakpoint-notch-corner);
+    height: var(--breakpoint-notch-corner);
+    pointer-events: none;
+    content: "";
+}
+
+.notch::before {
+    top: 0;
+    left: calc(1px - var(--breakpoint-notch-corner));
+    background: radial-gradient(
+        circle at 0 100%,
+        transparent var(--breakpoint-notch-corner-cut),
+        var(--breakpoint-notch-bg) var(--breakpoint-notch-corner)
+    );
+}
+
+.notch::after {
+    right: 0;
+    bottom: calc(1px - var(--breakpoint-notch-corner));
+    background: radial-gradient(
+        circle at 0 100%,
+        transparent var(--breakpoint-notch-corner-cut),
+        var(--breakpoint-notch-bg) var(--breakpoint-notch-corner)
+    );
+}
+
+.triggerPill.triggerPill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 6px;
+    border-radius: 9px;
+    border: 0;
+    background: var(--editor-mint-surface);
+    color: var(--editor-success-text);
+}
+
+.triggerPill.triggerPill:hover {
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.1),
+            rgba(255, 255, 255, 0)
+        ),
+        rgba(142, 230, 200, 0.2);
+}
+
+/* Dropdown panel — the anchored ContextMenu renders inline (not portaled), so
+ * it inherits the shell's `pointer-events: none`. Re-enable it here or the
+ * menu's clicks/hover fall through to the canvas (and dismiss the menu). */
+.menuPanel {
+    pointer-events: auto;
+}
+
+/* Dropdown rows */
+
+.menuRow {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.menuRowMain.menuRowMain {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.menuRowActive.menuRowActive {
+    color: var(--editor-success-text);
+}
+
+.rowLabel {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.rowDetail {
+    flex: 0 0 auto;
+    color: var(--editor-text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.rowAction.rowAction {
+    flex: 0 0 auto;
+    color: var(--editor-text-secondary);
+}
+
+.rowAction.rowAction:hover {
+    color: var(--editor-success-text);
+}
+
+.rowRemove.rowRemove {
+    flex: 0 0 auto;
+    color: var(--editor-text-secondary);
+}
+
+.rowRemove.rowRemove:hover {
+    color: var(--editor-danger-light);
+}
+
+/* Add-condition dialog */
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.toggleRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.label {
+    color: var(--editor-text-secondary);
+    font-size: 11px;
+    font-weight: 620;
+}
+
+.error {
+    margin: 0;
+    color: var(--editor-danger-light);
+    font-size: 11px;
+}
+
+/* Guided builder */
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.rangeRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 6px;
+    align-items: center;
+}
+
+.pairRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    align-items: center;
+}
+
+.hint {
+    margin: 0;
+    color: var(--editor-text-secondary);
+    font-size: 11px;
+}
+
+.supportBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 620;
+}
+
+.supportYes {
+    color: var(--editor-success-text);
+}
+
+.supportNo {
+    color: var(--editor-danger-light);
+}
+

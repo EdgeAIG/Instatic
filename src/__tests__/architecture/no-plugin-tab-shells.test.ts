@@ -105,13 +105,6 @@ const EXACT_ALLOWLIST = new Set<string>([
   // pattern: icon-only, compact fixed layout that the full-width Tabs
   // style cannot represent.
   join(PROJECT_ROOT, 'src/admin/pages/content/components/ContentModeToggle/ContentModeToggle.tsx'),
-  // §T.6 — the conditional-layer tab strip (Base + one tab per @media /
-  // @container / @supports layer). Each tab is a compact pill carrying an
-  // inline remove (×) sub-button and an ellipsised, dynamically-built label.
-  // The full-width underline-indicator Tabs primitive can't represent a
-  // wrapping pill row with per-tab remove affordances — same constraint
-  // class as §T.3/§T.5's compact custom toggles.
-  join(PROJECT_ROOT, 'src/admin/pages/site/panels/PropertiesPanel/ConditionTabs.tsx'),
 ])
 
 function isAllowlisted(file: string): boolean {

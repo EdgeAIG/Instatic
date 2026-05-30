@@ -135,7 +135,7 @@
       "selector": ".heading-style",
       "order": 0,
       "styles": { "fontSize": "2rem", "fontWeight": "700" },
-      "breakpointStyles": { "mobile": { "fontSize": "1.5rem" } },
+      "contextStyles": { "mobile": { "fontSize": "1.5rem" } },
       "tags": ["heading", "typography"],
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000
@@ -147,7 +147,7 @@
       "selector": ".text-primary",
       "order": 0,
       "styles": { "color": "var(--primary)" },
-      "breakpointStyles": {},
+      "contextStyles": {},
       "generated": {
         "origin": "framework",
         "family": "color",
@@ -166,7 +166,7 @@
       "selector": ".text-m",
       "order": 0,
       "styles": { "fontSize": "clamp(1rem, 2vw, 1.2rem)" },
-      "breakpointStyles": {},
+      "contextStyles": {},
       "generated": {
         "origin": "framework",
         "family": "typography",
@@ -186,7 +186,7 @@
       "selector": ".space-m",
       "order": 0,
       "styles": { "padding": "clamp(0.5rem, 2vw, 1rem)" },
-      "breakpointStyles": {},
+      "contextStyles": {},
       "generated": {
         "origin": "framework",
         "family": "spacing",

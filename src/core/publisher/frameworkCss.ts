@@ -60,7 +60,7 @@ function generateFrameworkUtilityCss(site: SiteDocument): string {
     ? pickUsedGeneratedClasses(generatedClasses, collectUsedClassIds(site))
     : generatedClasses
 
-  return generateClassCSS(classes, site.breakpoints)
+  return generateClassCSS(classes, site.breakpoints, site.conditions ?? [])
 }
 
 function pickUsedGeneratedClasses(

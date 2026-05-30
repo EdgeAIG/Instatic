@@ -132,7 +132,7 @@ export function generateFrameworkColorUtilityClasses(
           selector: classKindSelector(name),
           order: 0,
           styles: utilityStyles(utility, variableRef),
-          breakpointStyles: {},
+          contextStyles: {},
           generated: {
             origin: 'framework',
             family: 'color',

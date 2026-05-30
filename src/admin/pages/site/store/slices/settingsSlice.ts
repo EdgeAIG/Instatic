@@ -30,6 +30,7 @@ export type SettingsSection =
   | 'general'
   | 'pages'
   | 'breakpoints'
+  | 'conditions'
   | 'preferences'
   | 'shortcuts'
   | 'publishing'

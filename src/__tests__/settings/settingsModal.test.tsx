@@ -211,16 +211,16 @@ describe('SettingsModal — backdrop', () => {
 // ---------------------------------------------------------------------------
 
 describe('SettingsModal — section navigation', () => {
-  it('renders exactly 6 nav items (general, pages, breakpoints, shortcuts, publishing, preferences)', () => {
+  it('renders exactly 7 nav items (general, pages, breakpoints, conditions, shortcuts, publishing, preferences)', () => {
     openModal()
     render(<SettingsModal />)
     const nav = screen.getByRole('navigation', { name: /settings sections/i })
-    // The nav contains 6 section buttons + 1 close button.
+    // The nav contains 7 section buttons + 1 close button.
     // Exclude the close button (identified by aria-label="Close settings").
     const navBtns = Array.from(nav.querySelectorAll('button')).filter(
       (btn) => btn.getAttribute('aria-label') !== 'Close settings'
     )
-    expect(navBtns.length).toBe(6)
+    expect(navBtns.length).toBe(7)
   })
 
   it('renders nav items with correct labels after retiring typography and colors', () => {
@@ -232,6 +232,7 @@ describe('SettingsModal — section navigation', () => {
     expect(within(nav).getByText('General')).toBeDefined()
     expect(within(nav).getByText('Pages')).toBeDefined()
     expect(within(nav).getByText('Breakpoints')).toBeDefined()
+    expect(within(nav).getByText('Conditions')).toBeDefined()
     expect(within(nav).getByText('Publishing')).toBeDefined()
     expect(within(nav).getByText('Shortcuts')).toBeDefined()
     expect(within(nav).getByText('Preferences')).toBeDefined()

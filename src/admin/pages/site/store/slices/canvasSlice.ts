@@ -30,6 +30,14 @@ export interface CanvasSlice {
   panY: number
   /** Active breakpoint ID — determines which viewport frame is "focused" */
   activeBreakpointId: string
+  /**
+   * Active custom-condition id (a `site.conditions` id) the style panel is
+   * editing under, or null when editing the viewport-resolved styles (base /
+   * breakpoint). Orthogonal to `activeBreakpointId`: a condition can't reframe
+   * the canvas, so the viewport frame stays put while edits route to the
+   * condition's `contextStyles` bag. Selecting a viewport clears this.
+   */
+  activeConditionId: string | null
   /** Active page ID */
   activePageId: string | null
   /**
@@ -47,6 +55,8 @@ export interface CanvasSlice {
   setPan: (x: number, y: number) => void
   setCanvasTransform: (zoom: number, x: number, y: number) => void
   setActiveBreakpoint: (id: string) => void
+  /** Set (or clear, with null) the active custom-condition editing context. */
+  setActiveConditionId: (id: string | null) => void
   setActivePage: (pageId: string) => void
   setCanvasMode: (mode: CanvasMode) => void
   setCanvasView: (view: CanvasView) => void
@@ -75,6 +85,7 @@ export const createCanvasSlice: EditorStoreSliceCreator<CanvasSlice> = (set, get
   panX: 0,
   panY: 0,
   activeBreakpointId: 'desktop',
+  activeConditionId: null,
   activePageId: null,
   previousActivePageId: null,
   canvasMode: 'select',
@@ -90,7 +101,11 @@ export const createCanvasSlice: EditorStoreSliceCreator<CanvasSlice> = (set, get
     panY: clampPan(panY),
   }),
 
-  setActiveBreakpoint: (id) => set({ activeBreakpointId: id }),
+  // Picking a viewport switches editing back to that viewport's styles, so the
+  // condition overlay is cleared.
+  setActiveBreakpoint: (id) => set({ activeBreakpointId: id, activeConditionId: null }),
+
+  setActiveConditionId: (id) => set({ activeConditionId: id }),
 
   setActivePage: (pageId) => set({ activePageId: pageId }),
 

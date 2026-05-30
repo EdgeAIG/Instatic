@@ -44,17 +44,24 @@ export function CanvasTransformLayer({
       className={cn(styles.transformLayer, page && styles.transformLayerActive)}
     >
       {page ? (
-        breakpoints.map((bp) => (
-          <BreakpointFrame
-            key={bp.id}
-            page={page}
-            breakpoint={bp}
-            isActive={activeBreakpointId === bp.id}
-            isDimmed={dimInactiveBreakpoints && activeBreakpointId !== bp.id}
-            onActivate={onBreakpointActivate}
-            templateContext={templateContext}
-          />
-        ))
+        // Only breakpoints flagged for a preview frame render an iframe on the
+        // canvas (`previewFrame !== false`; undefined = framed for back-compat).
+        // Frame-less breakpoints are still selectable editing contexts in the
+        // toolbar switcher and still publish their @media CSS — they just don't
+        // spawn an editor iframe.
+        breakpoints
+          .filter((bp) => bp.previewFrame !== false)
+          .map((bp) => (
+            <BreakpointFrame
+              key={bp.id}
+              page={page}
+              breakpoint={bp}
+              isActive={activeBreakpointId === bp.id}
+              isDimmed={dimInactiveBreakpoints && activeBreakpointId !== bp.id}
+              onActivate={onBreakpointActivate}
+              templateContext={templateContext}
+            />
+          ))
       ) : (
         <NoSiteState />
       )}

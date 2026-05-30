@@ -95,7 +95,7 @@ export function collectClassCSS(site: SiteDocument): string {
 
   if (Object.keys(usedClasses).length === 0) return ''
 
-  const css = generateClassCSS(usedClasses, site.breakpoints)
+  const css = generateClassCSS(usedClasses, site.breakpoints, site.conditions ?? [])
   return sanitizeModuleCSS(css)
 }
 

@@ -87,7 +87,7 @@ function nodeCaps(
     const fromBase = widthCapFromBag(cls.styles)
     if (fromBase !== null) base = fromBase
     for (const bpId of breakpointIds) {
-      const fromBp = widthCapFromBag(cls.breakpointStyles?.[bpId])
+      const fromBp = widthCapFromBag(cls.contextStyles?.[bpId])
       if (fromBp !== null) byBreakpoint.set(bpId, fromBp)
     }
   }

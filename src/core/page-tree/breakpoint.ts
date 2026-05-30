@@ -25,6 +25,15 @@ export const BreakpointSchema = Type.Object({
    * Falls back to "monitor" if missing or non-string — handled in parseBreakpoint.
    */
   icon: Type.String(),
+  /**
+   * Whether this breakpoint renders a live preview iframe on the editor canvas.
+   * EDITOR-ONLY — it has no effect on published CSS (a breakpoint always emits
+   * its `@media (max-width: N)` block regardless). `undefined` is treated as
+   * `true` (framed) for back-compat; width media queries added via the
+   * editing-context switcher default to `false` so not every responsive size
+   * spawns an iframe. Toggle it in Settings → Breakpoints.
+   */
+  previewFrame: Type.Optional(Type.Boolean()),
 })
 
 export type Breakpoint = Static<typeof BreakpointSchema>
@@ -55,5 +64,6 @@ export function parseBreakpoint(raw: unknown): Breakpoint | null {
     label: r.label,
     width: r.width,
     icon: typeof r.icon === 'string' ? r.icon : 'monitor',
+    ...(typeof r.previewFrame === 'boolean' ? { previewFrame: r.previewFrame } : {}),
   }
 }

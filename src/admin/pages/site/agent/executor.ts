@@ -237,7 +237,9 @@ function applyClassBreakpointStyles(
 ): void {
   for (const [breakpointId, styles] of Object.entries(breakpointStyles)) {
     if (Object.keys(styles).length > 0) {
-      store.setClassBreakpointStyles(classId, breakpointId, styles)
+      // A breakpoint id is a valid context id; the validator already confirmed
+      // the key names a real site breakpoint.
+      store.setClassContextStyles(classId, breakpointId, styles)
     }
   }
 }
@@ -499,7 +501,7 @@ function runUpdateClassStyles(input: Static<typeof updateClassStylesSchema>): Ag
   if (input.breakpointId) {
     const breakpointError = validateBreakpointId(store, input.breakpointId)
     if (breakpointError) return { success: false, error: breakpointError }
-    store.setClassBreakpointStyles(classId, input.breakpointId, input.patch)
+    store.setClassContextStyles(classId, input.breakpointId, input.patch)
   } else {
     store.updateClassStyles(classId, input.patch)
   }
