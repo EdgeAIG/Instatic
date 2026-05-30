@@ -18,7 +18,7 @@ import { nanoid } from 'nanoid'
 import type { Draft } from 'immer'
 import type { EditorStore, EditorStoreSliceCreator } from '@site/store/types'
 import type { BaseNode, SiteDocument } from '@core/page-tree'
-import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
+import type { StyleRule, CSSPropertyBag, StyleCondition, ConditionalStyleLayer } from '@core/page-tree'
 import { classKindSelector } from '@core/page-tree'
 import { isGeneratedClassLocked, isUserVisibleClass } from '@core/page-tree/classUtils'
 import { assertValidCssClassName } from '@core/page-tree/classNames'
@@ -66,6 +66,22 @@ function isValidCssSelector(selector: string): boolean {
     return true
   } catch {
     return false
+  }
+}
+
+/** Structural equality for two style conditions — used to dedupe layers. */
+function sameCondition(a: StyleCondition, b: StyleCondition): boolean {
+  if (a.kind !== b.kind) return false
+  switch (a.kind) {
+    case 'breakpoint':
+      return a.breakpointId === (b as Extract<StyleCondition, { kind: 'breakpoint' }>).breakpointId
+    case 'media':
+    case 'supports':
+      return a.query === (b as Extract<StyleCondition, { kind: 'media' | 'supports' }>).query
+    case 'container': {
+      const bb = b as Extract<StyleCondition, { kind: 'container' }>
+      return a.query === bb.query && (a.name ?? '') === (bb.name ?? '')
+    }
   }
 }
 
@@ -134,6 +150,24 @@ export interface ClassSlice {
     breakpointId: string,
     patch: Partial<CSSPropertyBag>,
   ): void
+
+  // ── Conditional style layers (custom @media / @container / @supports) ──────
+  /**
+   * Add a conditional style layer to a rule. Returns the new layer's id, or
+   * null if the rule doesn't exist / is locked / a layer with the same
+   * condition already exists (in which case the existing id is returned).
+   */
+  addConditionalLayer(classId: string, condition: StyleCondition): string | null
+
+  /** Shallow-merge a style patch into a conditional layer's styles. */
+  updateConditionalLayerStyles(
+    classId: string,
+    layerId: string,
+    patch: Partial<CSSPropertyBag>,
+  ): void
+
+  /** Remove a conditional layer entirely. */
+  removeConditionalLayer(classId: string, layerId: string): void
 
   /**
    * Fully remove a CSS property from a class — both from base styles and
@@ -465,6 +499,79 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
         if (v === undefined || v === null) {
           delete draftClass.breakpointStyles[breakpointId][k]
         }
+      }
+      draftClass.updatedAt = Date.now()
+      return true
+    })
+  },
+
+  addConditionalLayer(classId, condition) {
+    const { site } = get()
+    const cls = site?.styleRules[classId]
+    if (!cls) return null
+    if (isGeneratedClassLocked(cls)) return null
+
+    // Reuse an existing layer with the same condition rather than duplicating.
+    const existing = (cls.conditionalLayers ?? []).find((l) =>
+      sameCondition(l.condition, condition),
+    )
+    if (existing) return existing.id
+
+    const newId = nanoid()
+    mutateSite((site) => {
+      const draftClass = site.styleRules[classId]
+      if (!draftClass) return false
+      if (!draftClass.conditionalLayers) draftClass.conditionalLayers = []
+      const layer: ConditionalStyleLayer = {
+        id: newId,
+        condition,
+        styles: {},
+        order: draftClass.conditionalLayers.length,
+      }
+      draftClass.conditionalLayers.push(layer)
+      draftClass.updatedAt = Date.now()
+      return true
+    })
+    return newId
+  },
+
+  updateConditionalLayerStyles(classId, layerId, patch) {
+    const { site } = get()
+    const cls = site?.styleRules[classId]
+    if (!cls) return
+    if (isGeneratedClassLocked(cls)) return
+    const layer = (cls.conditionalLayers ?? []).find((l) => l.id === layerId)
+    if (!layer) return
+    if (!hasStylePatchChanges(layer.styles, patch)) return
+
+    mutateSite((site) => {
+      const draftClass = site.styleRules[classId]
+      const draftLayer = draftClass?.conditionalLayers?.find((l) => l.id === layerId)
+      if (!draftLayer) return false
+      Object.assign(draftLayer.styles, patch)
+      for (const [k, v] of Object.entries(patch)) {
+        if (v === undefined || v === null) {
+          delete draftLayer.styles[k]
+        }
+      }
+      draftClass!.updatedAt = Date.now()
+      return true
+    })
+  },
+
+  removeConditionalLayer(classId, layerId) {
+    const { site } = get()
+    const cls = site?.styleRules[classId]
+    if (!cls) return
+    if (isGeneratedClassLocked(cls)) return
+    if (!(cls.conditionalLayers ?? []).some((l) => l.id === layerId)) return
+
+    mutateSite((site) => {
+      const draftClass = site.styleRules[classId]
+      if (!draftClass?.conditionalLayers) return false
+      draftClass.conditionalLayers = draftClass.conditionalLayers.filter((l) => l.id !== layerId)
+      if (draftClass.conditionalLayers.length === 0) {
+        delete draftClass.conditionalLayers
       }
       draftClass.updatedAt = Date.now()
       return true

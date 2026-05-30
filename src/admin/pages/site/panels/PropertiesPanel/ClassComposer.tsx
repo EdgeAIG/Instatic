@@ -6,14 +6,15 @@
  * navigation are owned by the parent (StyleSurface).
  */
 
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useEditorStore } from '@site/store/store'
-import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
+import type { StyleRule, CSSPropertyBag, StyleCondition } from '@core/page-tree'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { Section } from '@ui/components/Section'
 import { SpacingBoxControl } from './SpacingBoxControl/SpacingBoxControl'
 import { BorderControl } from './BorderControl/BorderControl'
 import { CustomPropertiesSection } from './CustomPropertiesSection'
+import { ConditionTabs, type StyleTarget } from './ConditionTabs'
 import { LayoutSection } from './LayoutSection'
 import { PositionSection } from './PositionSection'
 import {
@@ -31,6 +32,9 @@ const SPACING_SECTION_ID = 'spacing'
 const LAYOUT_SECTION_ID = 'layout'
 const POSITION_SECTION_ID = 'position'
 const BORDER_SECTION_ID = 'border'
+
+/** Stable empty-array reference for rules with no conditional layers. */
+const EMPTY_LAYERS: ReadonlyArray<import('@core/page-tree').ConditionalStyleLayer> = []
 
 // ---------------------------------------------------------------------------
 // Props
@@ -60,28 +64,50 @@ export function ClassComposer({
   const removeClassStyleProperty = useEditorStore((s) => s.removeClassStyleProperty)
   const setPreviewClassStyles = useEditorStore((s) => s.setPreviewClassStyles)
   const clearPreviewClassStyles = useEditorStore((s) => s.clearPreviewClassStyles)
+  const addConditionalLayer = useEditorStore((s) => s.addConditionalLayer)
+  const updateConditionalLayerStyles = useEditorStore((s) => s.updateConditionalLayerStyles)
+  const removeConditionalLayer = useEditorStore((s) => s.removeConditionalLayer)
+
+  // The active *condition* dimension (Base vs a specific conditional layer).
+  // Reset to Base when the selected class changes. Orthogonal to the active
+  // width-breakpoint (owned by the responsive toolbar) — a condition edits the
+  // layer's flat styles, ignoring the breakpoint axis for v1.
+  const [activeTarget, setActiveTarget] = useState<StyleTarget>({ kind: 'base' })
+  const layers = cls.conditionalLayers ?? EMPTY_LAYERS
+  // If the active layer was removed (or the class changed), fall back to Base.
+  const activeLayer =
+    activeTarget.kind === 'condition'
+      ? layers.find((l) => l.id === activeTarget.layerId) ?? null
+      : null
+  const onCondition = activeTarget.kind === 'condition' && activeLayer !== null
 
   const activeTab = getActiveStyleTab(activeBreakpointId)
 
-  const storedStyles: Record<string, unknown> = activeTab !== 'base'
-    ? (cls.breakpointStyles[activeTab] ?? {})
-    : cls.styles
-  const currentStyles: Record<string, unknown> = activeTab !== 'base'
+  const storedStyles: Record<string, unknown> = onCondition
+    ? (activeLayer!.styles as Record<string, unknown>)
+    : activeTab !== 'base'
+      ? (cls.breakpointStyles[activeTab] ?? {})
+      : cls.styles
+  const currentStyles: Record<string, unknown> = onCondition
     ? { ...cls.styles, ...storedStyles }
-    : cls.styles
+    : activeTab !== 'base'
+      ? { ...cls.styles, ...storedStyles }
+      : cls.styles
 
   const visibleStyleSections = getVisibleStyleSections(styleQuery)
 
   const handleChange = useCallback(
     (key: keyof CSSPropertyBag, value: string | number | undefined) => {
       const patch = { [key]: value ?? null } as Partial<CSSPropertyBag>
-      if (activeTab !== 'base') {
+      if (onCondition) {
+        updateConditionalLayerStyles(classId, (activeTarget as { layerId: string }).layerId, patch)
+      } else if (activeTab !== 'base') {
         setClassBreakpointStyles(classId, activeTab, patch)
       } else {
         updateClassStyles(classId, patch)
       }
     },
-    [classId, activeTab, updateClassStyles, setClassBreakpointStyles],
+    [classId, activeTab, onCondition, activeTarget, updateClassStyles, setClassBreakpointStyles, updateConditionalLayerStyles],
   )
 
   const handleRemoveProperty = useCallback(
@@ -100,9 +126,35 @@ export function ClassComposer({
    */
   const handleClearProperty = useCallback(
     (key: keyof CSSPropertyBag) => {
+      if (onCondition) {
+        // On a condition tab, "clear" removes the prop from that layer only.
+        updateConditionalLayerStyles(classId, (activeTarget as { layerId: string }).layerId, {
+          [key]: undefined,
+        } as Partial<CSSPropertyBag>)
+        return
+      }
       removeClassStyleProperty(classId, key)
     },
-    [classId, removeClassStyleProperty],
+    [classId, onCondition, activeTarget, removeClassStyleProperty, updateConditionalLayerStyles],
+  )
+
+  // ── Condition tab handlers ───────────────────────────────────────────────
+  const handleAddCondition = useCallback(
+    (condition: StyleCondition) => {
+      const layerId = addConditionalLayer(classId, condition)
+      if (layerId) setActiveTarget({ kind: 'condition', layerId })
+    },
+    [classId, addConditionalLayer],
+  )
+
+  const handleRemoveCondition = useCallback(
+    (layerId: string) => {
+      removeConditionalLayer(classId, layerId)
+      setActiveTarget((cur) =>
+        cur.kind === 'condition' && cur.layerId === layerId ? { kind: 'base' } : cur,
+      )
+    },
+    [classId, removeConditionalLayer],
   )
 
   // Preview a transient style patch on the canvas while a property
@@ -125,6 +177,18 @@ export function ClassComposer({
 
   return (
     <div className={styles.styleSections}>
+      {/* Condition tabs — Base + custom @media / @container / @supports layers.
+          Hidden while a style search is active (search targets the property
+          sections, not the condition dimension). */}
+      {!styleQuery.trim() && (
+        <ConditionTabs
+          layers={layers}
+          active={activeTarget}
+          onSelect={setActiveTarget}
+          onAdd={handleAddCondition}
+          onRemove={handleRemoveCondition}
+        />
+      )}
       {visibleStyleSections.map((section) => (
         <div key={section.id} data-style-section={section.id}>
           <ClassStyleSection
