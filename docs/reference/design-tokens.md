@@ -251,13 +251,40 @@ Cards are filled and borderless; inputs are unfilled and bordered. That's the lo
 
 ## Z-index layers
 
+Three global tokens cover the three surfaces that float above everything:
+
 ```css
 --z-dropdown:           20;
 --tooltip-z-index:    2000;
 --spotlight-z-index:  9000;
 ```
 
-Use these. Don't invent new z-index values.
+The visual editor uses additional raw z-index values that are **not** tokenised. They fall into two independent stacking contexts:
+
+**Editor layout context** (shared stacking context for the editor chrome):
+
+| Value | What occupies it |
+|-------|-----------------|
+| 0     | `CanvasRoot` — an isolation root; all canvas-internal values are confined here |
+| 30    | Main toolbar |
+| 50    | Floating panels: PropertiesPanel, AgentPanel, DomPanel |
+| 55    | LeftSidebar, RightSidebar, PanelRail |
+| 80    | CodeEditorPanel |
+| 201   | Toolbar popovers / dropdowns |
+| 400–401 | PreviewOverlay |
+
+**Canvas-internal context** (confined inside CanvasRoot's `z-index: 0`):
+
+| Value       | What occupies it |
+|-------------|-----------------|
+| 24–25       | CanvasModeToggle, CanvasNotch, CanvasContextSelector |
+| 50          | PluginCanvasOverlayLayer |
+| 51          | Selection ring, hover ring, selection toolbar |
+| 2147483647  | Drop-indicator layer inside iframe (must beat arbitrary module stacking contexts) |
+
+`CanvasRoot` declares `z-index: 0; position: relative` to establish the isolation. Without it, the canvas-internal z-index 51 would escape into the layout context and paint over floating panels at z-index 50. See [`docs/editor.md`](../editor.md) → "Canvas stacking context isolation" for the full explanation.
+
+Raw canvas-internal values are intentional exceptions — they cannot be tokens because they are relative to an isolated stacking context, not the global one. Do not add new raw z-index values outside this established ladder.
 
 ---
 

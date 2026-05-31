@@ -236,7 +236,7 @@ If a size recurs across three or more primitives, promote it to a token.
 --spotlight-z-index:  9000
 ```
 
-Use these. Don't invent new z-index values in component CSS.
+Use these for all dropdowns, tooltips, and the command palette. The visual editor has additional raw z-index values for the layout chrome (sidebars, floating panels) and a separate internal ladder inside the canvas's isolating stacking context — those are intentional exceptions documented in [`docs/reference/design-tokens.md`](reference/design-tokens.md) → "Z-index layers".
 
 ### Spotlight
 

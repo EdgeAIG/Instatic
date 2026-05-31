@@ -348,6 +348,38 @@ The **unlayered-vs-layered** split is the cascade isolation mechanism: CSS rules
 
 Full details: [`docs/features/canvas-iframe-per-frame.md`](../features/canvas-iframe-per-frame.md).
 
+### 3. Canvas stacking context isolation
+
+`CanvasRoot` (`src/admin/pages/site/canvas/CanvasRoot.module.css`) sets `position: relative; z-index: 0`. This establishes an **isolating stacking context** for the entire canvas subtree. Every canvas-internal z-index value is confined inside that context and cannot compete with sibling layout elements.
+
+Why this matters: selection rings and the floating selection toolbar are portaled into the canvas root and painted at z-index 51 (above the `PluginCanvasOverlayLayer` at 50). Without the `z-index: 0` stacking context on the canvas, those z-index 51 values escape into the shared layout context and paint over the floating `PropertiesPanel` (also z-index 50), which is a sibling of the canvas. With the isolation in place, the canvas as a whole occupies z-index 0 in the shared layout context — well below the panel's 50.
+
+**Editor layout z-index table** (shared context, outside the canvas):
+
+| Element                               | z-index | File |
+|---------------------------------------|---------|------|
+| Canvas (CanvasRoot, isolation root)   | 0       | `canvas/CanvasRoot.module.css` |
+| Toolbar (main bar)                    | 30      | `toolbar/Toolbar.module.css` |
+| PropertiesPanel (floating)            | 50      | `panels/PropertiesPanel/PropertiesPanel.module.css` |
+| AgentPanel (floating)                 | 50      | `panels/AgentPanel/AgentPanel.module.css` |
+| DomPanel (floating)                   | 50      | `panels/DomPanel/DomPanel.module.css` |
+| LeftSidebar, RightSidebar, PanelRail  | 55      | `sidebars/*/` |
+| CodeEditorPanel                       | 80      | `code-editor/CodeEditorPanel.module.css` |
+| Toolbar popovers / dropdowns          | 201     | `toolbar/Toolbar.module.css` |
+| PreviewOverlay                        | 400–401 | `preview/PreviewOverlay.module.css` |
+
+**Canvas-internal z-index table** (all confined inside the `z-index: 0` canvas context):
+
+| Element                               | z-index           |
+|---------------------------------------|-------------------|
+| CanvasModeToggle, CanvasNotch         | 24                |
+| CanvasContextSelector                 | 25                |
+| PluginCanvasOverlayLayer              | 50                |
+| Selection ring, hover ring, selection toolbar | 51        |
+| Drop-indicator inside iframe          | 2147483647 (max)  |
+
+Canvas-internal values are not CSS tokens — they are raw integers intentionally scoped to the canvas stacking context and isolated from the layout stacking context by the `z-index: 0` on `CanvasRoot`.
+
 ### Key canvas files
 
 | File                            | Owns                                                            |
