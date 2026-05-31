@@ -4,8 +4,14 @@
  *
  * The `transform` property is set to a no-op initial value here;
  * useCanvas overwrites it imperatively via a ref on mount + pan/zoom.
- * `will-change` is toggled via .transformLayerActive when page content
- * is present (promotes layer to GPU composite only when needed).
+ *
+ * `will-change: transform` is NOT applied permanently. A permanent promotion
+ * wraps the whole (large, complex) subtree into one oversized GPU layer whose
+ * backing overflows the tile/memory budget, leaving content blank and unpainted
+ * until invalidated (react-virtualized#453; Chrome "re-rastering composited
+ * layers on scale change"). `useCanvas` instead promotes the layer imperatively
+ * only for the duration of an active gesture (see WILL_CHANGE_RELEASE_MS), so at
+ * rest the browser rasterizes it normally (viewport-tiled).
  */
 
 .transformLayer {
@@ -21,11 +27,6 @@
   position: absolute;
   top: 80px;
   left: 80px;
-}
-
-/* Promote to GPU composite layer when page content is present */
-.transformLayerActive {
-  will-change: transform;
 }
 
 /*

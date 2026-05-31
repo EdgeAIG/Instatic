@@ -89,17 +89,12 @@ const ALLOWLIST = new Set([
   // inline-flex sizing would distort.
   'admin/pages/content/components/ContentExplorerPanel/ContentExplorerPanel.tsx',
 
-  // ── §8.3 Sub-micro pill controls inside a status badge ──────────────────
-  // The runtime-preview Refresh control lives inside a 22px status pill in
-  // the canvas preview chrome. It is a 16px-high pill — smaller than the
-  // Button "micro" size (18px) — sized to read as inline status chrome
-  // rather than a primary action. Button's token sizes can't go that small.
-  'admin/pages/site/canvas/CanvasPreviewSurface.tsx',
-
   // ── §8.6 ARIA tablist tabs ──────────────────────────────────────────────
   // role="tab" buttons inside role="tablist" need a custom tab layout
   // (icon + label, aria-selected, no border, mode-specific active state).
   // Button's token-driven sizing would distort the segmented-toggle look.
+  // The same pill also hosts the Run-scripts toggle + Refresh and the inline
+  // breakpoint switcher, which share the 22px icon-tab geometry.
   'admin/pages/site/canvas/CanvasModeToggle.tsx',
   // Content workspace's Write / Live mode switch — mirrors the canvas
   // mode toggle's segmented pill pattern and shares the same constraints.

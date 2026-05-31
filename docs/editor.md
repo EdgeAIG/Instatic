@@ -352,16 +352,17 @@ Full details: [`docs/features/canvas-iframe-per-frame.md`](../features/canvas-if
 | `ClassStyleInjector.tsx`        | Class registry + publisher reset CSS into each iframe head      |
 | `UserStylesheetInjector.tsx`    | User-uploaded CSS into each iframe head                         |
 | `NodeRenderer.tsx`              | Renders a single node and its children inside the iframe        |
-| `CanvasTransformLayer.tsx`      | Zoom + pan transform                                            |
-| `CanvasPreviewSurface.tsx`      | The "preview" mode that hides editor affordances                |
-| `CanvasModeToggle.tsx`          | Toggles edit vs. preview                                        |
+| `CanvasTransformLayer.tsx`      | Zoom + pan transform (design view)                              |
+| `CanvasLiveSurface.tsx`         | "Live" view — single real-size editable frame, normal scroll    |
+| `RuntimeScriptInjector.tsx`     | Injects bundled runtime scripts into an editable iframe         |
+| `CanvasModeToggle.tsx`          | Design/Live view toggle + Run-scripts toggle + breakpoint switch |
 | `CanvasContextSelector.tsx`     | Editing-context switcher: viewports + custom conditions (@media/@container/@supports) |
 | `CanvasLayerContextMenu.tsx`    | Right-click on a layer                                          |
 | `canvasDnd.ts`                  | Drag-and-drop (insert / move / wrap)                            |
 | `canvasDomGeometry.ts`          | Cross-iframe DOM measurement                                    |
 | `canvasSelectionUtils.ts`       | Selection helpers                                               |
 | `useCanvasKeyboardShortcuts.ts` | Editor keyboard shortcuts (delete, duplicate, wrap, …)          |
-| `useRuntimePreviewBuild.ts`     | Builds the preview-mode bundle                                  |
+| `useRuntimeScriptBuild.ts`      | Builds the bundled runtime scripts for the Run-scripts toggle    |
 
 ---
 

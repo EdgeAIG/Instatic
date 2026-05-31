@@ -20,6 +20,12 @@
     user-select: none;
 }
 
+.tablist {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
 .tab {
     display: inline-flex;
     align-items: center;
@@ -51,6 +57,25 @@
 .tabActive {
     background: var(--editor-surface-3);
     color: var(--editor-text);
+}
+
+.tab:disabled {
+    opacity: 0.5;
+    cursor: progress;
+}
+
+/* Run-scripts toggle: tint by build status so the author can tell at a glance
+   whether the injected scripts are live, rebuilding, or errored. */
+.tab[data-script-status="ready"] {
+    color: var(--editor-success-text);
+}
+
+.tab[data-script-status="building"] {
+    color: var(--editor-warning-text);
+}
+
+.tab[data-script-status="error"] {
+    color: var(--editor-danger-text);
 }
 
 /* Vertical separator between the design/preview toggle and the inline

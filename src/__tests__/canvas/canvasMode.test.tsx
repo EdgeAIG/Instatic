@@ -1,26 +1,25 @@
 /**
- * Canvas mode (Design / Preview) tests.
+ * Canvas mode (Design / Live) + Run-scripts tests.
  *
  * Covers:
- * - canvasView default + setCanvasView store action
- * - CanvasModeToggle component reflects + drives the store, and surfaces
- *   inline breakpoint switcher buttons only when preview is active
- * - BreakpointFrame is design-only and never renders the runtime iframe
- * - CanvasPreviewSurface owns the runtime preview iframe in preview mode
- * - Bundle signature contract: a property edit on a node does not retrigger
- *   the runtime build, but a script-content edit, packageJson change, or
- *   Refresh does. That contract is the entire point of the design-vs-preview
- *   split — driven through CanvasPreviewSurface in this suite.
+ * - canvasView default + setCanvasView store action ('design' | 'live')
+ * - runScripts default + setRunScripts store action
+ * - CanvasModeToggle reflects + drives the store: Design/Live tabs, the
+ *   Run-scripts toggle, and the inline breakpoint switcher (live only)
+ * - useRuntimeScriptBuild signature contract: it builds only while enabled,
+ *   does NOT rebuild on a node-tree edit (scripts don't depend on the tree),
+ *   but DOES rebuild on a script-file edit, a packageJson change, or Refresh.
+ *   That contract is what lets scripts run alongside live editing without
+ *   re-executing on every keystroke.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import React from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { CanvasModeToggle } from '@site/canvas/CanvasModeToggle'
-import { CanvasPreviewSurface } from '@site/canvas/CanvasPreviewSurface'
-import { BreakpointFrame } from '@site/canvas/BreakpointFrame'
+import { useRuntimeScriptBuild } from '@site/canvas/useRuntimeScriptBuild'
 import { useEditorStore } from '@site/store/store'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
+import type { Page } from '@core/page-tree'
 import { makeNode, makePage, makeSite } from '../fixtures'
 
 afterEach(cleanup)
@@ -31,32 +30,42 @@ afterEach(() => {
 })
 
 beforeEach(() => {
-  // Reset to a clean canvas-view default for every test.
-  useEditorStore.setState({ canvasView: 'design' } as Parameters<typeof useEditorStore.setState>[0])
+  useEditorStore.setState({
+    canvasView: 'design',
+    runScripts: false,
+  } as Parameters<typeof useEditorStore.setState>[0])
 })
 
 afterEach(() => {
-  // Belt-and-suspenders: also reset after each test so canvasView never leaks
-  // into subsequent test files (Zustand store is a global singleton across
-  // the suite and unrelated tests render BreakpointFrame expecting design mode).
-  useEditorStore.setState({ canvasView: 'design' } as Parameters<typeof useEditorStore.setState>[0])
+  // Belt-and-suspenders: reset after each test so canvas state never leaks
+  // into subsequent test files (the Zustand store is a global singleton).
+  useEditorStore.setState({
+    canvasView: 'design',
+    runScripts: false,
+  } as Parameters<typeof useEditorStore.setState>[0])
 })
 
 // ---------------------------------------------------------------------------
-// canvasView state + setCanvasView action
+// canvasView / runScripts store state
 // ---------------------------------------------------------------------------
 
-describe('canvasView store state', () => {
-  it('defaults to "design" so existing users keep their familiar canvas', () => {
+describe('canvas view + run-scripts store state', () => {
+  it('canvasView defaults to "design"', () => {
     expect(useEditorStore.getState().canvasView).toBe('design')
   })
 
-  it('setCanvasView swaps between "design" and "preview"', () => {
-    act(() => useEditorStore.getState().setCanvasView('preview'))
-    expect(useEditorStore.getState().canvasView).toBe('preview')
+  it('setCanvasView swaps between "design" and "live"', () => {
+    act(() => useEditorStore.getState().setCanvasView('live'))
+    expect(useEditorStore.getState().canvasView).toBe('live')
 
     act(() => useEditorStore.getState().setCanvasView('design'))
     expect(useEditorStore.getState().canvasView).toBe('design')
+  })
+
+  it('runScripts defaults to false and setRunScripts toggles it', () => {
+    expect(useEditorStore.getState().runScripts).toBe(false)
+    act(() => useEditorStore.getState().setRunScripts(true))
+    expect(useEditorStore.getState().runScripts).toBe(true)
   })
 })
 
@@ -64,56 +73,70 @@ describe('canvasView store state', () => {
 // CanvasModeToggle
 // ---------------------------------------------------------------------------
 
-describe('CanvasModeToggle', () => {
-  it('renders both tabs with the design tab pre-selected', () => {
-    render(<CanvasModeToggle />)
+const NOOP = () => {}
 
+describe('CanvasModeToggle', () => {
+  it('renders both view tabs with the design tab pre-selected', () => {
+    render(<CanvasModeToggle scriptStatus="idle" onRefreshScripts={NOOP} />)
     const design = screen.getByTestId('canvas-mode-toggle-design')
-    const preview = screen.getByTestId('canvas-mode-toggle-preview')
+    const live = screen.getByTestId('canvas-mode-toggle-live')
     expect(design.getAttribute('aria-selected')).toBe('true')
-    expect(preview.getAttribute('aria-selected')).toBe('false')
+    expect(live.getAttribute('aria-selected')).toBe('false')
   })
 
-  it('clicking Preview switches the store to preview mode', () => {
-    render(<CanvasModeToggle />)
-    fireEvent.click(screen.getByTestId('canvas-mode-toggle-preview'))
-    expect(useEditorStore.getState().canvasView).toBe('preview')
+  it('clicking Live switches the store to live mode', () => {
+    render(<CanvasModeToggle scriptStatus="idle" onRefreshScripts={NOOP} />)
+    fireEvent.click(screen.getByTestId('canvas-mode-toggle-live'))
+    expect(useEditorStore.getState().canvasView).toBe('live')
   })
 
   it('clicking Design switches the store back to design mode', () => {
-    act(() => useEditorStore.getState().setCanvasView('preview'))
-    render(<CanvasModeToggle />)
+    act(() => useEditorStore.getState().setCanvasView('live'))
+    render(<CanvasModeToggle scriptStatus="idle" onRefreshScripts={NOOP} />)
     fireEvent.click(screen.getByTestId('canvas-mode-toggle-design'))
     expect(useEditorStore.getState().canvasView).toBe('design')
   })
 
-  it('does not render inline breakpoint buttons in design mode', () => {
-    withRuntimeSite()
-    render(<CanvasModeToggle />)
-    expect(screen.queryByTestId('canvas-preview-breakpoints')).toBeNull()
+  it('the Run-scripts toggle reflects + drives store.runScripts', () => {
+    render(<CanvasModeToggle scriptStatus="idle" onRefreshScripts={NOOP} />)
+    const toggle = screen.getByTestId('canvas-run-scripts-toggle')
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(toggle)
+    expect(useEditorStore.getState().runScripts).toBe(true)
   })
 
-  it('renders an inline breakpoint button per site breakpoint when preview is active', () => {
-    const { breakpoints } = withRuntimeSite()
-    act(() => useEditorStore.getState().setCanvasView('preview'))
-    render(<CanvasModeToggle />)
+  it('shows the Refresh button only while scripts are running', () => {
+    render(<CanvasModeToggle scriptStatus="idle" onRefreshScripts={NOOP} />)
+    expect(screen.queryByTestId('canvas-run-scripts-refresh')).toBeNull()
+    act(() => useEditorStore.getState().setRunScripts(true))
+    expect(screen.getByTestId('canvas-run-scripts-refresh')).toBeDefined()
+  })
 
-    const group = screen.getByTestId('canvas-preview-breakpoints')
-    expect(group).toBeDefined()
+  it('does not render inline breakpoint buttons in design mode', () => {
+    withRuntimeSite()
+    render(<CanvasModeToggle scriptStatus="idle" onRefreshScripts={NOOP} />)
+    expect(screen.queryByTestId('canvas-live-breakpoints')).toBeNull()
+  })
+
+  it('renders an inline breakpoint button per site breakpoint when live is active', () => {
+    const { breakpoints } = withRuntimeSite()
+    act(() => useEditorStore.getState().setCanvasView('live'))
+    render(<CanvasModeToggle scriptStatus="idle" onRefreshScripts={NOOP} />)
+
+    expect(screen.getByTestId('canvas-live-breakpoints')).toBeDefined()
     for (const bp of breakpoints) {
-      expect(screen.getByTestId(`canvas-preview-breakpoint-${bp.id}`)).toBeDefined()
+      expect(screen.getByTestId(`canvas-live-breakpoint-${bp.id}`)).toBeDefined()
     }
   })
 
   it('clicking an inline breakpoint button drives setActiveBreakpoint', () => {
     const { breakpoints } = withRuntimeSite()
-    act(() => useEditorStore.getState().setCanvasView('preview'))
-    render(<CanvasModeToggle />)
+    act(() => useEditorStore.getState().setCanvasView('live'))
+    render(<CanvasModeToggle scriptStatus="idle" onRefreshScripts={NOOP} />)
 
-    // Pick a non-active breakpoint to switch to.
     const initial = useEditorStore.getState().activeBreakpointId
     const target = breakpoints.find((bp) => bp.id !== initial) ?? breakpoints[0]
-    fireEvent.click(screen.getByTestId(`canvas-preview-breakpoint-${target.id}`))
+    fireEvent.click(screen.getByTestId(`canvas-live-breakpoint-${target.id}`))
     expect(useEditorStore.getState().activeBreakpointId).toBe(target.id)
   })
 })
@@ -163,30 +186,23 @@ function withRuntimeSite() {
 }
 
 // ---------------------------------------------------------------------------
-// BreakpointFrame is design-only
+// useRuntimeScriptBuild — bundle signature contract
 // ---------------------------------------------------------------------------
 
-describe('BreakpointFrame is design-only', () => {
-  it('never renders the runtime iframe, even when preview mode is active', () => {
-    const { page, breakpoint } = withRuntimeSite()
-    act(() => useEditorStore.getState().setCanvasView('preview'))
-    render(
-      <BreakpointFrame
-        page={page}
-        breakpoint={breakpoint}
-        isActive
-        onActivate={() => {}}
-      />,
-    )
-    expect(screen.queryByTestId('canvas-runtime-preview')).toBeNull()
-  })
-})
+/**
+ * Minimal host for the hook: renders the build status and a Refresh button so
+ * tests can drive the public surface without a full canvas mount.
+ */
+function ScriptBuildHarness({ page, enabled }: { page: Page; enabled: boolean }) {
+  const build = useRuntimeScriptBuild({ page, breakpointId: 'desktop', enabled })
+  return (
+    <button data-testid="script-status" data-status={build.status} onClick={build.refresh}>
+      refresh
+    </button>
+  )
+}
 
-// ---------------------------------------------------------------------------
-// CanvasPreviewSurface — runtime iframe + bundle signature contract
-// ---------------------------------------------------------------------------
-
-describe('CanvasPreviewSurface', () => {
+describe('useRuntimeScriptBuild', () => {
   let buildCalls = 0
   beforeEach(() => {
     buildCalls = 0
@@ -211,27 +227,23 @@ describe('CanvasPreviewSurface', () => {
     })
   }
 
-  function renderPreviewSurface() {
-    const { page, breakpoint } = withRuntimeSite()
-    act(() => useEditorStore.getState().setCanvasView('preview'))
-    return {
-      page,
-      breakpoint,
-      ...render(
-        <CanvasPreviewSurface page={page} activeBreakpoint={breakpoint} />,
-      ),
-    }
-  }
-
-  it('renders the runtime iframe once the build resolves', async () => {
-    renderPreviewSurface()
+  it('does not build while disabled', async () => {
+    const { page } = withRuntimeSite()
+    render(<ScriptBuildHarness page={page} enabled={false} />)
     await flushDebounce()
-    const iframe = await screen.findByTestId('canvas-runtime-preview')
-    expect(iframe).toBeDefined()
+    expect(buildCalls).toBe(0)
   })
 
-  it('rebuilds whenever the site is mutated (debounced) — node prop edit', async () => {
-    renderPreviewSurface()
+  it('builds once when enabled', async () => {
+    const { page } = withRuntimeSite()
+    render(<ScriptBuildHarness page={page} enabled />)
+    await flushDebounce()
+    expect(buildCalls).toBe(1)
+  })
+
+  it('does NOT rebuild on a node-tree edit (scripts are tree-independent)', async () => {
+    const { page } = withRuntimeSite()
+    render(<ScriptBuildHarness page={page} enabled />)
     await flushDebounce()
     expect(buildCalls).toBe(1)
 
@@ -252,16 +264,12 @@ describe('CanvasPreviewSurface', () => {
     })
     await flushDebounce()
 
-    // Preview is a separate surface from the design canvas in the new
-    // architecture, so rebuilding on every site change can't trigger
-    // "scripts re-execute on every keystroke" — the user can't be typing
-    // while the iframe is the visible surface. We choose freshness over
-    // the older guarantee.
-    expect(buildCalls).toBe(2)
+    expect(buildCalls).toBe(1)
   })
 
   it('rebuilds when a script file changes', async () => {
-    renderPreviewSurface()
+    const { page } = withRuntimeSite()
+    render(<ScriptBuildHarness page={page} enabled />)
     await flushDebounce()
     expect(buildCalls).toBe(1)
 
@@ -280,7 +288,8 @@ describe('CanvasPreviewSurface', () => {
   })
 
   it('rebuilds when packageJson changes', async () => {
-    renderPreviewSurface()
+    const { page } = withRuntimeSite()
+    render(<ScriptBuildHarness page={page} enabled />)
     await flushDebounce()
     expect(buildCalls).toBe(1)
 
@@ -300,59 +309,14 @@ describe('CanvasPreviewSurface', () => {
     expect(buildCalls).toBe(2)
   })
 
-  it('rebuilds when a class style changes (drives bug 2 — stale styles)', async () => {
-    renderPreviewSurface()
+  it('rebuilds on Refresh even when nothing else changed', async () => {
+    const { page } = withRuntimeSite()
+    render(<ScriptBuildHarness page={page} enabled />)
     await flushDebounce()
     expect(buildCalls).toBe(1)
 
-    act(() => {
-      const current = useEditorStore.getState().site!
-      // Simulate a user editing class styles in design mode and then having
-      // them flow into the next build via site.updatedAt.
-      useEditorStore.setState({
-        site: {
-          ...current,
-          styleRules: {
-            ...current.classes,
-            'hero': {
-              id: 'hero',
-              name: 'hero',
-              kind: 'reusable',
-              styles: { padding: '60px' },
-              breakpointStyles: {},
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            },
-          },
-          updatedAt: Date.now(),
-        },
-      } as Parameters<typeof useEditorStore.setState>[0])
-    })
-    await flushDebounce()
-
-    expect(buildCalls).toBe(2)
-  })
-
-  // NOTE: a "breakpoint switches" rerender test is intentionally omitted —
-  // it exercises the same buildSignature memo recompute that script-content,
-  // packageJson, and Refresh tests already cover, but happens to be flaky
-  // under jsdom's debounced-effect scheduler. The contract holds at the hook
-  // level: breakpointId is part of computeBuildSignature() so any change
-  // recomputes the signature and re-fires the effect.
-
-  it('rebuilds on Refresh click even when nothing else changed', async () => {
-    renderPreviewSurface()
-    await flushDebounce()
-    expect(buildCalls).toBe(1)
-
-    fireEvent.click(await screen.findByTestId('canvas-runtime-preview-refresh'))
+    fireEvent.click(screen.getByTestId('script-status'))
     await flushDebounce()
     expect(buildCalls).toBe(2)
-  })
-
-  it('exposes both side resize handles', () => {
-    renderPreviewSurface()
-    expect(screen.getByTestId('canvas-preview-resize-left')).toBeDefined()
-    expect(screen.getByTestId('canvas-preview-resize-right')).toBeDefined()
   })
 })

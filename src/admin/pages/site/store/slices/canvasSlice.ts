@@ -11,18 +11,22 @@ type CanvasMode = 'select' | 'pan' | 'insert'
 /**
  * Canvas render mode.
  *
- * - 'design': the React-based module renderer is shown — fully reactive to
- *   property edits, no script execution. Selection / drag / drop work here.
- * - 'preview': the runtime-preview iframe is shown — site scripts actually run
- *   inside a sandboxed iframe so authors can test behavior. Property edits
- *   while in preview mode do NOT auto-refresh the iframe; the user clicks
- *   Refresh (or navigates page/breakpoint, or edits scripts/deps) to rebuild.
+ * - 'design': the multi-breakpoint editing canvas — every breakpoint frame is
+ *   shown side-by-side with pan/zoom. Fully reactive to property edits.
+ * - 'live': a single editable frame at 100% (fluid full-width, optionally
+ *   clamped to a breakpoint width) with normal vertical scrolling, like a
+ *   conventional page builder's live view. It reuses the SAME editable iframe
+ *   the design canvas uses (React-rendered node tree), so selection, the
+ *   properties panel, and structural edits all keep working — it is not a
+ *   read-only preview.
  *
- * The two surfaces are mutually exclusive — preview mode does not stack the
- * iframe over the design canvas. This avoids the "scripts re-execute on every
- * keystroke" problem the previous overlay design caused.
+ * Both views render the editable node tree; `live` just drops the infinite
+ * canvas (pan/zoom, multiple frames) in favour of a single, real-size frame.
+ * Whether the site's runtime scripts also execute inside the editable frames
+ * is governed by the orthogonal `runScripts` flag below — it applies to both
+ * views.
  */
-export type CanvasView = 'design' | 'preview'
+export type CanvasView = 'design' | 'live'
 
 export interface CanvasSlice {
   zoom: number
@@ -48,8 +52,16 @@ export interface CanvasSlice {
   previousActivePageId: string | null
   /** Current editor interaction mode */
   canvasMode: CanvasMode
-  /** Current canvas render mode — design (live module editor) or preview (sandboxed runtime) */
+  /** Current canvas render mode — 'design' (multi-breakpoint canvas) or 'live' (single real-size editable frame) */
   canvasView: CanvasView
+  /**
+   * When true, the site's runtime scripts are bundled and injected into the
+   * editable canvas iframes (both 'design' and 'live' views), so authored
+   * behaviour runs in-place while the page stays editable. Opt-in (default
+   * off): scripts mutate the same DOM React renders, so a Refresh re-runs them
+   * after edits that React reconciles away.
+   */
+  runScripts: boolean
 
   setZoom: (zoom: number) => void
   setPan: (x: number, y: number) => void
@@ -60,6 +72,8 @@ export interface CanvasSlice {
   setActivePage: (pageId: string) => void
   setCanvasMode: (mode: CanvasMode) => void
   setCanvasView: (view: CanvasView) => void
+  /** Toggle (or set) whether runtime scripts run inside the editable iframes. */
+  setRunScripts: (run: boolean) => void
   resetView: () => void
   /**
    * Step zoom up to the next preset level. When `originX`/`originY` are
@@ -90,6 +104,7 @@ export const createCanvasSlice: EditorStoreSliceCreator<CanvasSlice> = (set, get
   previousActivePageId: null,
   canvasMode: 'select',
   canvasView: 'design',
+  runScripts: false,
 
   setZoom: (zoom) => set({ zoom: clampZoom(zoom) }),
 
@@ -112,6 +127,8 @@ export const createCanvasSlice: EditorStoreSliceCreator<CanvasSlice> = (set, get
   setCanvasMode: (mode) => set({ canvasMode: mode }),
 
   setCanvasView: (view) => set({ canvasView: view }),
+
+  setRunScripts: (run) => set({ runScripts: run }),
 
   resetView: () => set({ zoom: DEFAULT_ZOOM, panX: 0, panY: 0 }),
 

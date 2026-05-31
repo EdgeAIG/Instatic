@@ -13,7 +13,7 @@ import type { Ref } from 'react'
 import type { Page, Breakpoint } from '@core/page-tree'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { BreakpointFrame } from './BreakpointFrame'
-import { cn } from '@ui/cn'
+import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import styles from './CanvasTransformLayer.module.css'
 
 interface CanvasTransformLayerProps {
@@ -23,6 +23,8 @@ interface CanvasTransformLayerProps {
   dimInactiveBreakpoints?: boolean
   onBreakpointActivate: (id: string) => void
   templateContext?: TemplateRenderDataContext
+  /** Opt-in runtime scripts injected into every frame; empty/undefined = none. */
+  runtimeScripts?: InjectableRuntimeScript[]
   /** React 19: ref is a regular prop on function components. */
   ref?: Ref<HTMLDivElement>
 }
@@ -34,14 +36,18 @@ export function CanvasTransformLayer({
   dimInactiveBreakpoints = false,
   onBreakpointActivate,
   templateContext,
+  runtimeScripts,
   ref,
 }: CanvasTransformLayerProps) {
   return (
     <div
       ref={ref}
       data-testid="canvas-transform-layer"
-      // will-change toggled via modifier class (avoids compositing overhead on empty canvas)
-      className={cn(styles.transformLayer, page && styles.transformLayerActive)}
+      // GPU promotion (will-change) is applied imperatively + transiently by
+      // useCanvas during active gestures — not permanently — to avoid wrapping
+      // the whole subtree into one oversized layer backing that leaves content
+      // blank at scale/low zoom. See WILL_CHANGE_RELEASE_MS in useCanvas.ts.
+      className={styles.transformLayer}
     >
       {page ? (
         // Only breakpoints flagged for a preview frame render an iframe on the
@@ -60,6 +66,7 @@ export function CanvasTransformLayer({
               isDimmed={dimInactiveBreakpoints && activeBreakpointId !== bp.id}
               onActivate={onBreakpointActivate}
               templateContext={templateContext}
+              runtimeScripts={runtimeScripts}
             />
           ))
       ) : (

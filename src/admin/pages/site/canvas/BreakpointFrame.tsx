@@ -10,11 +10,11 @@
  * not the editor chrome. See `docs/features/canvas-iframe-per-frame.md`
  * for the rationale.
  *
- * Frame is design-only after the canvas-view redesign: preview mode now
- * lives in its own surface (CanvasPreviewSurface) which owns a single
- * full-bleed iframe instead of one iframe per breakpoint frame. See the
- * "Canvas Preview Surface" architecture note in CanvasPreviewSurface.tsx
- * for why preview no longer reuses these frames.
+ * BreakpointFrame is the design-canvas frame (one per breakpoint, panned and
+ * zoomed together). Live mode renders a single real-size frame in its own
+ * surface (CanvasLiveSurface) using the same `IframeFrameSurface` with
+ * `interaction="live"`. Both can run the site's runtime scripts when the
+ * "Run scripts" toggle is on — see `runtimeScripts`.
  */
 
 import { useRef, useState, type CSSProperties } from 'react'
@@ -24,6 +24,7 @@ import { NodeRenderer } from './NodeRenderer'
 import { BreakpointSelectionOverlay } from './BreakpointSelectionOverlay'
 import { CanvasBreakpointContext, CanvasTemplateContext } from './CanvasContexts'
 import { IframeFrameSurface, type IframeFrameSurfaceHandle } from './IframeFrameSurface'
+import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
 import { useEditorPermissions } from '@site/editorPermissionsContext'
@@ -36,6 +37,8 @@ interface BreakpointFrameProps {
   isDimmed?: boolean
   onActivate: (breakpointId: string) => void
   templateContext?: TemplateRenderDataContext
+  /** Opt-in runtime scripts injected into this frame; empty/undefined = none. */
+  runtimeScripts?: InjectableRuntimeScript[]
 }
 
 export function BreakpointFrame({
@@ -45,6 +48,7 @@ export function BreakpointFrame({
   isDimmed = false,
   onActivate,
   templateContext,
+  runtimeScripts,
 }: BreakpointFrameProps) {
   // --bp-width drives both label width and viewport width via CSS (dynamic value)
   const bpStyle = { '--bp-width': `${breakpoint.width}px` } as CSSProperties
@@ -127,6 +131,7 @@ export function BreakpointFrame({
           breakpointId={breakpoint.id}
           width={breakpoint.width}
           onClick={handleEmptyFrameClick}
+          runtimeScripts={runtimeScripts}
         >
           <CanvasTemplateContext.Provider value={templateContext}>
             <CanvasBreakpointContext.Provider value={breakpoint.id}>

@@ -14,6 +14,12 @@
     transition:
         opacity 140ms ease,
         filter 140ms ease;
+    /* Isolate each frame as its own layout + paint containment box so paint
+       invalidation and (implicit) compositing don't propagate across frames or
+       into the editor chrome — reduces the oversized-layer pressure behind the
+       blank-content bug. NOTE: paint containment clips the frame's drop shadow
+       to the wrapper box; if that reads poorly, drop `paint` and keep `layout`. */
+    contain: layout paint;
 }
 
 .frameWrapperDimmed {

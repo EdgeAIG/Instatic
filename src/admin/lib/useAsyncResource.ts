@@ -41,7 +41,7 @@
  *   - **Event-driven / subscription / activation effects** that aren't a GET
  *     (`useInstalledEditorPlugins`, `AdminSectionNavigation`, `SpotlightRoot`).
  *   - **Non-fetch effects** — rAF loops (`BreakpointSelectionOverlay`),
- *     debounced builders (`useRuntimePreviewBuild`), dynamic module imports
+ *     debounced builders (`useRuntimeScriptBuild`), dynamic module imports
  *     (`PluginPageRenderer`), boot orchestration with `flushSync` paint timing
  *     (`useAdminBoot`), preference-sync-with-debounced-save
  *     (`useDashboardLayout`), or a status fetch that seeds an action state

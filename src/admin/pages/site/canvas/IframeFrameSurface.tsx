@@ -75,10 +75,27 @@ import { cn } from '@ui/cn'
 import { ClassStyleInjector } from './ClassStyleInjector'
 import { UserStylesheetInjector } from './UserStylesheetInjector'
 import { EditorChromeInjector } from './EditorChromeInjector'
+import { RuntimeScriptInjector } from './RuntimeScriptInjector'
+import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import { CANVAS_VIEWPORT_HEIGHT, type CanvasViewport } from './resolveViewportUnits'
 import styles from './IframeFrameSurface.module.css'
 
+/**
+ * Frame interaction model.
+ * - 'canvas': the infinite-surface design frame. Wheel/pointer events are
+ *   forwarded to the parent for pan/zoom, the iframe grows to its content
+ *   height (no inner scrollbar), and the canvas-chrome CSS neutralises
+ *   cursors / text selection so the frame reads as a click-to-select preview.
+ * - 'live': a single real-size frame. The iframe is its own scroll viewport
+ *   (published height behaviour), real cursors and text selection apply, and
+ *   no events are forwarded — there is nothing to pan.
+ */
+export type IframeInteraction = 'canvas' | 'live'
+
 const IFRAME_SRC_DOC = '<!doctype html><html><head></head><body></body></html>'
+
+/** Stable empty list so a script-less frame doesn't churn the injector's deps. */
+const EMPTY_RUNTIME_SCRIPTS: InjectableRuntimeScript[] = []
 
 interface IframeFrameSurfaceProps {
   /** Stable id used to tag the iframe's `<body>` with `data-breakpoint-id`. */
@@ -104,6 +121,15 @@ interface IframeFrameSurfaceProps {
    * iframe boundary.
    */
   dataAttrs?: Record<string, string | undefined>
+  /** Interaction model — see {@link IframeInteraction}. Defaults to 'canvas'. */
+  interaction?: IframeInteraction
+  /**
+   * Bundled runtime scripts to execute inside the frame. Empty/undefined runs
+   * nothing — the frame stays a pure render. Same in both interaction modes
+   * (the "Run scripts" toggle drives this), so authored behaviour can run
+   * alongside the live editor.
+   */
+  runtimeScripts?: InjectableRuntimeScript[]
 }
 
 export interface IframeFrameSurfaceHandle {
@@ -117,9 +143,20 @@ export interface IframeFrameSurfaceHandle {
 
 export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFrameSurfaceProps>(
   function IframeFrameSurface(
-    { breakpointId, width, className, style, onClick, children, dataAttrs },
+    {
+      breakpointId,
+      width,
+      className,
+      style,
+      onClick,
+      children,
+      dataAttrs,
+      interaction = 'canvas',
+      runtimeScripts,
+    },
     ref,
   ) {
+    const isLive = interaction === 'live'
     const iframeRef = useRef<HTMLIFrameElement | null>(null)
     const [iframeDoc, setIframeDoc] = useState<Document | null>(null)
 
@@ -184,7 +221,7 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
     // (zero-specificity) so the override is safe.
     useEffect(() => {
       if (!iframeDoc?.body) return
-      applyIframeBodyReset(iframeDoc, breakpointId)
+      applyIframeBodyReset(iframeDoc, breakpointId, interaction)
       if (!onClick) return
       // Empty-frame click: ONLY fire when the click target is the body
       // itself (not a child node bubbling up). Without this guard, every
@@ -202,7 +239,7 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
       return () => {
         iframeDoc.body.removeEventListener('click', handler)
       }
-    }, [iframeDoc, breakpointId, onClick])
+    }, [iframeDoc, breakpointId, onClick, interaction])
 
     // ── Iframe height tracking ────────────────────────────────────────────
     // The canvas is a Figma-like infinite surface — frames are not supposed
@@ -243,6 +280,11 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
     //    land on the iframe element in the PARENT document, so they never
     //    trip the MutationObserver and never reset the budget themselves.
     useEffect(() => {
+      // Grow-to-content is a canvas-only concern: on the infinite surface the
+      // frame must not have an inner scrollbar. In 'live' mode the iframe IS
+      // the scroll viewport (published height behaviour), so we leave its
+      // height to CSS (100%) and let it scroll internally.
+      if (isLive) return
       if (!iframeDoc) return
       const iframe = iframeRef.current
       if (!iframe) return
@@ -308,7 +350,7 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
         ro.disconnect()
         mo.disconnect()
       }
-    }, [iframeDoc])
+    }, [iframeDoc, isLive])
 
     // ── Forward wheel events to the canvas gesture layer ─────────────────
     // Without this, scrolling the wheel while the cursor is over an iframe
@@ -320,6 +362,8 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
     // the iframe element itself (in the parent doc), so it bubbles to the
     // canvas root and useGesture's handler picks it up.
     useEffect(() => {
+      // Live frames scroll natively — no pan to forward to.
+      if (isLive) return
       if (!iframeDoc) return
       const iframe = iframeRef.current
       if (!iframe) return
@@ -355,7 +399,7 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
       return () => {
         iframeDoc.removeEventListener('wheel', onWheel)
       }
-    }, [iframeDoc])
+    }, [iframeDoc, isLive])
 
     // ── Forward pointer events for canvas pan gestures + reorder drag ────
     // The canvas pan gesture (useCanvas via @use-gesture) and the canvas
@@ -385,6 +429,9 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
     // pointer event into module selection logic (otherwise a module would
     // get selected while the user was trying to pan).
     useEffect(() => {
+      // Pan-gesture / reorder-drag relay is canvas-only. Live frames neither
+      // pan nor host the cross-frame reorder drag.
+      if (isLive) return
       if (!iframeDoc) return
       const iframe = iframeRef.current
       if (!iframe) return
@@ -511,7 +558,7 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
         iframeDoc.removeEventListener('pointerup', maybeForward)
         iframeDoc.removeEventListener('pointercancel', maybeForward)
       }
-    }, [iframeDoc])
+    }, [iframeDoc, isLive])
 
     const dataAttrSpread = dataAttrs
       ? Object.fromEntries(
@@ -532,8 +579,11 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
           // `srcDoc` is what creates the iframe document; an empty
           // `<html><body>` so we can portal React content into the body.
           srcDoc={IFRAME_SRC_DOC}
-          className={cn(styles.iframe, className)}
-          style={{ ...style, width: `${width}px` }}
+          className={cn(styles.iframe, isLive && styles.iframeLive, className)}
+          // Canvas frames are sized to the breakpoint width and grow to content
+          // height. Live frames fill the surface-controlled wrapper and scroll
+          // internally, so they take 100% in both axes.
+          style={isLive ? { ...style, width: '100%', height: '100%' } : { ...style, width: `${width}px` }}
           title={`Canvas frame for ${breakpointId}`}
           {...dataAttrSpread}
           // Allow the same-origin policy so the parent can read/write the
@@ -549,6 +599,9 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
               <ClassStyleInjector targetDocument={iframeDoc} viewport={viewport} />
               <UserStylesheetInjector targetDocument={iframeDoc} viewport={viewport} />
               {children}
+              {/* Runtime scripts (opt-in) run against the node tree mounted
+                  above. Empty list = no-op, so this is safe to always mount. */}
+              <RuntimeScriptInjector targetDocument={iframeDoc} scripts={runtimeScripts ?? EMPTY_RUNTIME_SCRIPTS} />
             </>,
             iframeDoc.body,
           )}
@@ -611,8 +664,18 @@ const CANVAS_CHROME_CSS = [
   'iframe { pointer-events: none; }',
 ].join('\n')
 
-function applyIframeBodyReset(iframeDoc: Document, breakpointId: string): void {
+function applyIframeBodyReset(
+  iframeDoc: Document,
+  breakpointId: string,
+  interaction: IframeInteraction,
+): void {
   iframeDoc.body.setAttribute('data-breakpoint-id', breakpointId)
+  // Live frames render the page exactly as published: html/body keep the
+  // `:where(html, body) { height: 100% }` reset (the iframe is the scroll
+  // viewport, short pages still fill it), and the canvas-chrome CSS
+  // (cursor / user-select / nested-iframe overrides) is NOT applied — real
+  // cursors, text selection, and embedded iframes behave like the live site.
+  if (interaction === 'live') return
   iframeDoc.documentElement.style.height = 'auto'
   iframeDoc.body.style.height = 'auto'
   let chrome = iframeDoc.head.querySelector('style[data-pb-canvas-chrome]')

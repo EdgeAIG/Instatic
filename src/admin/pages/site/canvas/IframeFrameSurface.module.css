@@ -35,3 +35,15 @@
   border: 0;
   display: block;
 }
+
+/* Live frame: a single real-size viewport that scrolls internally instead of
+ * growing to content. The live surface controls the wrapper's width; the
+ * iframe fills it and owns its own scrollbar (published height behaviour).
+ * Chrome — shadow / radius / min-height — is dropped so it reads as the page
+ * itself, not a framed artboard. */
+.iframeLive {
+  min-height: 0;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: auto;
+}
