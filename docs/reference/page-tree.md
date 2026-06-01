@@ -240,15 +240,14 @@ insertNode(tree, heading, parentId, 0) // first child
 ### Validate a tree loaded from disk
 
 ```ts
-import { NodeTreeSchema } from '@core/page-tree'
-import { Value } from '@core/utils/typeboxHelpers'
+import { parsePageNodeTree } from '@core/page-tree'
 
-if (!Value.Check(NodeTreeSchema, raw)) {
-  throw new SiteValidationError('Page tree failed schema validation', { /* path */ })
-}
+const tree = parsePageNodeTree(raw)
+// Returns a typed NodeTree<PageNode>; throws on schema mismatch, missing root,
+// node-map key/id mismatch, unresolved child IDs, or reachable cycles.
 ```
 
-The persistence layer (`src/core/persistence/validate.ts`) already does this for every site document on load.
+`parsePageNodeTree` checks both the TypeBox schema (`NodeTreeSchema`) and the post-schema invariants that JSON Schema cannot express (root presence, key parity, child resolution, acyclicity). The persistence layer (`src/core/persistence/validate.ts`) and the plugin content handlers use this for every tree payload.
 
 ---
 

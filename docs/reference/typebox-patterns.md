@@ -228,14 +228,16 @@ For UI states that need to distinguish causes (e.g. "invalid page slug" vs. "dup
 
 ```ts
 export class SiteValidationError extends Error {
-  constructor(message: string, public readonly path: string[]) {
-    super(message)
+  readonly path: string
+  constructor(message: string, path: string) {
+    super(`[persistence/validate] ${path}: ${message}`)
     this.name = 'SiteValidationError'
+    this.path = path
   }
 }
 ```
 
-Already-existing typed errors in the codebase: `SiteValidationError`, `VisualComponentNameError`, `VisualComponentParamNameError`, `VisualComponentRecursionError`. Add one when the UI needs to render a specific error state.
+`path` is a dot-separated string identifying the field (`'site.pages[0].slug'`). The `[persistence/validate]` prefix is injected in the constructor — callers pass just the path. Already-existing typed errors in the codebase: `SiteValidationError`, `VisualComponentNameError`, `VisualComponentParamNameError`, `VisualComponentRecursionError`. Add one when the UI needs to render a specific error state.
 
 ---
 
@@ -270,7 +272,11 @@ Common boundaries already wrapped — extend the same pattern when you add a new
 | `JSON.parse` of localStorage               | `parseJsonWithFallback(raw, Schema, default)`       | `src/core/utils/jsonValidate.ts`        |
 | `JSON.parse` of disk JSON                  | `safeParseJson(raw, Schema)`                        | `src/core/utils/jsonValidate.ts`        |
 | Plugin manifest                            | `parsePluginManifest(raw)`                          | `src/core/plugins/manifest.ts`          |
-| Site document loaded from storage          | `validateSite(raw)`                                 | `src/core/persistence/validate.ts`      |
+| Site shell loaded from storage             | `validateSite(raw)`                                 | `src/core/persistence/validate.ts`      |
+| Page roster loaded from storage            | `validatePages(shell, rawPages, vcs)`               | `src/core/persistence/validate.ts`      |
+| VC roster loaded from storage (read path)  | `validateVisualComponents(rawVCs)`                  | `src/core/persistence/validate.ts`      |
+| VC roster on write (fail-closed)           | `validateVisualComponentsForWrite(rawVCs)`          | `src/core/persistence/validate.ts`      |
+| Page-tree payload from plugin RPC / disk   | `parsePageNodeTree(raw)`                            | `src/core/page-tree/operationSchema.ts` |
 | DB JSON columns (after auto-parse)         | Per-repository TypeBox schema                       | `server/repositories/*.ts`              |
 | Response schemas (shared)                  | `responseSchemas.ts`                                | `src/core/persistence/responseSchemas.ts`|
 
