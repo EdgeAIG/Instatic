@@ -29,6 +29,39 @@ const table: DataTable = {
   ],
 }
 
+const systemTables: DataTable[] = [
+  {
+    ...table,
+    id: 'pages',
+    name: 'Pages',
+    slug: 'pages',
+    kind: 'page',
+    singularLabel: 'Page',
+    pluralLabel: 'Pages',
+    system: true,
+  },
+  {
+    ...table,
+    id: 'posts',
+    name: 'Posts',
+    slug: 'posts',
+    kind: 'postType',
+    singularLabel: 'Post',
+    pluralLabel: 'Posts',
+    system: true,
+  },
+  {
+    ...table,
+    id: 'components',
+    name: 'Components',
+    slug: 'components',
+    kind: 'component',
+    singularLabel: 'Component',
+    pluralLabel: 'Components',
+    system: true,
+  },
+]
+
 const analysis: FormSettingsAnalysis = {
   kind: 'control',
   node: {
@@ -167,6 +200,42 @@ describe('FormSettingsPanelView', () => {
     fireEvent.change(nameInput, { target: { value: 'Support inbox' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(createdNames).toEqual(['Support inbox']))
+  })
+
+  it('offers only non-system data tables as CMS form targets', () => {
+    const formAnalysis: FormSettingsAnalysis = {
+      ...analysis,
+      kind: 'form',
+      node: node('form', 'base.form', { mode: 'cms', formId: 'contact', targetTableId: '' }),
+      form: { nodeId: 'form', formId: 'contact', mode: 'cms', targetTableId: '' },
+      table: null,
+      field: null,
+      compatibleFields: [],
+      inferredFields: [{ id: 'email', label: 'Email', type: 'email', required: true }],
+      missingFields: [],
+      warnings: [],
+    }
+
+    render(
+      <FormSettingsPanelView
+        analysis={formAnalysis}
+        tables={[...systemTables, table]}
+        tablesLoading={false}
+        tablesError=""
+        previewState="default"
+        loading={false}
+        error=""
+        onPatchProps={() => undefined}
+        onTargetTableChange={() => undefined}
+        onCreateTable={() => undefined}
+        onInsertMissingField={() => undefined}
+        onPreviewStateChange={() => undefined}
+      />,
+    )
+
+    const select = document.querySelector('select[name="form-target-table"]') as HTMLSelectElement
+    const optionLabels = Array.from(select.options).map((option) => option.textContent)
+    expect(optionLabels).toEqual(['Choose table', 'Contact submissions'])
   })
 
   it('promotes mode and form id controls into the setup panel', () => {

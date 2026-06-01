@@ -21,4 +21,5 @@ export {
   PublicFormSubmitBodySchema,
 } from './schemas'
 export { deriveFormSnapshot, derivePageFormSnapshots } from './snapshot'
+export { isFormSubmissionTargetTable } from './targets'
 export { validateFormSubmission, type FormValidationResult } from './validation'

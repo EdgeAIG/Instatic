@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import type { DataField, DataTable, DataTableListItem } from '@core/data/schemas'
+import { isFormSubmissionTargetTable } from '@core/forms'
 import type { Page } from '@core/page-tree'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import { normalizeIdentifierInput, normalizeIdentifierValue } from '@core/utils/identifier'
@@ -29,7 +30,7 @@ import styles from './FormSettingsPanel.module.css'
 
 type FormPreviewState = 'default' | 'submitting' | 'success' | 'error'
 type FormMode = FormContextSummary['mode']
-type FormTableOption = Pick<DataTable, 'id' | 'name'>
+type FormTableOption = Pick<DataTable, 'id' | 'name' | 'kind' | 'system'>
 
 const FORM_MODE_OPTIONS: ReadonlyArray<{ value: FormMode; label: string }> = [
   { value: 'cms', label: 'CMS-native' },
@@ -364,7 +365,9 @@ function FormTargetTableRow({
   const targetTableId = analysis.form?.targetTableId ?? ''
   const options = [
     { label: 'Choose table', value: '' },
-    ...tables.map((table) => ({ label: table.name, value: table.id })),
+    ...tables
+      .filter(isFormSubmissionTargetTable)
+      .map((table) => ({ label: table.name, value: table.id })),
   ]
   const canCreateTable = analysis.inferredFields.length > 0
 

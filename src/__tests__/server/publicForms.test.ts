@@ -30,7 +30,7 @@ function node(id: string, moduleId: string, props: Record<string, unknown>, chil
   }
 }
 
-function makeSnapshot(): PublishedPageSnapshot {
+function makeSnapshot(targetTableId = 'newsletter_submissions'): PublishedPageSnapshot {
   return {
     cmsSnapshotVersion: 1,
     pageRowId: 'page-home',
@@ -48,7 +48,7 @@ function makeSnapshot(): PublishedPageSnapshot {
           form: node('form', 'base.form', {
             mode: 'cms',
             formId: 'newsletter',
-            targetTableId: 'newsletter_submissions',
+            targetTableId,
             honeypotName: 'company',
             minSubmitSeconds: 0,
           }, ['input']),
@@ -69,26 +69,50 @@ function makeSnapshot(): PublishedPageSnapshot {
   } as PublishedPageSnapshot
 }
 
-function makeDb() {
+interface FakeTableRow {
+  id: string
+  name: string
+  slug: string
+  kind: string
+  route_base: string
+  singular_label: string
+  plural_label: string
+  primary_field_id: string
+  fields_json: unknown[]
+  system: number
+}
+
+const newsletterTableRow: FakeTableRow = {
+  id: 'newsletter_submissions',
+  name: 'Newsletter submissions',
+  slug: 'newsletter-submissions',
+  kind: 'data',
+  route_base: '',
+  singular_label: 'Submission',
+  plural_label: 'Submissions',
+  primary_field_id: 'email',
+  fields_json: [{ id: 'email', label: 'Email', type: 'email', required: true }],
+  system: 0,
+}
+
+function makeDb(options: {
+  snapshot?: PublishedPageSnapshot
+  tableRows?: Record<string, FakeTableRow>
+} = {}) {
   const createdRows: Record<string, unknown>[] = []
+  const snapshot = options.snapshot ?? makeSnapshot()
+  const tableRows = options.tableRows ?? { newsletter_submissions: newsletterTableRow }
   const db = createFakeDb(async (rawSql, params): Promise<DbResult> => {
     const sql = rawSql.replace(/\s+/g, ' ').trim().toLowerCase()
     if (sql.startsWith('select data_row_versions.snapshot_json')) {
-      return { rows: [{ snapshot_json: makeSnapshot() }], rowCount: 1 }
+      return { rows: [{ snapshot_json: snapshot }], rowCount: 1 }
     }
     if (sql.startsWith('select id, name, slug, kind, route_base')) {
+      const row = tableRows[String(params[0])]
+      if (!row) return { rows: [], rowCount: 0 }
       return {
         rows: [{
-          id: 'newsletter_submissions',
-          name: 'Newsletter submissions',
-          slug: 'newsletter-submissions',
-          kind: 'data',
-          route_base: '',
-          singular_label: 'Submission',
-          plural_label: 'Submissions',
-          primary_field_id: 'email',
-          fields_json: [{ id: 'email', label: 'Email', type: 'email', required: true }],
-          system: 0,
+          ...row,
           created_by_user_id: null,
           updated_by_user_id: null,
           created_at: new Date('2026-06-01T00:00:00Z'),
@@ -237,5 +261,44 @@ describe('public CMS-native form endpoint', () => {
     expect(createdRows).toHaveLength(1)
     expect(createdRows[0].table_id).toBe('newsletter_submissions')
     expect(createdRows[0].cells_json).toEqual({ email: 'ai@example.com' })
+  })
+
+  it('rejects system data tables as public form targets', async () => {
+    resetPublicFormChallenges()
+    publicFormPerIpRateLimit.reset('unknown')
+    publicFormPerFormRateLimit.reset('unknown|newsletter')
+    const { db, createdRows } = makeDb({
+      snapshot: makeSnapshot('system_submissions'),
+      tableRows: {
+        system_submissions: {
+          ...newsletterTableRow,
+          id: 'system_submissions',
+          name: 'System submissions',
+          slug: 'system-submissions',
+          system: 1,
+        },
+      },
+    })
+    const challengeResponse = await handlePublicFormRequest(
+      makeRequest('/_pb/form/challenge', { formId: 'newsletter', pageId: 'page-home', pageToken: pageToken() }),
+      db,
+      new URL('http://cms.test/_pb/form/challenge'),
+    )
+    const challenge = await readJson(challengeResponse!)
+
+    const submit = await handlePublicFormRequest(
+      makeRequest('/_pb/form/submit', {
+        formId: 'newsletter',
+        pageId: 'page-home',
+        token: challenge.token,
+        challenge: challenge.challenge,
+        values: { email: 'ai@example.com', company: '' },
+      }),
+      db,
+      new URL('http://cms.test/_pb/form/submit'),
+    )
+
+    expect(submit?.status).toBe(404)
+    expect(createdRows).toHaveLength(0)
   })
 })

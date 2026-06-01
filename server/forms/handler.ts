@@ -7,6 +7,7 @@ import {
   PublicFormChallengeBodySchema,
   PublicFormSubmitBodySchema,
   derivePageFormSnapshots,
+  isFormSubmissionTargetTable,
   validateFormSubmission,
   type PublishedFormSnapshot,
 } from '@core/forms'
@@ -87,7 +88,7 @@ async function handleSubmit(req: Request, db: DbClient): Promise<Response> {
   }
 
   const table = await getDataTable(db, snapshot.targetTableId)
-  if (!table || table.kind !== 'data') {
+  if (!table || !isFormSubmissionTargetTable(table)) {
     return jsonResponse({ error: 'Form target not found' }, { status: 404 })
   }
 
