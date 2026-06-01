@@ -2,14 +2,13 @@
  * SiteImportModal — DOM integration tests.
  *
  * Test groups:
- *   1.  Store slice     — siteImportModalOpen / open / close actions
- *   2.  Render gating   — dialog visible only when store flag is true
+ *   1.  Global modal state — siteImportOpen / open / close actions
+ *   2.  Render             — dialog initial state
  *   3.  DropStep errors — role="alert" rendered from errorMessage prop
  *   4.  Helper logic    — filterPlanBySelection, makeDefaultSelection, describeIngestError
  *   5.  ImportStep      — running / complete / failed states from RunProgress
  *   6.  ConflictsStep   — shows/hides sections based on conflict lists
- *   7.  Auto-skip       — analyze→run when plan has no conflicts
- *   8.  Source-scan     — architecture rules on new files
+ *   7.  AnalyzeStep     — media rows render from plan.assets
  *
  * Uses @testing-library/react with the happy-dom GlobalWindow from setup.ts.
  * Store is reset in beforeEach; DOM is cleaned in afterEach.
@@ -17,10 +16,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import React from 'react'
-import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
-import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
-import { join } from 'path'
+import { render, screen, cleanup, fireEvent, act, waitFor } from '@testing-library/react'
 import { useEditorStore } from '@site/store/store'
+import { useAdminUi } from '@admin/state/adminUi'
+import { subscribeToasts, type Toast } from '@ui/components/Toast/toastBus'
 import { DropStep } from '@admin/modals/SiteImport/steps/DropStep'
 import { ImportStep } from '@admin/modals/SiteImport/steps/ImportStep'
 import {
@@ -32,6 +31,9 @@ import { AnalyzeStep } from '@admin/modals/SiteImport/steps/AnalyzeStep'
 import { SiteImportModal } from '@admin/modals/SiteImport'
 import type { ImportSelection } from '@admin/modals/SiteImport'
 import { commitImportPlan } from '@core/siteImport'
+import { pageToCells } from '@core/data/pageFromRow'
+// Static-site import maps HTML into base modules during plan analysis.
+import '@modules/base'
 import type {
   ImportPlan,
   ImportResult,
@@ -40,36 +42,31 @@ import type {
   NewStyleRule,
   SiteImportAdapter,
 } from '@core/siteImport'
+import type { DataRow, DataTable } from '@core/data/schemas'
+import type { SiteBundle } from '@core/data/bundleSchema'
+import type { Page, SiteDocument } from '@core/page-tree'
 import { makeSite } from '../../fixtures'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const SRC_ROOT = join(import.meta.dir, '../../../')
-const MODAL_DIR = join(SRC_ROOT, 'admin/modals/SiteImport')
-
-function collectFiles(dir: string, ext: RegExp): string[] {
-  const results: string[] = []
-  if (!existsSync(dir)) return results
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry)
-    if (statSync(full).isDirectory()) results.push(...collectFiles(full, ext))
-    else if (ext.test(entry)) results.push(full)
-  }
-  return results
-}
-
 /** Reset store to a known state between tests. */
 function resetStore() {
   useEditorStore.setState({
     site: null,
-    siteImportModalOpen: false,
   } as Parameters<typeof useEditorStore.setState>[0])
+  useAdminUi.setState({
+    siteImportOpen: false,
+  } as Parameters<typeof useAdminUi.setState>[0])
 }
 
 beforeEach(resetStore)
-afterEach(cleanup)
+const originalFetch = globalThis.fetch
+afterEach(() => {
+  globalThis.fetch = originalFetch
+  cleanup()
+})
 
 // ---------------------------------------------------------------------------
 // Minimal plan + result fixtures for subcomponent tests
@@ -118,72 +115,356 @@ function makeMinimalResult(overrides: Partial<ImportResult> = {}): ImportResult 
   }
 }
 
+const CMS_BUNDLE_TABLE: DataTable = {
+  id: 'posts',
+  name: 'Posts',
+  slug: 'posts',
+  kind: 'postType',
+  singularLabel: 'Post',
+  pluralLabel: 'Posts',
+  routeBase: '/posts',
+  primaryFieldId: 'title',
+  fields: [],
+  system: true,
+  createdByUserId: null,
+  updatedByUserId: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+}
+
+const CMS_BUNDLE_ROW: DataRow = {
+  id: 'cms-row-1',
+  tableId: 'posts',
+  cells: { title: 'Imported post', slug: 'imported-post' },
+  slug: 'imported-post',
+  status: 'published',
+  authorUserId: null,
+  createdByUserId: null,
+  updatedByUserId: null,
+  publishedByUserId: null,
+  author: null,
+  createdBy: null,
+  updatedBy: null,
+  publishedBy: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  publishedAt: null,
+  scheduledPublishAt: null,
+  deletedAt: null,
+}
+
+const CMS_BUNDLE: SiteBundle = {
+  schemaVersion: 1,
+  exportedAt: '2026-05-19T10:00:00.000Z',
+  sourceSiteName: 'Fixture CMS Site',
+  tables: [CMS_BUNDLE_TABLE],
+  rows: [CMS_BUNDLE_ROW],
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+function siteShell(site: SiteDocument): Omit<SiteDocument, 'pages' | 'visualComponents'> {
+  const { pages: _pages, visualComponents: _visualComponents, ...shell } = site
+  return shell
+}
+
+function pageRow(page: Page): DataRow {
+  return {
+    id: page.id,
+    tableId: 'pages',
+    cells: pageToCells(page),
+    slug: page.slug,
+    status: 'draft',
+    authorUserId: null,
+    createdByUserId: null,
+    updatedByUserId: null,
+    publishedByUserId: null,
+    author: null,
+    createdBy: null,
+    updatedBy: null,
+    publishedBy: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    publishedAt: null,
+    scheduledPublishAt: null,
+    deletedAt: null,
+  }
+}
+
+function mockDraftSiteLoad(site: SiteDocument): string[] {
+  const requested: string[] = []
+  globalThis.fetch = async (input: RequestInfo | URL) => {
+    const url = String(input)
+    requested.push(url)
+    if (url === '/admin/api/cms/site') {
+      return jsonResponse({ site: siteShell(site) })
+    }
+    if (url === '/admin/api/cms/pages') {
+      return jsonResponse({ rows: site.pages.map(pageRow) })
+    }
+    if (url === '/admin/api/cms/components') {
+      return jsonResponse({ rows: [] })
+    }
+    return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+  }
+  return requested
+}
+
+function dropCmsBundleFile(bundle: SiteBundle, name = 'site-bundle.json') {
+  const bundleFile = new File([JSON.stringify(bundle)], name, {
+    type: 'application/json',
+  })
+  fireEvent.drop(screen.getByLabelText(/drop site files/i), {
+    dataTransfer: { files: [bundleFile] },
+  })
+}
+
+function SiteImportHarness({ onCmsBundleImportComplete }: { onCmsBundleImportComplete?: () => void }) {
+  const open = useAdminUi((s) => s.siteImportOpen)
+  return open ? <SiteImportModal onCmsBundleImportComplete={onCmsBundleImportComplete} /> : null
+}
+
 // ---------------------------------------------------------------------------
-// 1 — Store slice: siteImportModalOpen / openSiteImportModal / closeSiteImportModal
+// 1 — Admin UI state: siteImportOpen / openSiteImport / closeSiteImport
 // ---------------------------------------------------------------------------
 
-describe('SiteImportModal — store slice', () => {
-  it('siteImportModalOpen starts as false', () => {
-    expect(useEditorStore.getState().siteImportModalOpen).toBe(false)
-  })
+describe('SiteImportModal — global modal state', () => {
+  it('opens and closes the modal flag idempotently', () => {
+    expect(useAdminUi.getState().siteImportOpen).toBe(false)
 
-  it('openSiteImportModal() sets siteImportModalOpen to true', () => {
-    useEditorStore.getState().openSiteImportModal()
-    expect(useEditorStore.getState().siteImportModalOpen).toBe(true)
-  })
+    useAdminUi.getState().openSiteImport()
+    useAdminUi.getState().openSiteImport()
+    expect(useAdminUi.getState().siteImportOpen).toBe(true)
 
-  it('closeSiteImportModal() sets siteImportModalOpen to false', () => {
-    useEditorStore.getState().openSiteImportModal()
-    expect(useEditorStore.getState().siteImportModalOpen).toBe(true)
-    useEditorStore.getState().closeSiteImportModal()
-    expect(useEditorStore.getState().siteImportModalOpen).toBe(false)
-  })
-
-  it('openSiteImportModal() is idempotent', () => {
-    useEditorStore.getState().openSiteImportModal()
-    useEditorStore.getState().openSiteImportModal()
-    expect(useEditorStore.getState().siteImportModalOpen).toBe(true)
-  })
-
-  it('closeSiteImportModal() is idempotent', () => {
-    useEditorStore.getState().closeSiteImportModal()
-    useEditorStore.getState().closeSiteImportModal()
-    expect(useEditorStore.getState().siteImportModalOpen).toBe(false)
+    useAdminUi.getState().closeSiteImport()
+    useAdminUi.getState().closeSiteImport()
+    expect(useAdminUi.getState().siteImportOpen).toBe(false)
   })
 })
 
 // ---------------------------------------------------------------------------
-// 2 — Render gating: dialog visible only when store flag is true
+// 2 — Render: initial drop step
 // ---------------------------------------------------------------------------
 
-describe('SiteImportModal — render gating', () => {
-  it('renders nothing when siteImportModalOpen is false', () => {
-    // Mount pattern: parent controls `{siteImportModalOpen && <SiteImportModal />}`
-    // When the flag is false the component is not mounted at all.
-    // Simulating by not rendering the component.
-    expect(document.querySelector('[role="dialog"]')).toBeNull()
-  })
-
-  it('renders the dialog when siteImportModalOpen is true', () => {
+describe('SiteImportModal — render', () => {
+  it('renders the initial drop-step dialog when opened', () => {
     const site = makeSite()
-    useEditorStore.setState({ site, siteImportModalOpen: true } as Parameters<typeof useEditorStore.setState>[0])
+    useEditorStore.setState({ site } as Parameters<typeof useEditorStore.setState>[0])
     render(<SiteImportModal />)
     expect(document.querySelector('[role="dialog"]')).not.toBeNull()
-  })
-
-  it('initial step is "drop" — title is "Import site"', () => {
-    const site = makeSite()
-    useEditorStore.setState({ site, siteImportModalOpen: true } as Parameters<typeof useEditorStore.setState>[0])
-    render(<SiteImportModal />)
-    // The dialog title in the Dialog component is rendered via an eyebrow + title
     expect(screen.getByText('Import site')).toBeDefined()
+    expect(screen.getByText('Choose files')).toBeDefined()
+  })
+})
+
+describe('SiteImportModal — CMS bundle import', () => {
+  it('routes a CMS-exported JSON bundle into the bundle preview flow', async () => {
+    let previewRequestBody: unknown = null
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        previewRequestBody = JSON.parse(String(init?.body ?? '{}'))
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              kind: 'postType',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 0,
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 0,
+            mediaEmbedded: false,
+          },
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    render(<SiteImportModal />)
+
+    dropCmsBundleFile(CMS_BUNDLE)
+
+    expect(await screen.findByText(/diff against current site/i)).toBeDefined()
+    expect(screen.getByText(/fixture cms site/i)).toBeDefined()
+    expect(screen.getByText(/import strategy/i)).toBeDefined()
+    expect((previewRequestBody as SiteBundle).schemaVersion).toBe(1)
   })
 
-  it('DropStep "Choose files" button is visible in the drop step', () => {
-    const site = makeSite()
-    useEditorStore.setState({ site, siteImportModalOpen: true } as Parameters<typeof useEditorStore.setState>[0])
+  it('imports the CMS bundle with the selected strategy and closes through the store flag', async () => {
+    let importUrl: string | null = null
+    let importBody: unknown = null
+    let callbackCalled = false
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              kind: 'postType',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 0,
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 0,
+            mediaEmbedded: false,
+          },
+        })
+      }
+      if (url.startsWith('/admin/api/cms/import')) {
+        importUrl = url
+        importBody = JSON.parse(String(init?.body ?? '{}'))
+        return jsonResponse({
+          ok: true,
+          strategy: 'merge-add',
+          tablesAffected: 1,
+          rowsInserted: 1,
+          rowsReplaced: 0,
+          rowsSkipped: 0,
+          mediaImported: 0,
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+    let capturedToasts: Toast[] = []
+    const unsubscribe = subscribeToasts((snapshot) => { capturedToasts = [...snapshot] })
+
+    try {
+      useEditorStore.setState({
+        site: makeSite(),
+      } as Parameters<typeof useEditorStore.setState>[0])
+      useAdminUi.getState().openSiteImport()
+
+      render(
+        <SiteImportHarness
+          onCmsBundleImportComplete={() => { callbackCalled = true }}
+        />,
+      )
+
+      dropCmsBundleFile(CMS_BUNDLE)
+      expect(await screen.findByText(/diff against current site/i)).toBeDefined()
+
+      fireEvent.click(screen.getByRole('button', { name: /add rows/i }))
+
+      await waitFor(() => {
+        expect(callbackCalled).toBe(true)
+      })
+      expect(useAdminUi.getState().siteImportOpen).toBe(false)
+      expect(importUrl).toContain('strategy=merge-add')
+      expect((importBody as SiteBundle).schemaVersion).toBe(1)
+      expect(capturedToasts.some((toast) => toast.kind === 'success' && toast.title === 'Import complete')).toBe(true)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  it('keeps CMS bundle import disabled when the preview has no rows or media', async () => {
+    const emptyBundle: SiteBundle = {
+      ...CMS_BUNDLE,
+      sourceSiteName: 'Empty Fixture Site',
+      rows: [],
+    }
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        return jsonResponse({
+          meta: {
+            exportedAt: emptyBundle.exportedAt,
+            sourceSiteName: emptyBundle.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              kind: 'postType',
+              inBundle: 0,
+              willReplace: 0,
+              willAdd: 0,
+              currentLocal: 5,
+            },
+          ],
+          totals: {
+            rows: 0,
+            mediaFiles: 0,
+            mediaEmbedded: false,
+          },
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
     render(<SiteImportModal />)
-    expect(screen.getByText('Choose files')).toBeDefined()
+
+    dropCmsBundleFile(emptyBundle, 'empty-site-bundle.json')
+
+    expect(await screen.findByText(/no content in this bundle/i)).toBeDefined()
+    expect((screen.getByRole('button', { name: /add rows/i }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('SiteImportModal — global static import', () => {
+  it('loads the CMS draft before analyzing static files when the editor store is empty', async () => {
+    const draftSite = makeSite({ name: 'Global Draft Site' })
+    const requested = mockDraftSiteLoad(draftSite)
+
+    useEditorStore.setState({
+      site: null,
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    render(<SiteImportModal />)
+
+    const htmlFile = new File(
+      ['<!doctype html><html><head><title>Imported page</title></head><body><h1>Imported page</h1></body></html>'],
+      'imported.html',
+      { type: 'text/html' },
+    )
+    fireEvent.drop(screen.getByLabelText(/drop site files/i), {
+      dataTransfer: { files: [htmlFile] },
+    })
+
+    expect(await screen.findByText('Review import')).toBeDefined()
+    expect(screen.queryByText(/editor has no site loaded/i)).toBeNull()
+    expect(useEditorStore.getState().site?.name).toBe('Global Draft Site')
+    expect(requested).toEqual([
+      '/admin/api/cms/site',
+      '/admin/api/cms/pages',
+      '/admin/api/cms/components',
+    ])
   })
 })
 
@@ -809,169 +1090,7 @@ describe('ConflictsStep — conflict rendering', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 7 — Auto-skip conflicts: plan with no conflicts → analyze step goes to run
-// ---------------------------------------------------------------------------
-
-describe('Auto-skip conflicts — logic', () => {
-  // This test exercises the conditional in SiteImportModal.handleAnalyzeNext:
-  //   if (filtered.conflicts.pages.length > 0 || filtered.conflicts.rules.length > 0)
-  //     → conflicts step
-  //   else
-  //     → run step (skip conflicts)
-  // We verify the hasConflicts gate logic directly.
-
-  it('hasConflicts is false when both conflict arrays are empty', () => {
-    const plan = makeMinimalPlan({
-      conflicts: { pages: [], rules: [] },
-    })
-    const hasConflicts =
-      plan.conflicts.pages.length > 0 || plan.conflicts.rules.length > 0
-    expect(hasConflicts).toBe(false)
-  })
-
-  it('hasConflicts is true when page conflicts exist', () => {
-    const plan = makeMinimalPlan({
-      conflicts: {
-        pages: [
-          {
-            source: 'about.html',
-            desiredSlug: 'about',
-            existingPageId: 'p-1',
-            defaultResolution: { action: 'auto-rename', resolvedSlug: 'about-2' },
-          },
-        ],
-        rules: [],
-      },
-    })
-    const hasConflicts =
-      plan.conflicts.pages.length > 0 || plan.conflicts.rules.length > 0
-    expect(hasConflicts).toBe(true)
-  })
-
-  it('hasConflicts is true when rule conflicts exist', () => {
-    const plan = makeMinimalPlan({
-      conflicts: {
-        pages: [],
-        rules: [
-          {
-            source: 'styles/main.css',
-            desiredName: 'hero-title',
-            existingRuleId: 'r-1',
-            defaultResolution: { action: 'auto-rename', resolvedName: 'hero-title-2' },
-          },
-        ],
-      },
-    })
-    const hasConflicts =
-      plan.conflicts.pages.length > 0 || plan.conflicts.rules.length > 0
-    expect(hasConflicts).toBe(true)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// 8 — Source-scan architecture checks
-// ---------------------------------------------------------------------------
-
-describe('SiteImportModal — source architecture', () => {
-  const tsxFiles = collectFiles(MODAL_DIR, /\.(tsx|ts)$/)
-  const cssFiles = collectFiles(MODAL_DIR, /\.module\.css$/)
-
-  it('uses no bare <button> elements — only the Button primitive', () => {
-    // Grep for lowercase `<button` (not inside JSX comments) in TSX files.
-    // Exceptions: hidden file inputs are <input>, not <button>.
-    //
-    // AnalyzeStep (the Review "category navigator") is exempt: its bare
-    // <button>s are structured custom layouts (full-width nav rows, the dashed
-    // "Add more files" drop target, the per-stylesheet disclosure chevron, and
-    // the "All"/"None" text links) that Button's token-driven inline-flex
-    // sizing cannot represent. It is registered in the global BTN-3 gate's §8
-    // allowlist (§8.12) — see button-primitive-usage.test.ts.
-    const EXEMPT = ['AnalyzeStep.tsx']
-    for (const file of tsxFiles) {
-      if (EXEMPT.some((name) => file.endsWith(name))) continue
-      const src = readFileSync(file, 'utf-8')
-      // Strip JSDoc + line comments to avoid false positives
-      const code = src
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/\/\/.*/g, '')
-      // Match `<button` that's not `<Button` (capital B = our primitive)
-      const bare = /<button[\s>]/.test(code)
-      if (bare) {
-        throw new Error(`Found bare <button in ${file.replace(SRC_ROOT, 'src/')} — use Button primitive`)
-      }
-    }
-    expect(tsxFiles.length).toBeGreaterThan(0)
-  })
-
-  it('uses no hardcoded hex/rgb/hsl colors in CSS modules', () => {
-    for (const file of cssFiles) {
-      const src = readFileSync(file, 'utf-8')
-      // Strip comments
-      const code = src.replace(/\/\*[\s\S]*?\*\//g, '')
-      // Match hex, rgb(), hsl() outside var()
-      const hasHex = /#[0-9a-fA-F]{3,8}\b/.test(code)
-      const hasRgb = /\brgb\s*\(/.test(code)
-      const hasHsl = /\bhsl\s*\(/.test(code)
-      if (hasHex || hasRgb || hasHsl) {
-        throw new Error(
-          `Found hardcoded color in ${file.replace(SRC_ROOT, 'src/')} — use CSS token var(--*)`,
-        )
-      }
-    }
-  })
-
-  it('imports no zod — use TypeBox instead (verified by ai-driver-isolation gate)', () => {
-    // The repo-wide ai-driver-isolation.test.ts gate already enforces that zod
-    // is only used in the allowed driver files. We assert here that the new
-    // SiteImport files don't reach into zod by verifying no TypeBox alternative
-    // is bypassed — i.e., the files use @sinclair/typebox for validation.
-    const hasTypebox = tsxFiles.some((f) => {
-      const src = readFileSync(f, 'utf-8')
-      return src.includes('@sinclair/typebox')
-    })
-    // createSiteImportAdapter.ts uses TypeBox (Type.Object etc.)
-    expect(hasTypebox).toBe(true)
-  })
-
-  it('uses no clsx / tailwind-merge / class-variance-authority imports', () => {
-    const banned = ['clsx', 'tailwind-merge', 'class-variance-authority', '@radix-ui/']
-    for (const file of tsxFiles) {
-      const src = readFileSync(file, 'utf-8')
-      for (const pkg of banned) {
-        if (src.includes(`'${pkg}'`) || src.includes(`"${pkg}"`)) {
-          throw new Error(`Found banned import "${pkg}" in ${file.replace(SRC_ROOT, 'src/')}`)
-        }
-      }
-    }
-  })
-
-  it('SiteImportModal re-exports from index barrel', () => {
-    const indexSrc = readFileSync(join(MODAL_DIR, 'index.ts'), 'utf-8')
-    expect(indexSrc).toContain('SiteImportModal')
-  })
-
-  it('siteImportModalOpen is declared in uiSlice', () => {
-    const sliceSrc = readFileSync(
-      join(SRC_ROOT, 'admin/pages/site/store/slices/uiSlice.ts'),
-      'utf-8',
-    )
-    expect(sliceSrc).toContain('siteImportModalOpen')
-    expect(sliceSrc).toContain('openSiteImportModal')
-    expect(sliceSrc).toContain('closeSiteImportModal')
-  })
-
-  it('SiteImportModal is mounted in AdminCanvasLayout', () => {
-    const layoutSrc = readFileSync(
-      join(SRC_ROOT, 'admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx'),
-      'utf-8',
-    )
-    expect(layoutSrc).toContain('SiteImportModal')
-    expect(layoutSrc).toContain('siteImportModalOpen')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// 9 — AnalyzeStep MEDIA group: renders from plan.assets, not classifiedFiles
+// 7 — AnalyzeStep MEDIA group: renders from plan.assets, not classifiedFiles
 //
 // Regression guard for the bug where anchor <a href="about.html"> caused
 // HTML pages to appear in plan.assets (and therefore in the MEDIA section

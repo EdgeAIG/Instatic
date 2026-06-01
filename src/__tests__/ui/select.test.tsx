@@ -246,6 +246,29 @@ describe('Select', () => {
     expect(combobox.placeholder).toBe('Browser default')
   })
 
+  it('marks the empty placeholder option distinctly from real options', () => {
+    render(
+      <Select
+        id="table-target"
+        aria-label="Target table"
+        value="contact-submissions"
+        placeholder="Choose table"
+        options={[
+          { value: '', label: 'Choose table' },
+          { value: 'contact-submissions', label: 'Contact submissions' },
+        ]}
+        onChange={() => {}}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /target table/i }))
+
+    expect(screen.getByRole('option', { name: 'Choose table' }).dataset.placeholderOption)
+      .toBe('true')
+    expect(screen.getByRole('option', { name: 'Contact submissions' }).dataset.placeholderOption)
+      .toBeUndefined()
+  })
+
   it('can open a wider menu than the closed trigger', () => {
     render(
       <Select

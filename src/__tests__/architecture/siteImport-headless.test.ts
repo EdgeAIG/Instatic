@@ -13,12 +13,11 @@
  * 2. No file in `src/core/siteImport/` imports from `server/` or any
  *    `@server/...` alias.
  * 3. No file in `src/core/siteImport/` imports `react` or `react-dom`
- *    (runtime imports — type-only is OK per the pattern established in phase0.test.ts).
+ *    at runtime.
  * 4. No `.tsx` file exists in `src/core/siteImport/` — JSX indicates React
  *    coupling that must not leak into the headless import pipeline.
  *
  * @see docs/plans/2026-05-29-super-import.md — Phase 1 spec
- * @see src/__tests__/architecture/phase0.test.ts — pattern for import scanning
  */
 
 import { describe, it, expect } from 'bun:test'

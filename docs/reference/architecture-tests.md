@@ -6,8 +6,8 @@ Catalog of every test in `src/__tests__/architecture/`. These are structural gat
 
 ## TL;DR
 
-- 93 tests across structural domains: SQL, JSON columns, migrations, CSS, icons, primitives, page tree, sandbox, agent, router, content storage, boundary validation, module size, etc.
-- Naming convention: `<topic>.test.ts` (kebab-case) or `<group>-<topic>.test.ts`. A few legacy `task<N>-*` / `phase<N>-*` / `guideline<N>-*` ids exist — when the codebase has stabilized, those should be renamed by topic.
+- 83 tests across structural domains: SQL, JSON columns, migrations, CSS, icons, primitives, page tree, sandbox, agent, router, content storage, boundary validation, module size, etc.
+- Naming convention: `<topic>.test.ts` (kebab-case) or `<group>-<topic>.test.ts`. A few legacy `task<N>-*` ids still exist when they guard live invariants; new gates should use topic names.
 - Run them all: `bun test src/__tests__/architecture/`.
 - Most are **import / source scans** — they parse the files in scope and assert / reject patterns. Some are unit-style (a small in-test database, a synthesized page tree).
 
@@ -103,8 +103,7 @@ See [docs/reference/ui-primitives.md](ui-primitives.md).
 | `canvas-aware-selectors.test.ts`              | Canvas-related store selectors are subscribed correctly to canvas-state slices.  |
 | `admin-router-usage.test.ts`                  | Internal admin navigation uses `@admin/lib/routing`; raw `/admin` anchors and `react-router-dom` are banned. |
 | `framework-typography-spacing.test.ts`        | The site framework's typography / spacing tokens compile correctly.              |
-| `task392-zoom-sync.test.ts`                   | Canvas zoom state stays in sync between toolbar + canvas transform layer.        |
-| `task414-wrap-to-container.test.ts`           | Wrap-to-container action preserves classIds and structural invariants.           |
+| `task414-wrap-to-container.test.ts`           | Wrap-to-container action creates defaulted wrappers and preserves tree structure. |
 | `task427-preview-class-css.test.ts`           | Preview-class CSS injection matches publisher output.                            |
 | `error-boundary-coverage.test.ts`             | Every workspace page / major surface is wrapped in an `ErrorBoundary` with a unique `location` tag. |
 
@@ -129,7 +128,6 @@ See [docs/features/spotlight.md](../features/spotlight.md).
 | `plugin-host-ui-runtime-parity.test.ts`       | Plugin host UI surfaces match the SDK's declared shape.                          |
 | `plugin-schedule-invariants.test.ts`          | Scheduled job cadence + overlap policy validate at registration.                 |
 | `sandbox-crypto-bridge.test.ts`               | Plugin sandbox's crypto surface is bridged correctly (`subtle.digest`, etc.).    |
-| `phase-g-bridge-security.test.ts`             | The plugin → host bridge restricts requests to declared targets only.            |
 | `no-plugin-tab-shells.test.ts`                | Plugin-mounted admin pages render in the canvas-style admin layout, not separate tabs. |
 
 See [docs/features/plugin-system.md](../features/plugin-system.md).
@@ -197,25 +195,6 @@ See [docs/features/site-transfer.md](../features/site-transfer.md).
 | `module-size-budgets.test.ts`                 | Per-module line-count cap. No new source module over 700 lines; a grandfathered ledger of existing god-files is frozen and ratchets down only. Source-side sibling of `bundle-size-budgets`. |
 | `codemirror-lazy-only.test.ts`                | CodeMirror is loaded only via `lazy()` — it's heavy and shouldn't be in the entry bundle. |
 | `singleInstallManagedHosting.test.ts`         | Single-install assumptions hold across the codebase (no multi-tenant leakage).   |
-
-### Numbered legacy gates
-
-These reference numbered tasks or phases from earlier refactors. They're still load-bearing — the names just predate the topic-naming convention.
-
-| Test                                          | What it enforces                                                                 |
-|-----------------------------------------------|----------------------------------------------------------------------------------|
-| `phase0.test.ts`                              | Editor store baseline invariants (Phase 0 of the store refactor).                |
-| `phase1.test.ts`                              | Editor store Phase 1 — sliced architecture.                                      |
-| `phase2-canvas.test.ts`                       | Canvas iframe / per-breakpoint frame invariants.                                 |
-| `phase3-dom-tree.test.ts`                     | DOM panel tree rendering correctness.                                            |
-| `phase6-settings-modal.test.ts`               | Settings modal section composition.                                              |
-| `phase-e-plus-site-panel.test.ts`             | Site panel composition.                                                          |
-| `task358-ui-overhaul.test.ts`                 | UI overhaul gates (Dashboard borderless tile pattern, etc.).                     |
-| `guideline366-design-refinements.test.ts`     | Design refinements per Guideline #366.                                           |
-
-When a phase or task is genuinely complete (no longer at risk of regression), prefer renaming the test by topic and folding it into a topic-named gate.
-
----
 
 ## Anatomy of an architecture test
 

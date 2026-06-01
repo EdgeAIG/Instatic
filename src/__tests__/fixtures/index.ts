@@ -16,7 +16,6 @@ import { DEFAULT_BREAKPOINTS, DEFAULT_SITE_SETTINGS, createDefaultSiteExplorerOr
 import type { AnyModuleDefinition } from '@core/module-engine'
 import type { VisualComponent, VCNode } from '@core/visualComponents'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
-import { isSafeUrl } from '@core/publisher'
 import { normalizeSitePackageJson } from '@core/site-dependencies/manifest'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
 
@@ -46,90 +45,6 @@ export function makeModule(
     render: (_props, _children) => ({ html: '<div data-testid="stub"></div>' }),
     ...overrides,
   }
-}
-
-/**
- * A container module that renders its children inside a <div>.
- * canHaveChildren: true — use this when testing child-rendering paths.
- */
-export function makeContainerModule(id = 'test.container'): AnyModuleDefinition {
-  return makeModule(id, {
-    name: 'Test Container',
-    canHaveChildren: true,
-    render: (_props, children) => ({
-      html: `<div class="test-container">${children.join('')}</div>`,
-    }),
-  })
-}
-
-/**
- * A module that properly HTML-escapes its `text` prop.
- * Use this for security/XSS conformance tests — demonstrates CORRECT escaping.
- */
-export function makeSafeTextModule(id = 'test.safe-text'): AnyModuleDefinition {
-  return makeModule(id, {
-    name: 'Safe Text Module',
-    schema: {
-      text: { type: 'text', label: 'Text' },
-    },
-    defaults: { text: 'Hello World' },
-    render: (props, _children) => {
-      const raw = String(props['text'] ?? '')
-      // Correct implementation: escape all HTML-special characters
-      const escaped = raw
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;')
-      return { html: `<p class="text">${escaped}</p>` }
-    },
-  })
-}
-
-/**
- * A module that properly sanitises link hrefs.
- * Uses isSafeUrl() to block javascript:, data:, vbscript:, and other unsafe schemes.
- * Demonstrates CORRECT URL sanitisation for the conformance suite.
- */
-export function makeSafeLinkModule(id = 'test.safe-link'): AnyModuleDefinition {
-  return makeModule(id, {
-    name: 'Safe Link Module',
-    schema: {
-      href: { type: 'url', label: 'URL' },
-      label: { type: 'text', label: 'Label' },
-    },
-    defaults: { href: '#', label: 'Click here' },
-    render: (props, _children) => {
-      const rawHref = String(props['href'] ?? '#')
-      // Use isSafeUrl() — same guard as production modules (Constraint #211).
-      // This blocks javascript:, data:, vbscript:, and any other non-http(s)/relative URL.
-      const safeHref = isSafeUrl(rawHref) ? rawHref : '#'
-      const label = String(props['label'] ?? 'Link')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-      return { html: `<a href="${safeHref}">${label}</a>` }
-    },
-  })
-}
-
-/**
- * An UNSAFE module that interpolates props WITHOUT escaping.
- * Use this to demonstrate/test XSS vulnerability detection (should FAIL conformance).
- */
-export function makeUnsafeTextModule(id = 'test.unsafe-text'): AnyModuleDefinition {
-  return makeModule(id, {
-    name: 'Unsafe Text Module (intentionally bad)',
-    schema: {
-      text: { type: 'text', label: 'Text' },
-    },
-    defaults: { text: 'Hello' },
-    // ⚠️ INTENTIONALLY UNSAFE — no escaping
-    render: (props, _children) => ({
-      html: `<p>${props['text']}</p>`,
-    }),
-  })
 }
 
 // ---------------------------------------------------------------------------

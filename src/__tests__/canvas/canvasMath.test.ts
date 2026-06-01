@@ -27,7 +27,10 @@ import * as canvasMath from '@site/canvas/math'
 import {
   MIN_ZOOM,
   MAX_ZOOM,
+  DEFAULT_ZOOM,
+  ZOOM_STEPS,
   clampZoom,
+  nearestZoomStep,
   screenToCanvas,
   canvasToScreen,
   applyZoom,
@@ -50,6 +53,15 @@ describe('math.ts — exported constants', () => {
 
   it('MAX_ZOOM is a reasonable upper bound (≤ 10)', () => {
     expect(MAX_ZOOM).toBeLessThanOrEqual(10)
+  })
+
+  it('ZOOM_STEPS are ordered boundaries and include the default zoom', () => {
+    expect(ZOOM_STEPS[0]).toBe(MIN_ZOOM)
+    expect(ZOOM_STEPS[ZOOM_STEPS.length - 1]).toBe(MAX_ZOOM)
+    expect(ZOOM_STEPS).toContain(DEFAULT_ZOOM)
+    for (let i = 1; i < ZOOM_STEPS.length; i++) {
+      expect(ZOOM_STEPS[i]).toBeGreaterThan(ZOOM_STEPS[i - 1])
+    }
   })
 })
 
@@ -89,6 +101,29 @@ describe('clampZoom', () => {
 
   it('is a pure function — same input produces same output', () => {
     expect(clampZoom(1.5)).toBe(clampZoom(1.5))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// nearestZoomStep
+// ---------------------------------------------------------------------------
+
+describe('nearestZoomStep', () => {
+  it('moves to the next zoom step in the requested direction', () => {
+    expect(nearestZoomStep(0.1, 1)).toBe(0.25)
+    expect(nearestZoomStep(1, 1)).toBe(1.25)
+    expect(nearestZoomStep(3, 1)).toBe(MAX_ZOOM)
+
+    expect(nearestZoomStep(4, -1)).toBe(3)
+    expect(nearestZoomStep(1, -1)).toBe(0.75)
+    expect(nearestZoomStep(0.25, -1)).toBe(MIN_ZOOM)
+  })
+
+  it('snaps non-step values outward and clamps at the bounds', () => {
+    expect(nearestZoomStep(1.1, 1)).toBe(1.25)
+    expect(nearestZoomStep(1.1, -1)).toBe(1)
+    expect(nearestZoomStep(MAX_ZOOM, 1)).toBe(MAX_ZOOM)
+    expect(nearestZoomStep(MIN_ZOOM, -1)).toBe(MIN_ZOOM)
   })
 })
 

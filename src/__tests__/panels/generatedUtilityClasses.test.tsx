@@ -70,7 +70,7 @@ describe('generated utility classes in editor panels', () => {
     })
 
     expect(screen.getByRole('menu', { name: /selector suggestions/i })).toBeDefined()
-    expect(screen.getByText('text-primary')).toBeDefined()
+    expect(screen.getByText('.text-primary')).toBeDefined()
     expect(screen.getByText('Utility')).toBeDefined()
   })
 

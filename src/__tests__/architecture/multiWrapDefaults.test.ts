@@ -81,56 +81,20 @@ afterEach(() => {
 })
 
 describe('multi-wrap — wrapNodes defaults', () => {
-  it('Gate 1a: wrapNodes creates wrapper with module defaults (not empty props)', () => {
-    const { a, b } = setupPage()
-    const wrapperId = useEditorStore.getState().wrapNodes([a, b], TEST_MODULE_ID)
-    expect(wrapperId).toBeTruthy()
-    const wrapper = useEditorStore.getState().site!.pages[0].nodes[wrapperId!]
-    expect(wrapper).toBeDefined()
-    expect(Object.keys(wrapper.props).length).toBeGreaterThan(0)
-  })
-
-  it('Gate 1b: wrapper node has tag prop set to "div" (not undefined)', () => {
-    const { a, b } = setupPage()
-    const wrapperId = useEditorStore.getState().wrapNodes([a, b], TEST_MODULE_ID)
-    const wrapper = useEditorStore.getState().site!.pages[0].nodes[wrapperId!]
-    expect(wrapper.props.tag).toBe('div')
-  })
-
-  it('Gate 1c: caller-supplied defaults override module defaults', () => {
+  it('wrapNodes creates a defaulted wrapper with caller overrides', () => {
     const { a, b } = setupPage()
     const wrapperId = useEditorStore.getState().wrapNodes(
       [a, b],
       TEST_MODULE_ID,
       { tag: 'section', gap: 8 },
     )
+    expect(wrapperId).toBeTruthy()
     const wrapper = useEditorStore.getState().site!.pages[0].nodes[wrapperId!]
-    expect(wrapper.props.tag).toBe('section')
-    expect(wrapper.props.gap).toBe(8)
-    // Non-overridden defaults are still present
-    expect(wrapper.props.display).toBe('flex')
-  })
-})
-
-describe('multi-wrap — source code guard (siteSlice)', () => {
-  it('Gate 2: site/nodeActions.ts wrapNodes action uses registry.get() to merge defaults', async () => {
-    const path = await import('path')
-    const fs = await import('fs')
-    // The siteSlice was split into a directory of per-domain action factories
-    // (`slices/site/*`). `wrapNodes` lives in `nodeActions.ts`.
-    const filePath = path.resolve(
-      __dirname,
-      '../../admin/pages/site/store/slices/site/nodeActions.ts',
-    )
-    const src = fs.readFileSync(filePath, 'utf-8')
-
-    // The wrapNodes action must resolve module defaults via registry.get()
-    // and pass `resolvedDefaults` to the page-tree mutation. This mirrors
-    // the wrapNode invariant captured by Task #414.
-    const wrapCallMatch = src.match(
-      /wrapNodes:\s*\(nodeIds[^]*?wrapperId\s*=\s*wrapNodes\(tree,\s*nodeIds,\s*containerModuleId,\s*(\w+)\)/,
-    )
-    expect(wrapCallMatch).not.toBeNull()
-    expect(wrapCallMatch?.[1]).toBe('resolvedDefaults')
+    expect(wrapper.props).toMatchObject({
+      tag: 'section',
+      display: 'flex',
+      gap: 8,
+      padding: 16,
+    })
   })
 })

@@ -9,6 +9,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { MemoryRouter } from '@admin/lib/routing'
 import { AdminCanvasLayout } from '@admin/layouts/AdminCanvasLayout'
 import { AdminSessionProvider } from '@admin/session'
@@ -20,6 +22,7 @@ import { pageToCells } from '@core/data/pageFromRow'
 import '@modules/base/index'
 
 const LAYOUT_STORAGE_KEY = 'pb-editor-layout-v2'
+const SRC_ROOT = join(import.meta.dir, '../..')
 
 const originalFetch = globalThis.fetch
 
@@ -383,29 +386,41 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
     expect(siteButton.getAttribute('aria-pressed')).toBe('true')
   })
 
-  it('orders primary rail panels by importance and assigns automatic rail accents', () => {
+  it('keeps global AI access separated from the primary rail panels', () => {
     renderEditorLayout()
 
     const rail = screen.getByRole('navigation', { name: /panel dock/i })
-    const primaryButtons = within(rail).getAllByRole('button').slice(0, 5)
+    const primaryButtons = within(screen.getByTestId('panel-rail-primary')).getAllByRole('button').slice(0, 5)
+    const globalButtons = within(screen.getByTestId('panel-rail-global')).getAllByRole('button')
 
     expect(primaryButtons.map((button) => button.getAttribute('data-testid'))).toEqual([
       'panel-rail-layers',
-      'panel-rail-agent',
       'panel-rail-site',
       'panel-rail-selectors',
       'panel-rail-colors',
+      'panel-rail-typography',
     ])
     expect(primaryButtons.map((button) => button.getAttribute('data-icon'))).toEqual([
       'database-solid',
-      'ai-settings-solid',
       'files-stack-2',
       'paint-bucket',
       'colors-swatch',
+      'text-start-t',
     ])
     const primaryAccents = primaryButtons.map((button) => button.getAttribute('data-accent'))
     expect(primaryAccents.every(Boolean)).toBe(true)
     expect(new Set(primaryAccents).size).toBe(primaryAccents.length)
+    expect(globalButtons.map((button) => button.getAttribute('data-testid'))).toEqual(['panel-rail-agent'])
+    expect(globalButtons[0]?.getAttribute('data-icon')).toBe('ai-settings-solid')
+    expect(globalButtons[0]?.getAttribute('data-accent')).toBeTruthy()
+    expect(rail.lastElementChild).toBe(screen.getByTestId('panel-rail-global'))
+
+    const railCss = readFileSync(
+      join(SRC_ROOT, 'admin/pages/site/sidebars/PanelRail/PanelRail.module.css'),
+      'utf8',
+    )
+    const globalGroupRule = railCss.match(/\.globalGroup\s*{[^}]*}/)?.[0] ?? ''
+    expect(globalGroupRule).not.toContain('border-top')
   })
 
   it('docks left rail panels into an expanding sidebar and switches between them', () => {

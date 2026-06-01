@@ -98,86 +98,23 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('Task #414 — wrapNode defaults', () => {
-  it('Gate 1a: wrapNode creates wrapper node with module defaults (not empty props)', () => {
-    const { childId } = setupPage()
-    const state = useEditorStore.getState()
-    const page = state.site!.pages[0]
-
-    const wrapperId = state.wrapNode(childId, TEST_MODULE_ID)
-
-    const wrapper = useEditorStore.getState().site!.pages[0].nodes[wrapperId]
-    expect(wrapper).toBeDefined()
-    // props must NOT be empty — module defaults must be merged in
-    expect(Object.keys(wrapper.props).length).toBeGreaterThan(0)
-  })
-
-  it('Gate 1b: wrapper node has tag prop set to "div" (not undefined)', () => {
-    const { childId } = setupPage()
-    const state = useEditorStore.getState()
-
-    const wrapperId = state.wrapNode(childId, TEST_MODULE_ID)
-
-    const wrapper = useEditorStore.getState().site!.pages[0].nodes[wrapperId]
-    // This is the critical check: before the fix, props.tag was undefined,
-    // causing React.createElement(undefined) → "Element type is invalid" crash
-    expect(wrapper.props.tag).toBe('div')
-  })
-
-  it('Gate 1c: caller-supplied defaults override module defaults', () => {
-    const { childId } = setupPage()
-    const state = useEditorStore.getState()
-
-    const wrapperId = state.wrapNode(childId, TEST_MODULE_ID, { tag: 'section', gap: 8 })
-
-    const wrapper = useEditorStore.getState().site!.pages[0].nodes[wrapperId]
-    expect(wrapper.props.tag).toBe('section')
-    expect(wrapper.props.gap).toBe(8)
-    // Non-overridden defaults are still present
-    expect(wrapper.props.display).toBe('flex')
-  })
-
-  it('Gate 1d: wrapped node becomes child of the wrapper (tree structure)', () => {
+  it('wrapNode creates a defaulted wrapper and moves the target under it', () => {
     const { rootId, childId } = setupPage()
     const state = useEditorStore.getState()
 
-    const wrapperId = state.wrapNode(childId, TEST_MODULE_ID)
+    const wrapperId = state.wrapNode(childId, TEST_MODULE_ID, { tag: 'section', gap: 8 })
     const afterState = useEditorStore.getState().site!.pages[0]
+    const wrapper = afterState.nodes[wrapperId]
 
-    // Wrapper takes the original node's slot in the parent
+    expect(wrapper).toBeDefined()
+    expect(wrapper.props).toMatchObject({
+      tag: 'section',
+      display: 'flex',
+      gap: 8,
+      padding: 16,
+    })
     expect(afterState.nodes[rootId].children).toContain(wrapperId)
     expect(afterState.nodes[rootId].children).not.toContain(childId)
-    // Original node is the wrapper's first child
     expect(afterState.nodes[wrapperId].children).toContain(childId)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Gate 2 — siteSlice.wrapNode source code safety check
-// ---------------------------------------------------------------------------
-
-describe('Task #414 — source code guard (siteSlice)', () => {
-  it('Gate 2: site/nodeActions.ts wrapNode action uses registry.get() to merge defaults', async () => {
-    const path = await import('path')
-    const fs = await import('fs')
-    // The siteSlice was split into a directory of per-domain action factories
-    // (`slices/site/*`). `wrapNode` lives in `nodeActions.ts`.
-    const filePath = path.resolve(
-      __dirname,
-      '../../admin/pages/site/store/slices/site/nodeActions.ts',
-    )
-    const src = fs.readFileSync(filePath, 'utf-8')
-
-    // The wrapNode action must call registry.get(containerModuleId) before
-    // invoking the mutation — this is what provides the defaults.
-    expect(src).toContain('registry.get(containerModuleId)')
-    expect(src).toContain('mod?.defaults')
-
-    // The mutation call must use resolvedDefaults, not a bare empty object.
-    // After the tree-unification refactor (Task 2) the helper is mutateActiveTree,
-    // not mutatePage — update the pattern accordingly.
-    const wrapCallMatch = src.match(/mutateActiveTree\(\(tree\)\s*=>\s*\{\s*wrapperId\s*=\s*wrapNode\(tree,\s*nodeId,\s*containerModuleId,\s*(\w+)\)/)
-    expect(wrapCallMatch).not.toBeNull()
-    // Ensure it's passing resolvedDefaults (not {} or undefined)
-    expect(wrapCallMatch?.[1]).toBe('resolvedDefaults')
   })
 })

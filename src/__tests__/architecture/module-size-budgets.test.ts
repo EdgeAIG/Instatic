@@ -91,7 +91,7 @@ const EXEMPT = new Set<string>([
  * shorter; the goal is an empty object.
  */
 const GRANDFATHERED: Record<string, number> = {
-  'src/admin/pages/site/store/slices/classSlice.ts': 1045,
+  'src/admin/pages/site/store/slices/classSlice.ts': 1014,
   'server/repositories/data/rows.ts': 1023,
   'src/admin/pages/site/panels/PropertiesPanel/ClassPicker.tsx': 761,
   'src/admin/pages/site/panels/PropertiesPanel/LayoutSection.tsx': 962,

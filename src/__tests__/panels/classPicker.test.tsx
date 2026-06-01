@@ -108,13 +108,14 @@ describe('ClassPicker — rendering', () => {
     expect(screen.getByPlaceholderText('Add or create selector…')).toBeTruthy()
   })
 
-  it('renders an assigned class as a pill with a remove button', () => {
+  it('renders an assigned class as a selector pill with a dotted class label', () => {
     const { nodeId } = loadSiteWithNode()
     selectClass(nodeId, 'header')
     render(<ClassPicker nodeId={nodeId} />)
-    // Pill button uses aria-label "Edit class header" or "Deselect class header".
-    expect(screen.getByRole('button', { name: /edit class header|deselect class header/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Remove class header' })).toBeTruthy()
+    // Class-kind rules display as CSS selectors so they are visually distinct
+    // from ambient selectors and plain text.
+    expect(screen.getByRole('button', { name: /edit class \.header|deselect class \.header/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove class .header' })).toBeTruthy()
   })
 
   it('renders the trailing action node when supplied', () => {
@@ -139,6 +140,7 @@ describe('ClassPicker — search + create', () => {
     const input = screen.getByPlaceholderText('Add or create selector…')
     await user.click(input)
     await user.type(input, 'brand-new')
+    expect(screen.getByText('+ Create class “.brand-new”')).toBeTruthy()
 
     // Submit button tooltip surfaces the create intent.
     const submit = screen.getByRole('button', { name: 'Submit selector' })
@@ -207,7 +209,7 @@ describe('ClassPicker — assigned pill', () => {
     const cls = selectClass(nodeId, 'card')
     render(<ClassPicker nodeId={nodeId} />)
 
-    const pill = screen.getByRole('button', { name: /edit class card|deselect class card/i })
+    const pill = screen.getByRole('button', { name: /edit class \.card|deselect class \.card/i })
     await user.click(pill)
     expect(useEditorStore.getState().activeClassId).toBe(cls.id)
 
@@ -221,7 +223,7 @@ describe('ClassPicker — assigned pill', () => {
     const cls = selectClass(nodeId, 'card')
     render(<ClassPicker nodeId={nodeId} />)
 
-    const remove = screen.getByRole('button', { name: 'Remove class card' })
+    const remove = screen.getByRole('button', { name: 'Remove class .card' })
     await user.click(remove)
 
     const node = useEditorStore.getState().site!.pages[0].nodes[nodeId]
@@ -235,7 +237,7 @@ describe('ClassPicker — assigned pill', () => {
     const cls = selectClass(nodeId, 'header')
     render(<ClassPicker nodeId={nodeId} />)
 
-    const pill = screen.getByRole('button', { name: /edit class header|deselect class header/i })
+    const pill = screen.getByRole('button', { name: /edit class \.header|deselect class \.header/i })
     const initiallyActive = useEditorStore.getState().activeClassId === cls.id
     pill.focus()
     fireEvent.keyDown(pill, { key: 'Enter' })
@@ -248,7 +250,7 @@ describe('ClassPicker — assigned pill', () => {
     selectClass(nodeId, 'header')
     render(<ClassPicker nodeId={nodeId} />)
 
-    const pill = screen.getByRole('button', { name: /edit class header|deselect class header/i })
+    const pill = screen.getByRole('button', { name: /edit class \.header|deselect class \.header/i })
     fireEvent.contextMenu(pill, { clientX: 0, clientY: 0 })
 
     // Context menu opens — assert at least the Remove item is present.
@@ -320,9 +322,9 @@ describe('ClassPicker — empty-query suggestions', () => {
     const input = screen.getByPlaceholderText('Add or create selector…')
     act(() => input.focus())
 
-    // Both classes should appear as menuitems.
-    expect(screen.getByRole('menuitem', { name: 'alpha' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'beta' })).toBeTruthy()
+    // Both class-kind rules should appear with their CSS class selector prefix.
+    expect(screen.getByRole('menuitem', { name: '.alpha' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: '.beta' })).toBeTruthy()
   })
 
   it('clicking a suggestion assigns it to the node', async () => {
@@ -334,7 +336,7 @@ describe('ClassPicker — empty-query suggestions', () => {
     const input = screen.getByPlaceholderText('Add or create selector…')
     await user.click(input)
 
-    const item = await screen.findByRole('menuitem', { name: 'alpha' })
+    const item = await screen.findByRole('menuitem', { name: '.alpha' })
     await user.click(item)
 
     const node = useEditorStore.getState().site!.pages[0].nodes[nodeId]
