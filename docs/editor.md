@@ -9,9 +9,9 @@ The frontend is a single React 19 + Vite SPA mounted at `/admin`. Inside it, two
 ## TL;DR
 
 - **Entry:** `src/admin/main.tsx` mounts `<Router><AdminRoutes /></Router>` with React 19 root-level error callbacks. `flushSync` forces the initial render synchronous to cut LCP.
-- **Router:** `src/admin/lib/routing/` — in-house router replacing `react-router-dom`. 9 routes, all wrapped in a per-route `<ErrorBoundary>` and `<Suspense>`.
+- **Router:** `src/admin/lib/routing/` — in-house router replacing `react-router-dom`. 10 routes, all wrapped in a per-route `<ErrorBoundary>` and `<Suspense>`.
 - **Cold path:** entry chunk is tiny (~96 KB gz). `AuthenticatedAdmin` is `React.lazy` and only loads post-login; it pre-warms all 9 workspace chunks at module evaluation.
-- **Workspaces:** `dashboard`, `site` (the editor), `content`, `data`, `media`, `plugins`, `users`, `account`, `pluginPage`. Capability-gated by `canAccessWorkspace`.
+- **Workspaces:** `dashboard`, `site` (the editor), `content`, `data`, `media`, `plugins`, `users`, `ai`, `account`, `pluginPage`. Capability-gated by `canAccessWorkspace`.
 - **Editor store** lives at `src/admin/pages/site/store/`. Zustand + Immer + `subscribeWithSelector`. 11 slices, one source of truth for the page tree.
 - **Active tree routing:** `mutateActiveTree(fn)` in `siteSlice` is the **only** place that branches on page-mode vs. VC-mode. The 11 named mutation actions are one-liners that delegate to it.
 - **Canvas:** `src/admin/pages/site/canvas/` renders the page tree into per-breakpoint `IframeFrameSurface` iframes. Two views: **design** (multiple breakpoints side-by-side with pan/zoom) and **live** (single real-size editable frame with normal scrolling). Selection / hover ring colors come from `--canvas-selection-ring` / `--canvas-hover-ring`.
@@ -69,7 +69,7 @@ Why the split:
 
 ## Routing
 
-`src/admin/lib/routing/` contains the in-house router (`Router`, `Routes`, `Route`, `Navigate`, `Link`, `useLocation`, `useNavigate`, `useParams`). Replaces `react-router-dom` for the 9-route admin app.
+`src/admin/lib/routing/` contains the in-house router (`Router`, `Routes`, `Route`, `Navigate`, `Link`, `useLocation`, `useNavigate`, `useParams`). Replaces `react-router-dom` for the 10-route admin app.
 
 Use the in-house router for every internal admin navigation, including links rendered by the site editor. `react-router-dom` and raw `<a href="/admin...">` hard navigations are banned in admin UI by `admin-router-usage.test.ts`. `src/core/` and `src/modules/` stay router-free because they are shared engine / published-page code, not admin UI.
 
@@ -86,6 +86,7 @@ The route table (`src/admin/router.tsx`):
 | `/admin/media`                          | `<AdminEntry section="media" />` |
 | `/admin/plugins`                        | `<AdminEntry section="plugins" />` |
 | `/admin/users`                          | `<AdminEntry section="users" />` |
+| `/admin/ai`                             | `<AdminEntry section="ai" />` (AI credentials, models, defaults) |
 | `/admin/account`                        | `<AdminEntry section="account" />` |
 | `/admin/plugins/:pluginId/:pageId`      | `<AdminEntry section="pluginPage" />` |
 
@@ -197,6 +198,7 @@ src/admin/
     ├── media/                  ← media manager
     ├── plugins/                ← plugin install / configure
     ├── users/                  ← user management
+    ├── ai/                     ← AI credentials, defaults, usage audit
     ├── account/                ← own-account settings
     └── ...
 ```

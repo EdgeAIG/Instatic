@@ -1,6 +1,6 @@
 # Admin Router
 
-Cookbook for the in-house router at `src/admin/lib/routing/`. Replaces `react-router-dom` for the admin app — a 4-component, 4-hook surface that covers everything the 9-route admin needs.
+Cookbook for the in-house router at `src/admin/lib/routing/`. Replaces `react-router-dom` for the admin app — a 4-component, 4-hook surface that covers everything the 10-route admin needs.
 
 Use it for every internal admin navigation, including links rendered by the site editor. `src/core/` and `src/modules/` must not import it because they are shared engine / published-page code, not admin UI.
 
@@ -58,6 +58,7 @@ Don't import from `react-router-dom`. It's removed from `package.json`.
   <Route path="/admin/media"                     element={<AdminEntry section="media" />} />
   <Route path="/admin/plugins"                   element={<AdminEntry section="plugins" />} />
   <Route path="/admin/users"                     element={<AdminEntry section="users" />} />
+  <Route path="/admin/ai"                        element={<AdminEntry section="ai" />} />
   <Route path="/admin/account"                   element={<AdminEntry section="account" />} />
   <Route path="/admin/plugins/:pluginId/:pageId" element={<AdminEntry section="pluginPage" />} />
 </Routes>
@@ -178,16 +179,16 @@ Used by `AuthenticatedAdmin` to render a non-redirect fallback when access is de
 
 ## `useAdminNavigate`
 
-`src/admin/lib/useAdminNavigate.ts` wraps `useNavigate` with type-safe workspace navigation:
+`src/admin/lib/useAdminNavigate.ts` wraps `useNavigate` with a `document.startViewTransition` + `flushSync` pattern that gives admin navigation its fade-in/fade-out feel. The function signature is `(to: string) => void` — pass the full path:
 
 ```ts
-const adminNavigate = useAdminNavigate()
-adminNavigate('site')                  // → /admin/site
-adminNavigate('plugins', { pluginId: 'acme.x', pageId: 'dashboard' })
-                                        // → /admin/plugins/acme.x/dashboard
+const navigate = useAdminNavigate()
+navigate('/admin/site')
+navigate('/admin/ai')
+navigate('/admin/plugins/acme.x/dashboard')
 ```
 
-Prefer `useAdminNavigate` over raw `useNavigate` inside the admin — it knows the workspace path conventions and won't go wrong.
+Prefer `useAdminNavigate` over raw `useNavigate` for programmatic navigation inside admin components (toolbar dropdowns, modals, panel buttons). `<Link>` is still better for anchor-based navigation where middle-click / modifier-key semantics matter.
 
 ---
 
@@ -274,7 +275,7 @@ function MyComponent() {
   const navigate = useAdminNavigate()
   const handleSave = async () => {
     await saveSomething()
-    navigate('content')
+    navigate('/admin/content')
   }
   return <Button onClick={handleSave}>Save</Button>
 }
