@@ -80,6 +80,12 @@ import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import { useIframeCursorBridge } from './useIframeCursorBridge'
 import { useCanvasFormControlSuppression } from './useCanvasFormControlSuppression'
 import { CANVAS_VIEWPORT_HEIGHT, type CanvasViewport } from './resolveViewportUnits'
+import { resolveCanvasFrameHeight } from './iframeFrameHeight'
+import {
+  getIframeObserverConstructors,
+  getIframeObserverDocument,
+  observeIframeMutations,
+} from './iframeFrameObservers'
 import styles from './IframeFrameSurface.module.css'
 
 /**
@@ -299,21 +305,27 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
       if (!iframeDoc) return
       const iframe = iframeRef.current
       if (!iframe) return
+      const observerDocument = getIframeObserverDocument(iframe, iframeDoc)
 
       const MAX_SELF_RESIZES = 60
       let selfResizes = 0
       let rafId: number | null = null
+      const {
+        ResizeObserver: FrameResizeObserver,
+        MutationObserver: FrameMutationObserver,
+      } = getIframeObserverConstructors(iframe)
 
       const measure = () => {
         rafId = null
-        const body = iframeDoc.body
-        const html = iframeDoc.documentElement
+        const body = observerDocument.body
+        const html = observerDocument.documentElement
         if (!body || !html) return
-        // `scrollHeight` of either body or html — pick the larger because
-        // some content (e.g. fixed-position children) only contributes to
-        // one of the two.
-        const target = Math.max(body.scrollHeight, html.scrollHeight)
         const current = parseFloat(iframe.style.height || '0')
+        const target = resolveCanvasFrameHeight({
+          bodyScrollHeight: body.scrollHeight,
+          documentScrollHeight: html.scrollHeight,
+          currentFrameHeight: current,
+        })
         if (Math.abs(current - target) <= 0.5) {
           // Layout settled — clear the budget so the next genuine change
           // gets a fresh fit.
@@ -337,9 +349,9 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
       // ResizeObserver fires for any layout change inside the iframe — font
       // load reflow, image decode/lazy-load, authored style edits, and our
       // own height writes (hence the self-resize cap above).
-      const ro = new ResizeObserver(scheduleMeasure)
-      ro.observe(iframeDoc.body)
-      ro.observe(iframeDoc.documentElement)
+      const ro = new FrameResizeObserver(scheduleMeasure)
+      ro.observe(observerDocument.body)
+      ro.observe(observerDocument.documentElement)
       // MutationObserver covers structural edits (nodes added/removed, text
       // changed) and injected-CSS replacements (the class/user-style tags in
       // <head>), resetting the self-resize budget so a real change always
@@ -347,19 +359,14 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
       // toggles selection/hover `data-*`/`aria-*` attributes on every pointer
       // move, and re-measuring (a forced reflow) on each of those was a
       // second, hover-driven source of jank on large pages.
-      const mo = new MutationObserver(() => {
+      const mo = observeIframeMutations(FrameMutationObserver, observerDocument, () => {
         selfResizes = 0
         scheduleMeasure()
-      })
-      mo.observe(iframeDoc.documentElement, {
-        childList: true,
-        subtree: true,
-        characterData: true,
       })
       return () => {
         if (rafId !== null) cancelAnimationFrame(rafId)
         ro.disconnect()
-        mo.disconnect()
+        mo?.disconnect()
       }
     }, [iframeDoc, isLive])
 
@@ -621,47 +628,9 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
   },
 )
 
-/**
- * Tag the iframe body with the breakpoint id, break the
- * `:where(html, body) { height: 100% }` reset rule so the iframe height can
- * track its content height instead of getting locked into a feedback loop
- * (iframe sized to body which is sized to 100% of iframe), and inject the
- * canvas-only chrome stylesheet.
- *
- * Canvas chrome stylesheet
- * ────────────────────────
- * Lives in the iframe `<head>` so it only affects canvas content — the
- * published page never sees these rules. Each rule turns off a piece of
- * default browser behaviour that fights the "canvas is a click-to-select
- * preview surface" model:
- *
- *  - `cursor: default` — the iframe is a design surface, not a reading
- *    surface. Author gets the same arrow cursor everywhere instead of
- *    the I-beam flicker on text and the pointer flicker on links.
- *  - `user-select: none` — text selection on click-drag inside the
- *    iframe just fights the canvas's click-to-select-node interaction.
- *    Disabled outright; copy-paste of authored content isn't a canvas
- *    workflow.
- *  - `outline: none` on focus — the canvas draws its own selection ring
- *    via `BreakpointSelectionOverlay`. The browser's default focus
- *    outline on the authored link / button control / body would just
- *    double-up and clash with the canvas chrome.
- *  - `iframe { pointer-events: none }` — authored modules may render
- *    their own embedded iframes (YouTube embeds, custom HTML, etc.). In
- *    the canvas we want pan / scroll / selection gestures to keep
- *    working when the cursor is over those nested iframes — disabling
- *    pointer events on them makes the canvas behave consistently.
- *
- * The `*, *::before, *::after` selector has higher specificity than the
- * publisher reset's `:where()` rules and overrides anything authored
- * unless the user explicitly opts back in (e.g. `cursor: pointer` on a
- * class will not survive — that's the trade-off and it matches Figma's
- * "preview is not interactive" model).
- *
- * Lives at module scope so the React Compiler doesn't flag the cross-frame
- * DOM writes as mutating React state — these mutate the iframe's document,
- * not anything React owns.
- */
+// Canvas-only chrome: neutralize interaction affordances inside design frames.
+// Kept at module scope so the React Compiler does not treat the cross-frame
+// DOM writes as React-owned state mutation.
 const CANVAS_CHROME_CSS = [
   '*, *::before, *::after {',
   '  cursor: default !important;',
