@@ -1,4 +1,8 @@
 import type { AnyModuleDefinition } from '@core/module-engine'
+import {
+  DEFAULT_MODULE_INSERTER_PREFERENCE,
+  type ModuleInserterItemRef as PersistedModuleInserterItemRef,
+} from '@core/persistence/userPreferences'
 import type { VisualComponent } from '@core/visualComponents'
 import {
   countPresetNodes,
@@ -18,17 +22,14 @@ export type ModuleInserterSectionId =
   | 'community'
   | 'recent'
 export type ModuleInserterItemKind = 'module' | 'layout' | 'component' | 'community'
+export type ModuleInserterItemRef = PersistedModuleInserterItemRef
+export type ModuleInserterRecentRef = ModuleInserterItemRef
 
 export interface RegistryModuleForInserter {
   id: string
   name: string
   category: string
   description?: string
-}
-
-export interface ModuleInserterRecentRef {
-  kind: ModuleInserterItemKind
-  id: string
 }
 
 interface BaseInserterItem {
@@ -77,6 +78,9 @@ const HIDDEN_MODULE_IDS = new Set([
   'base.visual-component-ref',
   'base.slot-instance',
 ])
+
+export const DEFAULT_MODULE_INSERTER_FAVORITES =
+  DEFAULT_MODULE_INSERTER_PREFERENCE.favorites
 
 export function moduleAccentForCategory(category: string): ModuleInserterAccent {
   if (category === 'Forms') return 'mint'
@@ -152,6 +156,39 @@ export function getComponentItems(
   }))
 }
 
+export interface BuiltModuleInserterItems {
+  moduleItems: ModuleInserterModuleItem[]
+  layoutItems: ModuleInserterLayoutItem[]
+  componentItems: ModuleInserterComponentItem[]
+  allInsertableItems: ModuleInserterItem[]
+}
+
+export function buildModuleInserterItems({
+  modules,
+  isVCMode,
+  layoutPresets,
+  visualComponents,
+}: {
+  modules: readonly AnyModuleDefinition[]
+  isVCMode: boolean
+  layoutPresets: readonly InsertionPreset[]
+  visualComponents: readonly VisualComponent[]
+}): BuiltModuleInserterItems {
+  const moduleItems = getInsertableModuleItems(modules, isVCMode)
+  const layoutItems = getLayoutPresetItems(layoutPresets)
+  const componentItems = getComponentItems(visualComponents)
+  return {
+    moduleItems,
+    layoutItems,
+    componentItems,
+    allInsertableItems: [
+      ...moduleItems,
+      ...layoutItems,
+      ...componentItems,
+    ],
+  }
+}
+
 export function filterInserterItems<TItem extends ModuleInserterItem>(
   items: readonly TItem[],
   query: string,
@@ -169,10 +206,17 @@ export function resolveRecentItems(
   recent: readonly ModuleInserterRecentRef[],
   items: readonly ModuleInserterItem[],
 ): ModuleInserterItem[] {
+  return resolveInserterRefs(recent, items)
+}
+
+export function resolveInserterRefs(
+  refs: readonly ModuleInserterItemRef[],
+  items: readonly ModuleInserterItem[],
+): ModuleInserterItem[] {
   const byKey = new Map(items.map((item) => [item.key, item]))
   const resolved: ModuleInserterItem[] = []
   const seen = new Set<string>()
-  for (const ref of recent) {
+  for (const ref of refs) {
     const key = recentKey(ref)
     if (seen.has(key)) continue
     const item = byKey.get(key)
@@ -181,6 +225,20 @@ export function resolveRecentItems(
     seen.add(key)
   }
   return resolved
+}
+
+export function dedupeModuleInserterRefs(
+  refs: readonly ModuleInserterItemRef[],
+): ModuleInserterItemRef[] {
+  const deduped: ModuleInserterItemRef[] = []
+  const seen = new Set<string>()
+  for (const ref of refs) {
+    const key = recentKey(ref)
+    if (seen.has(key)) continue
+    deduped.push(ref)
+    seen.add(key)
+  }
+  return deduped
 }
 
 export function itemDescription(item: ModuleInserterItem): string {
@@ -192,7 +250,7 @@ export function itemDescription(item: ModuleInserterItem): string {
   return item.description
 }
 
-export function recentKey(ref: ModuleInserterRecentRef): string {
+export function recentKey(ref: ModuleInserterItemRef): string {
   return `${ref.kind}:${ref.id}`
 }
 

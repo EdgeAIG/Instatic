@@ -16,12 +16,8 @@ describe('CanvasNotch', () => {
     expect(src).toContain('floatingControl=')
   })
 
-  it('exposes the approved quick insert actions', () => {
+  it('resolves quick insert actions from module inserter favorites', () => {
     const src = readFileSync(CANVAS_NOTCH, 'utf-8')
-
-    // Quote style (single vs double) is owned by Prettier — match either.
-    const quotedModule = (id: string) =>
-      new RegExp(`['"]${id.replace('.', '\\.')}['"]`)
 
     // Icons come from each module's own declaration via the shared ModuleIcon
     // resolver — the notch must not duplicate the icon mapping locally.
@@ -30,14 +26,10 @@ describe('CanvasNotch', () => {
     expect(src).not.toContain('pixel-art-icons/icons/text-start-t')
     expect(src).not.toContain('pixel-art-icons/icons/image-solid')
 
-    // Approved quick-insert module IDs (Container / Text / Image).
-    expect(src).toMatch(quotedModule('base.container'))
-    expect(src).toMatch(quotedModule('base.text'))
-    expect(src).toMatch(quotedModule('base.image'))
-    // The "Button" quick insert lives under the Add (+) dropdown — the notch
-    // intentionally does not surface it as a standalone quick action so the
-    // chip stays compact and avoids overlap with the Add picker.
-    expect(src).not.toMatch(quotedModule('base.button'))
+    expect(src).not.toContain('QUICK_ACTION_MODULE_IDS')
+    expect(src).toContain('useModuleInserterPreference')
+    expect(src).toContain('DEFAULT_MODULE_INSERTER_FAVORITES')
+    expect(src).toContain('resolveInserterRefs')
 
     expect(src).toContain('canvas-notch-add-btn')
   })

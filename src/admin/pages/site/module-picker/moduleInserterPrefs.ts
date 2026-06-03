@@ -3,7 +3,7 @@ import { parseJsonWithFallback } from '@core/utils/jsonValidate'
 import {
   recentKey,
   type ModuleInserterItemKind,
-  type ModuleInserterRecentRef,
+  type ModuleInserterItemRef,
 } from './moduleInserterModel'
 
 export const MODULE_INSERTER_STORAGE_KEY = 'instatic-module-inserter-v1'
@@ -35,6 +35,7 @@ const ModuleInserterPrefsSchema = Type.Object({
 
 type ModuleInserterView = Static<typeof InserterViewSchema>
 export type ModuleInserterPrefs = Static<typeof ModuleInserterPrefsSchema>
+export type ModuleInserterRecentRef = ModuleInserterItemRef
 
 const DEFAULT_PREFS: ModuleInserterPrefs = {
   view: 'grid',
@@ -91,4 +92,4 @@ function writeModuleInserterPrefs(prefs: ModuleInserterPrefs): void {
   }
 }
 
-export type { ModuleInserterItemKind, ModuleInserterRecentRef }
+export type { ModuleInserterItemKind }

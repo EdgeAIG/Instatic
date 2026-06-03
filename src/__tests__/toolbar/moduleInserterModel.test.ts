@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from 'bun:test'
 import {
+  DEFAULT_MODULE_INSERTER_FAVORITES,
+  dedupeModuleInserterRefs,
   getInsertableModuleItems,
   moduleAccentForCategory,
+  resolveInserterRefs,
   type RegistryModuleForInserter,
 } from '@site/module-picker/moduleInserterModel'
 import { findCanvasViewportAtPoint } from '@site/module-picker/moduleInserterDropTarget'
@@ -47,6 +50,39 @@ describe('module inserter model', () => {
     expect(moduleAccentForCategory('Typography')).toBe('peach')
     expect(moduleAccentForCategory('Interactive')).toBe('rose')
     expect(moduleAccentForCategory('Custom')).toBe('lilac')
+  })
+
+  it('deduplicates inserter refs by kind and id while preserving first order', () => {
+    expect(dedupeModuleInserterRefs([
+      { kind: 'module', id: 'base.text' },
+      { kind: 'module', id: 'base.text' },
+      { kind: 'layout', id: 'layout.contact' },
+      { kind: 'module', id: 'base.image' },
+      { kind: 'layout', id: 'layout.contact' },
+    ])).toEqual([
+      { kind: 'module', id: 'base.text' },
+      { kind: 'layout', id: 'layout.contact' },
+      { kind: 'module', id: 'base.image' },
+    ])
+  })
+
+  it('resolves favorite refs against insertable items and skips missing refs', () => {
+    const items = getInsertableModuleItems([
+      mod('base.container', 'Layout', 'Container'),
+      mod('base.text', 'Typography', 'Text'),
+      mod('base.image', 'Media', 'Image'),
+    ], false)
+
+    const resolved = resolveInserterRefs([
+      ...DEFAULT_MODULE_INSERTER_FAVORITES,
+      { kind: 'module', id: 'base.missing' },
+    ], items)
+
+    expect(resolved.map((item) => item.id)).toEqual([
+      'base.container',
+      'base.text',
+      'base.image',
+    ])
   })
 })
 

@@ -1,12 +1,24 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useEditorStore } from '@site/store/store'
 import { CanvasNotch } from '@site/canvas/CanvasNotch'
+import { __resetModuleInserterPreferenceForTests } from '@site/module-picker/useModuleInserterPreference'
 import '@modules/base/index'
+
+const originalFetch = globalThis.fetch
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
 
 beforeEach(() => {
   localStorage.clear()
+  __resetModuleInserterPreferenceForTests()
+  globalThis.fetch = mock(async () => jsonResponse({ error: 'Preference not set' }, 404)) as typeof fetch
   useEditorStore.setState({
     site: null,
     activePageId: null,
@@ -25,6 +37,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  globalThis.fetch = originalFetch
 })
 
 function renderInsideCanvasClickBoundary() {
@@ -59,6 +72,26 @@ describe('CanvasNotch insertion events', () => {
 
     const state = useEditorStore.getState()
     expect(state.selectedNodeId).toBeTruthy()
+    expect(state.propertiesPanel.collapsed).toBe(false)
+  })
+
+  it('renders server favorite modules as notch shortcuts', async () => {
+    globalThis.fetch = mock(async () =>
+      jsonResponse({
+        value: { favorites: [{ kind: 'module', id: 'base.list' }] },
+      }),
+    ) as typeof fetch
+    const user = userEvent.setup()
+    renderInsideCanvasClickBoundary()
+
+    await user.click(await screen.findByTestId('canvas-notch-list-btn'))
+
+    const state = useEditorStore.getState()
+    const page = state.site?.pages.find((item) => item.id === state.activePageId)
+    const listNodes = page
+      ? Object.values(page.nodes).filter((node) => node.moduleId === 'base.list')
+      : []
+    expect(listNodes).toHaveLength(1)
     expect(state.propertiesPanel.collapsed).toBe(false)
   })
 })

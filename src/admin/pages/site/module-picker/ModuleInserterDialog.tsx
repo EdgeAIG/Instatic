@@ -35,10 +35,8 @@ import {
   LAYOUT_PRESETS,
 } from './insertionPresets'
 import {
+  buildModuleInserterItems,
   filterInserterItems,
-  getComponentItems,
-  getInsertableModuleItems,
-  getLayoutPresetItems,
   itemDescription,
   recentRefForItem,
   resolveRecentItems,
@@ -71,6 +69,7 @@ import {
 } from './ModuleInserterItemButton'
 import { ModuleInserterShortcuts } from './ModuleInserterShortcuts'
 import { ModuleWireframe } from './ModuleWireframe'
+import { useModuleInserterPreference } from './useModuleInserterPreference'
 import styles from './ModuleInserterDialog.module.css'
 
 interface ModuleInserterDialogProps {
@@ -121,16 +120,23 @@ export function ModuleInserterDialog({
   const visualComponents = useEditorStore((s) => s.site?.visualComponents ?? EMPTY_COMPONENTS)
   const setActiveBreakpoint = useEditorStore((s) => s.setActiveBreakpoint)
   const canvasPage = useEditorStore(selectActiveCanvasPage)
+  const {
+    isFavorite,
+    toggleFavorite,
+  } = useModuleInserterPreference()
 
   const isVCMode = activeDocument?.kind === 'visualComponent'
-  const moduleItems = getInsertableModuleItems(registry.list(), isVCMode)
-  const layoutItems = getLayoutPresetItems(LAYOUT_PRESETS)
-  const componentItems = getComponentItems(visualComponents)
-  const allInsertableItems: ModuleInserterItem[] = [
-    ...moduleItems,
-    ...layoutItems,
-    ...componentItems,
-  ]
+  const {
+    moduleItems,
+    layoutItems,
+    componentItems,
+    allInsertableItems,
+  } = buildModuleInserterItems({
+    modules: registry.list(),
+    isVCMode,
+    layoutPresets: LAYOUT_PRESETS,
+    visualComponents,
+  })
   const recentItems = resolveRecentItems(recentRefs, allInsertableItems)
 
   const filteredModules = filterInserterItems(moduleItems, query)
@@ -571,6 +577,8 @@ export function ModuleInserterDialog({
                     item={item}
                     view={view}
                     selected={selectedKey === item.key}
+                    favorite={isFavorite(recentRefForItem(item))}
+                    favoriteDisabled={item.kind === 'community'}
                     onSelect={() => {
                       selectionSourceRef.current = 'pointer'
                       setSelectedKeyOverride(item.key)
@@ -578,6 +586,9 @@ export function ModuleInserterDialog({
                     onPick={() => {
                       if (suppressClickRef.current) return
                       pickItem(item, undefined, 'click')
+                    }}
+                    onToggleFavorite={() => {
+                      toggleFavorite(recentRefForItem(item))
                     }}
                     onPointerDown={handlePointerDown}
                   />

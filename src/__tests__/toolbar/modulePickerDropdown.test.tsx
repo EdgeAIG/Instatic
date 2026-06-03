@@ -9,22 +9,35 @@
  * - base.visual-component-ref never shown
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import React from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ModulePickerDropdown } from '@site/toolbar/ModulePickerDropdown'
 import { useEditorStore } from '@site/store/store'
+import { __resetModuleInserterPreferenceForTests } from '@site/module-picker/useModuleInserterPreference'
 import { makeNode, makePage, makeSite } from '../fixtures'
 import type { VisualComponent } from '@core/visualComponents'
 import '@modules/base/index'
 
+const originalFetch = globalThis.fetch
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
 afterEach(() => {
   cleanup()
   document.body.replaceChildren()
+  globalThis.fetch = originalFetch
 })
 
 function resetStore() {
   localStorage.clear()
+  __resetModuleInserterPreferenceForTests()
+  globalThis.fetch = mock(async () => jsonResponse({ error: 'Preference not set' }, 404)) as typeof fetch
   useEditorStore.setState({
     site: null,
     activePageId: null,

@@ -374,6 +374,21 @@
     align-content: start;
 }
 
+.itemShell {
+    position: relative;
+    min-width: 0;
+}
+
+.grid .itemShell,
+.grid .tileItem {
+    height: 100%;
+}
+
+.tileItem,
+.rowItem {
+    width: 100%;
+}
+
 .tileItem,
 .rowItem {
     --button-bg-hover: var(--editor-surface-4);
@@ -429,7 +444,7 @@
     --moduleInserterItemRadius: var(--panel-radius);
 
     min-height: 60px;
-    padding: var(--moduleInserterTilePadding) 10px;
+    padding: var(--moduleInserterTilePadding) 42px var(--moduleInserterTilePadding) 10px;
     display: flex;
     gap: 10px;
     align-items: center;
@@ -492,8 +507,58 @@
 }
 
 .tileAdd {
+    right: calc(var(--moduleInserterTileControlInset) + 24px);
+    top: var(--moduleInserterTileControlInset);
+}
+
+.favoriteButton.favoriteButton {
+    position: absolute;
+    z-index: 4;
     right: var(--moduleInserterTileControlInset);
     top: var(--moduleInserterTileControlInset);
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    min-height: 22px;
+    padding: 0;
+    border-radius: var(--moduleInserterTileControlRadius);
+    color: var(--editor-text-muted);
+    background: color-mix(in srgb, var(--editor-bg) 72%, transparent);
+    opacity: 0;
+    transform: scale(0.9);
+    transition:
+        opacity 140ms ease,
+        transform 140ms ease,
+        color 140ms ease,
+        background-color 140ms ease;
+}
+
+.rowItem + .favoriteButton {
+    top: 50%;
+    transform: translateY(-50%) scale(0.9);
+}
+
+.itemShell:hover .favoriteButton,
+.itemShell:focus-within .favoriteButton,
+.favoriteButton[data-favorite="true"] {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.itemShell:hover .rowItem + .favoriteButton,
+.itemShell:focus-within .rowItem + .favoriteButton,
+.rowItem + .favoriteButton[data-favorite="true"] {
+    transform: translateY(-50%) scale(1);
+}
+
+.favoriteButton:hover,
+.favoriteButton[data-favorite="true"] {
+    color: var(--moduleInserterAccent);
+    background: color-mix(
+        in srgb,
+        var(--moduleInserterAccent) 18%,
+        var(--editor-bg)
+    );
 }
 
 .tileStage,

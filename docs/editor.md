@@ -497,7 +497,7 @@ When an eligible node is selected on a page canvas (not root, not already a ref,
 - `ZoomControls` — canvas zoom
 - `ModulePickerDropdown` — opens the module inserter modal
 
-`CanvasNotch` (`src/admin/pages/site/canvas/CanvasNotch.tsx`) owns the canvas-local insertion chrome. In Visual Component mode, `CanvasRoot` mounts `VisualComponentModeControl` below the notch so the current component name, rename action, and page-return action stay attached to the canvas rather than the global toolbar.
+`CanvasNotch` (`src/admin/pages/site/canvas/CanvasNotch.tsx`) owns the canvas-local insertion chrome. Its quick insert buttons are resolved from each admin's server-side `module-inserter` user preference; the default favorites are Container, Text, and Image. The full module inserter is the management surface for those favorites, so any insertable module, layout preset, or Visual Component can be pinned into the notch without adding a separate settings panel. In Visual Component mode, `CanvasRoot` mounts `VisualComponentModeControl` below the notch so the current component name, rename action, and page-return action stay attached to the canvas rather than the global toolbar.
 
 ### Module Inserter
 
@@ -513,6 +513,7 @@ Data sources:
 - **Components:** `site.visualComponents`.
 - **Community:** reserved for a future plugin catalog backend; no mocked catalog is shown in the real editor.
 - **Recent:** per-browser local state in `instatic-module-inserter-v1`, validated with TypeBox before use.
+- **Favorites:** per-user server state in `user_preferences` key `module-inserter`, validated with TypeBox by `src/core/persistence/userPreferences.ts` and used by `CanvasNotch`.
 
 The modal uses the tile-card pattern from `docs/design.md`: `--editor-surface` parent, 1px grid gap, `--editor-surface-2` tiles, `--card-radius`, rail-tint accents via `data-accent`, and an achromatic `--editor-focus-ring` selection state. Wireframe image regions reuse `--canvas-placeholder-bg`.
 

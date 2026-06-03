@@ -1,10 +1,14 @@
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react'
 import type { IconComponent } from 'pixel-art-icons/types'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
 import { GlobeSolidIcon } from 'pixel-art-icons/icons/globe-solid'
 import { HandGrabSolidIcon } from 'pixel-art-icons/icons/hand-grab-solid'
 import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
+import { StarSolidIcon } from 'pixel-art-icons/icons/star-solid'
 import { ModuleIcon } from '@site/ui/ModuleIcon'
 import { Button } from '@ui/components/Button'
 import {
@@ -31,10 +35,17 @@ interface InserterItemButtonProps {
   selected: boolean
   onSelect: () => void
   onPick: () => void
+  favorite: boolean
+  favoriteDisabled: boolean
+  onToggleFavorite: () => void
   onPointerDown: (
     item: ModuleInserterItem,
     event: ReactPointerEvent<HTMLButtonElement>,
   ) => void
+}
+
+function stopFavoritePointer(event: ReactPointerEvent<HTMLButtonElement>) {
+  event.stopPropagation()
 }
 
 export function ModuleInserterItemButton({
@@ -43,27 +54,57 @@ export function ModuleInserterItemButton({
   selected,
   onSelect,
   onPick,
+  favorite,
+  favoriteDisabled,
+  onToggleFavorite,
   onPointerDown,
 }: InserterItemButtonProps) {
   const isList = view === 'list'
+  const favoriteLabel = favorite
+    ? `Remove ${item.name} from notch favorites`
+    : `Add ${item.name} to notch favorites`
+
+  function handleFavoriteClick(event: ReactMouseEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!favoriteDisabled) onToggleFavorite()
+  }
+
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      align="start"
-      className={isList ? styles.rowItem : styles.tileItem}
-      onPointerMove={onSelect}
-      onFocus={onSelect}
-      onClick={onPick}
-      onPointerDown={(event) => onPointerDown(item, event)}
-      data-selected={selected ? 'true' : undefined}
-      data-accent={item.accent}
-      data-module-id={item.kind === 'module' ? item.id : undefined}
-      data-layout-id={item.kind === 'layout' ? item.id : undefined}
-      data-vc-id={item.kind === 'component' ? item.id : undefined}
-    >
-      {isList ? <ItemRow item={item} /> : <ItemTile item={item} />}
-    </Button>
+    <div className={styles.itemShell} data-accent={item.accent}>
+      <Button
+        variant="ghost"
+        size="sm"
+        align="start"
+        className={isList ? styles.rowItem : styles.tileItem}
+        onPointerMove={onSelect}
+        onFocus={onSelect}
+        onClick={onPick}
+        onPointerDown={(event) => onPointerDown(item, event)}
+        data-selected={selected ? 'true' : undefined}
+        data-accent={item.accent}
+        data-module-id={item.kind === 'module' ? item.id : undefined}
+        data-layout-id={item.kind === 'layout' ? item.id : undefined}
+        data-vc-id={item.kind === 'component' ? item.id : undefined}
+      >
+        {isList ? <ItemRow item={item} /> : <ItemTile item={item} />}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        iconOnly
+        className={styles.favoriteButton}
+        onClick={handleFavoriteClick}
+        onPointerDown={stopFavoritePointer}
+        aria-label={favoriteLabel}
+        aria-pressed={favorite}
+        tooltip={favoriteLabel}
+        disabled={favoriteDisabled}
+        data-favorite={favorite ? 'true' : undefined}
+      >
+        <StarSolidIcon size={13} aria-hidden="true" />
+      </Button>
+    </div>
   )
 }
 

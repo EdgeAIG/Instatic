@@ -71,6 +71,33 @@ export const DashboardLayoutSchema = Type.Object({
 
 export type DashboardLayoutPreference = Static<typeof DashboardLayoutSchema>
 
+const ModuleInserterItemKindSchema = Type.Union([
+  Type.Literal('module'),
+  Type.Literal('layout'),
+  Type.Literal('component'),
+  Type.Literal('community'),
+])
+
+export const ModuleInserterItemRefSchema = Type.Object({
+  kind: ModuleInserterItemKindSchema,
+  id: Type.String(),
+})
+
+export const ModuleInserterPreferenceSchema = Type.Object({
+  favorites: Type.Array(ModuleInserterItemRefSchema, { maxItems: 12 }),
+})
+
+export type ModuleInserterItemRef = Static<typeof ModuleInserterItemRefSchema>
+export type ModuleInserterPreference = Static<typeof ModuleInserterPreferenceSchema>
+
+export const DEFAULT_MODULE_INSERTER_PREFERENCE: ModuleInserterPreference = {
+  favorites: [
+    { kind: 'module', id: 'base.container' },
+    { kind: 'module', id: 'base.text' },
+    { kind: 'module', id: 'base.image' },
+  ],
+}
+
 // ---------------------------------------------------------------------------
 // Whitelist
 // ---------------------------------------------------------------------------
@@ -89,6 +116,7 @@ export type DashboardLayoutPreference = Static<typeof DashboardLayoutSchema>
  */
 export const USER_PREFERENCE_KEYS = [
   'dashboard-layout',
+  'module-inserter',
 ] as const
 
 export type UserPreferenceKey = (typeof USER_PREFERENCE_KEYS)[number]
@@ -101,6 +129,7 @@ export type UserPreferenceKey = (typeof USER_PREFERENCE_KEYS)[number]
  */
 export const USER_PREFERENCE_SCHEMAS = {
   'dashboard-layout': DashboardLayoutSchema,
+  'module-inserter': ModuleInserterPreferenceSchema,
 } as const satisfies Record<UserPreferenceKey, TSchema>
 
 export type UserPreferenceValue<K extends UserPreferenceKey> = Static<
