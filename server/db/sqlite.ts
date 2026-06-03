@@ -125,22 +125,20 @@ export function createSqliteClient(filename: string): DbClient {
   let txChain: Promise<unknown> = Promise.resolve()
   fn.transaction = <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> => {
     const run = async (): Promise<T> => {
-      let began = false
+      // BEGIN is outside the try: if it throws, it propagates without a
+      // ROLLBACK (nothing was opened), so a failed BEGIN can never roll back an
+      // unrelated transaction. Serialization already guarantees BEGIN never
+      // runs while another transaction is open.
       await fn.unsafe('BEGIN')
-      began = true
       try {
         const result = await cb(fn)
         await fn.unsafe('COMMIT')
         return result
       } catch (err) {
-        // Only roll back a transaction we actually opened; never let a failed
-        // BEGIN issue a ROLLBACK that could abort an unrelated transaction.
-        if (began) {
-          try {
-            await fn.unsafe('ROLLBACK')
-          } catch {
-            // swallow rollback failure — the original error is more important
-          }
+        try {
+          await fn.unsafe('ROLLBACK')
+        } catch {
+          // swallow rollback failure — the original error is more important
         }
         throw err
       }

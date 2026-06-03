@@ -11,10 +11,40 @@ type Sev = keyof typeof SEV_ORDER
 const srcPath = process.argv[2]
 if (!srcPath) throw new Error('Usage: bun scripts/generate-audit-report.ts <output-file>')
 
+interface RawFinding {
+  title: string
+  category: string
+  severity: string
+  file: string
+  lineStart: number
+  lineEnd: number
+  description: string
+  impact: string
+  evidence: string
+  reproduction: string
+  suggestedFix: string
+}
+interface RawVerdict {
+  isReal: boolean
+  confidence: string
+  severity: string
+  replicated: boolean
+  replicationSteps: string
+  assessment: string
+  falsePositiveReason: string
+  refinedFix: string
+  cwe: string
+}
+interface RawRecord {
+  finder: string
+  finding: RawFinding
+  verdict: RawVerdict | null
+}
+
 const raw = await Bun.file(srcPath).text()
-const parsed = JSON.parse(raw)
-const result = parsed.result ?? parsed
-const rawFindings: any[] = result.findings ?? []
+const parsed = JSON.parse(raw) as Record<string, unknown>
+const result = (parsed.result ?? parsed) as { findings?: RawRecord[]; finderCount?: number }
+const rawFindings: RawRecord[] = result.findings ?? []
 
 const records = rawFindings.map((rec, i) => {
   const f = rec.finding
