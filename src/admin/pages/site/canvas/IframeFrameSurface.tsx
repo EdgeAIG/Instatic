@@ -78,6 +78,7 @@ import { EditorChromeInjector } from './EditorChromeInjector'
 import { RuntimeScriptInjector } from './RuntimeScriptInjector'
 import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import { useIframeCursorBridge } from './useIframeCursorBridge'
+import { iframeWheelPointToParentClientPoint } from './iframeWheelForwarding'
 import { useCanvasFormControlSuppression } from './useCanvasFormControlSuppression'
 import { CANVAS_VIEWPORT_HEIGHT, type CanvasViewport } from './resolveViewportUnits'
 import { resolveCanvasFrameHeight } from './iframeFrameHeight'
@@ -390,11 +391,14 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
         // since we sized the iframe to content, but defensive).
         e.preventDefault()
         const rect = iframe.getBoundingClientRect()
-        // Re-emit at the iframe's outer client position so handlers in the
-        // parent doc see screen-space coordinates consistent with the
-        // user's pointer.
-        const clientX = rect.left + (e.clientX || 0)
-        const clientY = rect.top + (e.clientY || 0)
+        // The iframe event reports unscaled, iframe-local CSS pixels. The
+        // parent canvas needs transformed client pixels so zoom-to-cursor
+        // stays anchored under the user's pointer at every canvas scale.
+        const clientPoint = iframeWheelPointToParentClientPoint(
+          rect,
+          { width: iframe.clientWidth, height: iframe.clientHeight },
+          { x: e.clientX || 0, y: e.clientY || 0 },
+        )
         const forwarded = new WheelEvent('wheel', {
           bubbles: true,
           cancelable: true,
@@ -402,8 +406,8 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
           deltaY: e.deltaY,
           deltaZ: e.deltaZ,
           deltaMode: e.deltaMode,
-          clientX,
-          clientY,
+          clientX: clientPoint.x,
+          clientY: clientPoint.y,
           ctrlKey: e.ctrlKey,
           shiftKey: e.shiftKey,
           altKey: e.altKey,
