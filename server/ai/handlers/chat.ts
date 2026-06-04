@@ -38,7 +38,7 @@ import { resolveDriver } from '../drivers'
 import { selectToolsForScope } from '../tools'
 import {
   buildSiteSystemPrompt,
-  type SiteSnapshot,
+  type SiteAgentSnapshot,
 } from '../tools/site'
 import {
   buildContentSystemPrompt,
@@ -291,7 +291,7 @@ function buildSystemPromptForScope(
   if (scope === 'site') {
     // Snapshot type validation lives at the boundary that produced it
     // (the editor's renderEvidence + Phase 3 will add schema validation).
-    return buildSiteSystemPrompt((snapshot ?? emptySiteSnapshot()) as SiteSnapshot)
+    return buildSiteSystemPrompt((snapshot ?? emptySiteAgentSnapshot()) as SiteAgentSnapshot)
   }
   if (scope === 'content') {
     return buildContentSystemPrompt((snapshot ?? emptyContentSnapshot()) as ContentSnapshot)
@@ -304,19 +304,24 @@ function buildSystemPromptForScope(
   ]
 }
 
-function emptySiteSnapshot(): SiteSnapshot {
+function emptySiteAgentSnapshot(): SiteAgentSnapshot {
   return {
-    pageId: '',
-    pageTitle: 'Untitled',
-    rootNodeId: '',
-    pages: [],
-    activeBreakpointId: '',
-    breakpoints: [],
-    nodes: [],
-    availableModules: [],
+    page: {
+      id: '',
+      title: 'Untitled',
+      slug: '',
+      rootNodeId: '',
+      nodes: {},
+    } as SiteAgentSnapshot['page'],
+    site: {
+      pages: [],
+      breakpoints: [],
+      styleRules: {},
+      visualComponents: [],
+      settings: { shortcuts: {} },
+    } as unknown as SiteAgentSnapshot['site'],
     selectedNodeId: null,
-    classes: [],
-    tokens: { colors: [], typography: [], spacing: [], fonts: [] },
+    activeBreakpointId: '',
   }
 }
 

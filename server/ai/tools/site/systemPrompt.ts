@@ -9,7 +9,7 @@
  * behaviour comes from tools, not prompt knobs.
  */
 
-import type { SiteSnapshot } from './snapshot'
+import type { SiteAgentSnapshot } from './snapshot'
 
 // Mirrors the literal exported by `@anthropic-ai/claude-agent-sdk`; embedded
 // here so the prompt builder stays SDK-free.
@@ -20,7 +20,7 @@ const STATIC_PROMPT_PREFIX = `You build/edit websites inside a visual site edito
 Building:
 - Insert structure as semantic HTML with insertHtml (<section>, <h1>, <p>, <a>, <button>, <img>, <ul>, <article>, <nav>, <footer>, ...). One insertHtml per section (nav, hero, pricing, footer = 4-6 calls). Smaller chunks recover better when one fails.
 - Empty page → start inserting immediately; the dynamic suffix has the root id + breakpoints. Don't inspect first.
-- Editing existing content → getNodeHtml to read a subtree's HTML, or search_nodes / inspect_page to find a target; then updateNodeProps for content tweaks or replaceNodeHtml to rebuild a subtree's structure.
+- Editing existing content → read_page to read the whole page as annotated HTML + CSS (every element carries uid="<nodeId>"), or getNodeHtml for one subtree; then updateNodeProps / replaceNodeHtml addressing nodes by their uid.
 - Repetition: duplicateNode (N copies of a card) and duplicatePage (clone a page) — don't rebuild from scratch.
 
 Structure as HTML, styling as CSS:
@@ -43,11 +43,11 @@ Notes:
 
 Reply: 1-2 sentences after acting. No raw HTML/CSS/JSON in the reply — tools change the page, the reply just narrates.`
 
-function buildDynamicSuffix(snap: SiteSnapshot): string {
+function buildDynamicSuffix(snap: SiteAgentSnapshot): string {
   const selected = snap.selectedNodeId ?? 'none'
   const active = snap.activeBreakpointId || '(none)'
-  const breakpoints = snap.breakpoints.length > 0
-    ? snap.breakpoints
+  const breakpoints = snap.site.breakpoints.length > 0
+    ? snap.site.breakpoints
         .map((bp) => `${bp.id}@${bp.width}px${bp.mediaQuery ? `:${bp.mediaQuery}` : ''}`)
         .join(', ')
     : '(none)'
@@ -55,14 +55,14 @@ function buildDynamicSuffix(snap: SiteSnapshot): string {
   // duplicatePage / renamePage / deletePage without an extra list_pages
   // round-trip. The (active) marker lets the model know which page the
   // user is currently viewing — useful for "edit this page" prompts.
-  const pages = snap.pages.length > 0
-    ? snap.pages
-        .map((p) => `${p.id}=${p.slug || '(no-slug)'}${p.active ? ' (active)' : ''}`)
+  const pages = snap.site.pages.length > 0
+    ? snap.site.pages
+        .map((p) => `${p.id}=${p.slug || '(no-slug)'}${p.id === snap.page.id ? ' (active)' : ''}`)
         .join(', ')
     : '(none)'
   return [
-    `Page: "${snap.pageTitle}"`,
-    `root: ${snap.rootNodeId || '(empty)'}`,
+    `Page: "${snap.page.title}"`,
+    `root: ${snap.page.rootNodeId || '(empty)'}`,
     `selected: ${selected}`,
     `active breakpoint: ${active}`,
     `all breakpoints: [${breakpoints}]`,
@@ -74,7 +74,7 @@ function buildDynamicSuffix(snap: SiteSnapshot): string {
  * Build the site-scope system prompt as the cacheable 3-element form.
  * Drivers consume `string[]` directly — see `AiStreamRequest.systemPrompt`.
  */
-export function buildSiteSystemPrompt(snap: SiteSnapshot): string[] {
+export function buildSiteSystemPrompt(snap: SiteAgentSnapshot): string[] {
   return [
     STATIC_PROMPT_PREFIX,
     SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
