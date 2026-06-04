@@ -139,6 +139,11 @@ export function FontsSection() {
     }
   }
 
+  function openCreateTokenDialog() {
+    setEditToken(null)
+    setTokenDialogOpen(true)
+  }
+
   const sortedTokens = sortFontTokens(fontTokens)
 
   return (
@@ -177,21 +182,34 @@ export function FontsSection() {
         <>
           <div className={styles.tokenToolbar}>
             <span className={styles.tokenToolbarTitle}>Font tokens</span>
-            <Button
-              variant="secondary"
-              size="sm"
-              type="button"
-              onClick={() => {
-                setEditToken(null)
-                setTokenDialogOpen(true)
-              }}
-            >
-              Create token
-            </Button>
+            {sortedTokens.length > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={openCreateTokenDialog}
+              >
+                Create token
+              </Button>
+            )}
           </div>
 
           {sortedTokens.length === 0 ? (
-            <p className={styles.tokenEmpty}>No font tokens yet.</p>
+            <EmptyState
+              plain
+              compact
+              title="No font tokens yet."
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  type="button"
+                  onClick={openCreateTokenDialog}
+                >
+                  Create token
+                </Button>
+              }
+            />
           ) : (
             <ul className={styles.list} aria-label="Font tokens">
               {sortedTokens.map((token) => (
