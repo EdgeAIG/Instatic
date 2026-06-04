@@ -341,7 +341,11 @@ Nodes that reference the rule by id keep working — only the rendered CSS outpu
   - `src/admin/pages/site/panels/PropertiesPanel/selectorPickerModel.ts` — `deriveSelectorPickerModel`; the pure derivation layer for the unified selector picker
   - `src/core/page-tree/styleRule.ts` — `classifySelectorCreateInput`; the shared classifier for selector creation surfaces
   - `src/admin/pages/site/store/styleRuleRename.ts` — `renameStyleRule`, `isValidCssSelector`; rename logic for both class-kind and ambient rules
-  - `src/admin/pages/site/panels/PropertiesPanel/ClassPicker.tsx` — picker UI: pill strip, input, creation, context menus
+  - `src/admin/pages/site/panels/PropertiesPanel/ClassPicker.tsx` — picker UI entry point: pill strip, input, creation flow
+  - `src/admin/pages/site/panels/PropertiesPanel/classPickerUiState.ts` — reducer + action types for the picker's UI state
+  - `src/admin/pages/site/panels/PropertiesPanel/useClassPickerDerivedState.ts` — derives selector model, suggestions, and keyboard-nav indices
+  - `src/admin/pages/site/panels/PropertiesPanel/ClassPillContextMenu.tsx` — context menu portal for class pill right-click / keyboard-menu actions
+  - `src/admin/pages/site/panels/PropertiesPanel/ClassRenameDialog.tsx` — rename dialog for class selectors
   - `src/admin/pages/site/panels/PropertiesPanel/SelectorHeader.tsx` — selector name, inline rename, and delete shown in the Properties Panel header during selector-editing mode
   - `src/admin/pages/site/panels/SelectorDialogs.tsx` — `SelectorNameDialog`, `DeleteSelectorDialog`; shared dialog components for selector editing surfaces
   - `src/admin/pages/site/panels/SelectorsPanel/SelectorContextMenu.tsx` — right-click context menu for selector rows

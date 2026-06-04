@@ -685,7 +685,11 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
   - `src/admin/pages/site/store/slices/site/nodeActions.ts` — `mutateActiveTree`
   - `src/admin/pages/site/canvas/CanvasRoot.tsx` — canvas mount
   - `src/admin/spotlight/SpotlightRoot.tsx` — Cmd+K palette
-  - `src/admin/pages/site/panels/PropertiesPanel/ClassPicker.tsx` — unified selector picker UI
+  - `src/admin/pages/site/panels/PropertiesPanel/ClassPicker.tsx` — unified selector picker UI (entry point: pill strip, input, creation flow)
+  - `src/admin/pages/site/panels/PropertiesPanel/classPickerUiState.ts` — reducer + action types for the picker's local UI state (`query`, `showSuggestions`, `contextMenu`, `renameTarget`, `highlightedIndex`)
+  - `src/admin/pages/site/panels/PropertiesPanel/useClassPickerDerivedState.ts` — hook that derives selector model, suggestions, and keyboard-nav indices from store state; exports `cssAttrSelectorValue`
+  - `src/admin/pages/site/panels/PropertiesPanel/ClassPillContextMenu.tsx` — context menu portal for class pill right-click / keyboard-menu actions
+  - `src/admin/pages/site/panels/PropertiesPanel/ClassRenameDialog.tsx` — rename dialog for class selectors
   - `src/admin/pages/site/panels/PropertiesPanel/selectorPickerModel.ts` — selector picker derivation model (`deriveSelectorPickerModel`)
   - `src/core/page-tree/styleRule.ts` — selector creation classifier (`classifySelectorCreateInput`) shared by the Properties picker and Selectors panel
   - `src/admin/pages/site/panels/SiteExplorerPanel/SiteExplorerPanel.tsx` — site explorer panel mount
