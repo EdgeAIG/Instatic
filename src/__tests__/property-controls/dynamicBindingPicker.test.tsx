@@ -140,10 +140,8 @@ function loadTemplatePageInStore(tableSlug = 'posts') {
     nodes: { root, 'text-1': text },
     template: {
       enabled: true,
-      context: 'entry',
-      tableSlug,
+      target: { kind: 'postTypes', tableSlugs: [tableSlug] },
       priority: 100,
-      conditions: [],
     },
   })
   useEditorStore.setState({
@@ -274,7 +272,7 @@ describe('DynamicBindingControl picker', () => {
     })
   })
 
-  it('shows the auto-scope chip and surfaces table fields when the page has template.tableSlug', async () => {
+  it('shows the auto-scope chip and surfaces table fields when the page targets a post type', async () => {
     loadTemplatePageInStore('posts')
     renderBinding()
     fireEvent.click(screen.getByRole('button', { name: /bind text/i }))

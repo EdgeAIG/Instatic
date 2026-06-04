@@ -87,10 +87,8 @@ describe('canvas template preview bindings', () => {
       nodes: { root, title },
       template: {
         enabled: true,
-        context: 'entry',
-        tableSlug: 'posts',
+        target: { kind: 'postTypes', tableSlugs: ['posts'] },
         priority: 100,
-        conditions: [],
       },
     })
 
@@ -129,10 +127,8 @@ describe('canvas template preview bindings', () => {
       nodes: { root, image },
       template: {
         enabled: true,
-        context: 'entry',
-        tableSlug: 'posts',
+        target: { kind: 'postTypes', tableSlugs: ['posts'] },
         priority: 100,
-        conditions: [],
       },
     })
 

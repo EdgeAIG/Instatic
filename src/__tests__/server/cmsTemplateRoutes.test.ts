@@ -45,10 +45,8 @@ describe('CMS dynamic template routes', () => {
     page.slug = 'post-template'
     page.template = {
       enabled: true,
-      context: 'entry',
-      tableSlug: 'posts',
+      target: { kind: 'postTypes', tableSlugs: ['posts'] },
       priority: 100,
-      conditions: [],
     }
     const snapshot: PublishedPageSnapshot = {
       cmsSnapshotVersion: 1,
@@ -181,10 +179,8 @@ describe('CMS dynamic template routes', () => {
       page.slug = 'post-template-qs'
       page.template = {
         enabled: true,
-        context: 'entry',
-        tableSlug: 'posts',
+        target: { kind: 'postTypes', tableSlugs: ['posts'] },
         priority: 100,
-        conditions: [],
       }
       const snapshot: PublishedPageSnapshot = {
         cmsSnapshotVersion: 1,

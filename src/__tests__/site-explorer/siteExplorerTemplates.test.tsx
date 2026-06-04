@@ -30,7 +30,10 @@ function resetStore() {
 }
 
 function loadTemplateSite() {
-  const homeRoot = makeNode({ id: 'root-home', moduleId: 'base.body' })
+  // The home page carries exactly one base.outlet so it satisfies the
+  // template outlet invariant when converted via the dialog.
+  const homeOutlet = makeNode({ id: 'home-outlet', moduleId: 'base.outlet' })
+  const homeRoot = makeNode({ id: 'root-home', moduleId: 'base.body', children: ['home-outlet'] })
   const templateRoot = makeNode({ id: 'root-template', moduleId: 'base.body' })
   templateRoot.dynamicBindings = {
     text: { source: 'currentEntry', field: 'title' },
@@ -41,7 +44,7 @@ function loadTemplateSite() {
     title: 'Home',
     slug: 'index',
     rootNodeId: 'root-home',
-    nodes: { 'root-home': homeRoot },
+    nodes: { 'root-home': homeRoot, 'home-outlet': homeOutlet },
   })
   const template = makePage({
     id: 'page-template',
@@ -51,10 +54,8 @@ function loadTemplateSite() {
     nodes: { 'root-template': templateRoot },
     template: {
       enabled: true,
-      context: 'entry',
-      tableSlug: 'posts',
+      target: { kind: 'postTypes', tableSlugs: ['posts'] },
       priority: 20,
-      conditions: [],
     },
   })
 
@@ -102,13 +103,12 @@ describe('SiteExplorerPanel templates', () => {
     const page = useEditorStore.getState().site?.pages.find((candidate) => candidate.id === 'page-home')
     expect(page?.template).toMatchObject({
       enabled: true,
-      context: 'entry',
-      tableSlug: 'posts',
+      target: { kind: 'everywhere' },
       priority: 50,
     })
   })
 
-  it('uses the shared Select dropdown for the template collection field', async () => {
+  it('targets a chosen post type via the Applies-to selector', async () => {
     let collectionRequests = 0
     globalThis.fetch = async (input: RequestInfo | URL) => {
       if (String(input) === '/admin/api/cms/data/tables') {
@@ -169,17 +169,22 @@ describe('SiteExplorerPanel templates', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /use as template/i }))
 
     const dialog = screen.getByRole('dialog', { name: 'Template settings' })
-    const collectionControl = within(dialog).getByRole('combobox', { name: 'Table' })
-    expect(collectionControl.tagName).toBe('INPUT')
+
+    // Switch "Applies to" from Everywhere → Post types (first ArrowDown opens
+    // the listbox, the second moves to "Post types", Enter commits).
+    const appliesTo = within(dialog).getByRole('combobox', { name: 'Applies to' })
+    appliesTo.focus()
+    fireEvent.keyDown(appliesTo, { key: 'ArrowDown' })
+    fireEvent.keyDown(appliesTo, { key: 'ArrowDown' })
+    fireEvent.keyDown(appliesTo, { key: 'Enter' })
 
     await waitFor(() => expect(collectionRequests).toBe(1))
-    fireEvent.click(collectionControl)
-    const collectionMenu = await screen.findByRole('listbox', { name: 'Table' })
-    fireEvent.click(within(collectionMenu).getByRole('option', { name: 'Projects' }))
+    await waitFor(() => expect(within(dialog).getByRole('checkbox', { name: 'Projects' })).toBeDefined())
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Projects' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
 
     const page = useEditorStore.getState().site?.pages.find((candidate) => candidate.id === 'page-home')
-    expect(page?.template?.tableSlug).toBe('projects')
+    expect(page?.template?.target).toEqual({ kind: 'postTypes', tableSlugs: ['projects'] })
   })
 
   it('converts a template back to a page and drops bindings', () => {
