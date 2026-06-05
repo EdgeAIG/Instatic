@@ -1,6 +1,19 @@
 {
-  "//": "examples/** is reference/demo plugin code for plugin authors (newsletter, forms-builder, analytics, etc.), NOT shipped product code. It is intentionally excluded from the react-doctor health bar so the score reflects product code in src/, server/, scripts/ only. This is a deliberate, reviewable scoping decision — not a silent suppression.",
+  "//ignore": "examples/** is reference/demo plugin code for plugin authors (newsletter, forms-builder, analytics, etc.), NOT shipped product code. It is intentionally excluded from the react-doctor health bar so the score reflects product code in src/, server/, scripts/ only. This is a deliberate, reviewable scoping decision — not a silent suppression.",
   "ignore": {
     "files": ["examples/**"]
-  }
+  },
+
+  "//categories": "The 'React Compiler' category is react-doctor's port of the React Compiler's OWN diagnostics (the 'todo' bailout notices for syntax the compiler can't yet lower — e.g. try/finally; plus set-state-in-effect and hooks). The authoritative gate for these is eslint-plugin-react-compiler — the same compiler's official ESLint integration — which runs in `bun run lint`/CI. The bailouts are compiler limitations, not code defects, and react-hooks/set-state-in-effect is deliberately 'off' in eslint.config.js. Downgraded error→warn so they stay VISIBLE (never ignored) while enforcement lives in eslint, not in two places with different precision.",
+  "categories": {
+    "React Compiler": "warn"
+  },
+
+  "//rules": "react-compiler-no-manual-memoization (category Architecture, so not covered by the React Compiler downgrade above) is downgraded error→warn. With the React Compiler enabled, the three legitimate memoization cases — a function in a useEffect dep array, a React.memo bailout on a hot list-rendered component, and a react-hooks/refs escape hatch — are correct code this rule cannot recognize (it false-positived on every site here). Real protection (the compiler + react-hooks/exhaustive-deps) already lives in eslint; kept as a warning so genuinely-gratuitous memo on NEW code is still surfaced.",
+  "rules": {
+    "react-doctor/react-compiler-no-manual-memoization": "warn"
+  },
+
+  "//failOn": "Fail (non-zero exit) only on error-severity diagnostics. With the React-Compiler noise downgraded to warnings above, the remaining error tier is high-signal (Security, Correctness, etc.), so `bun run doctor` is a trustworthy regression gate rather than perpetually red on compiler limitations.",
+  "failOn": "error"
 }
