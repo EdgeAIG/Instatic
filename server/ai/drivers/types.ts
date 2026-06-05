@@ -136,7 +136,12 @@ export interface ToolContextBase {
   readonly userId: string
   readonly scope: import('../runtime/types').ToolScope
   readonly conversationId: string
-  readonly snapshot: unknown
+  /**
+   * The scope snapshot for read tools. Mutable across a turn: the browser
+   * bridge refreshes it after each mutating tool (via createBridge's
+   * onSnapshot) so later server read tools see post-mutation state.
+   */
+  snapshot: unknown
 }
 
 // ---------------------------------------------------------------------------

@@ -110,16 +110,22 @@ interface ToolResultEvent {
   error?: string
 }
 
-/** Aggregated token usage for the entire turn — emitted just before `done`. */
+/** Aggregated token usage for the entire turn — emitted just before `done`.
+ *  Billing/cost only; the context meter is driven by `ContextEvent`. */
 interface UsageEvent {
   type: 'usage'
   promptTokens: number
   completionTokens: number
   costUsd?: number
-  /** Context meter (handler-injected): provider-normalised total input the
-   *  model processed this turn. The window half is resolved from the model
-   *  catalogue client-side, so it isn't on the wire. */
-  contextTokens?: number
+}
+
+/** Per-round context size — drives the live "context used" meter. Emitted once
+ *  per provider round-trip; `contextTokens` is the handler-injected,
+ *  provider-normalised input the model held that round (the current context
+ *  size). The window half is resolved from the model catalogue client-side. */
+interface ContextEvent {
+  type: 'context'
+  contextTokens: number
 }
 
 export type ServerStreamEvent =
@@ -129,6 +135,7 @@ export type ServerStreamEvent =
   | ToolCallEvent
   | ToolResultEvent
   | UsageEvent
+  | ContextEvent
   | DoneEvent
   | ErrorEvent
 

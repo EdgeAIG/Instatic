@@ -22,6 +22,11 @@ function snapshot(): SiteAgentSnapshot {
   about.id = 'page-about'
   about.slug = 'about'
   about.title = 'About'
+  about.template = {
+    enabled: true,
+    target: { kind: 'postTypes', tableSlugs: ['posts'] },
+    priority: 100,
+  }
   page.id = 'page-home'
   page.slug = 'index'
   page.title = 'Home'
@@ -37,14 +42,22 @@ function callTool(name: string, input: Record<string, unknown> = {}): Promise<un
 }
 
 describe('site read tools', () => {
-  it('exposes exactly read_page + the four catalog tools', () => {
+  it('exposes exactly read_page + the catalog tools', () => {
     expect(siteReadTools.map((t) => t.name).sort()).toEqual([
       'list_breakpoints',
       'list_modules',
       'list_pages',
+      'list_post_types',
       'list_tokens',
       'read_page',
     ])
+  })
+
+  it('list_post_types is a server-resolved read tool', () => {
+    const tool = siteReadTools.find((t) => t.name === 'list_post_types')!
+    expect(tool.execution).toBe('server')
+    expect(tool.mutates).toBeFalsy()
+    expect(typeof tool.handler).toBe('function')
   })
 
   it('read_page returns annotated HTML + a <style> css bundle', async () => {
@@ -92,16 +105,28 @@ describe('site read tools', () => {
     expect(onlyColors.fonts).toEqual([])
   })
 
-  it('list_pages maps pages with active + isHomepage flags', async () => {
+  it('list_pages maps pages with active + isHomepage flags and template config', async () => {
     const { pages } = (await callTool('list_pages')) as {
-      pages: Array<{ id: string; slug: string; active: boolean; isHomepage: boolean }>
+      pages: Array<{
+        id: string
+        slug: string
+        active: boolean
+        isHomepage: boolean
+        template: { target: { kind: string; tableSlugs?: string[] }; priority: number } | null
+      }>
     }
     const home = pages.find((p) => p.id === 'page-home')!
     const about = pages.find((p) => p.id === 'page-about')!
     expect(home.isHomepage).toBe(true) // slug "index"
     expect(home.active).toBe(true) // the posted active page
+    expect(home.template).toBeNull() // ordinary page
     expect(about.isHomepage).toBe(false)
     expect(about.active).toBe(false)
+    // about is a postTypes template targeting "posts"
+    expect(about.template).toEqual({
+      target: { kind: 'postTypes', tableSlugs: ['posts'] },
+      priority: 100,
+    })
   })
 
   it('list_breakpoints returns the site breakpoints + the active id', async () => {

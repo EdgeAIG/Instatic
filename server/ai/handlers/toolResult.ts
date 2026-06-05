@@ -24,6 +24,10 @@ const ToolResultBodySchema = Type.Object({
   bridgeId: Type.String({ minLength: 1 }),
   requestId: Type.String({ minLength: 1 }),
   result: AiToolOutputSchema,
+  // Optional post-mutation snapshot. The browser sends its current
+  // scope snapshot after a mutating tool so subsequent server-side read tools
+  // in the same turn see fresh state (loose-typed — scope-specific shape).
+  snapshot: Type.Optional(Type.Unknown()),
 })
 
 export function tryHandleAiToolResult(
@@ -44,9 +48,9 @@ async function handleAiToolResult(req: Request, db: DbClient): Promise<Response>
 
   const body = await readValidatedBody(req, ToolResultBodySchema)
   if (!body) return badRequest('Invalid request body.')
-  const { bridgeId, requestId, result } = body
+  const { bridgeId, requestId, result, snapshot } = body
 
-  const matched = resolveBridgeToolResult(bridgeId, requestId, result)
+  const matched = resolveBridgeToolResult(bridgeId, requestId, result, snapshot)
   if (!matched) {
     // Bridge gone or unknown requestId — likely the stream was aborted
     // before the browser's POST arrived. Not a fatal client error.

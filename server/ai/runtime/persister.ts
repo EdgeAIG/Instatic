@@ -33,6 +33,16 @@ export interface ConversationsPersister {
     cacheReadTokens?: number
     cacheCreationTokens?: number
   }): Promise<void>
+  /**
+   * Record one round's context size (input buckets). Kept in memory; the LAST
+   * value seen this turn is the true "context used" and is written to the
+   * conversation row by `recordUsage` at turn end. Synchronous — no DB write.
+   */
+  recordContext(usage: {
+    promptTokens: number
+    cacheReadTokens?: number
+    cacheCreationTokens?: number
+  }): void
 }
 
 export interface ConversationsPersisterContext {
@@ -53,6 +63,10 @@ export function createConversationsPersister(
   // message row (which always exists by then — either a text reply or
   // the assistant's tool_use block that surfaced via appendToolCall).
   let lastAssistantMessageId: string | null = null
+  // The latest round's provider-normalised context size. The meter wants the
+  // CURRENT context (last round), not the per-round sum — so we overwrite, then
+  // persist this value with the terminal usage event.
+  let latestContextTokens: number | null = null
 
   return {
     async appendAssistantText(text) {
@@ -96,6 +110,14 @@ export function createConversationsPersister(
       })
     },
 
+    recordContext(usage) {
+      latestContextTokens = normalizeContextTokens(ctx.providerId, {
+        promptTokens: usage.promptTokens,
+        cacheReadTokens: usage.cacheReadTokens ?? 0,
+        cacheCreationTokens: usage.cacheCreationTokens ?? 0,
+      })
+    },
+
     async recordUsage(usage) {
       // Persist usage as a denormalised update on the LAST assistant
       // message so a per-message cost view is possible later. If no
@@ -120,9 +142,11 @@ export function createConversationsPersister(
         },
       )
       // Provider-normalised "context used now" snapshot for the conversation
-      // row (overwritten per turn, not summed) so the composer's meter can be
-      // restored on reload.
-      const contextTokens = normalizeContextTokens(ctx.providerId, {
+      // row, restored by the meter on reload. Prefer the LAST round's context
+      // (tracked via recordContext) — the true current context size. Fall back
+      // to this turn's input only if no context event arrived (e.g. a provider
+      // that never reported per-round usage).
+      const contextTokens = latestContextTokens ?? normalizeContextTokens(ctx.providerId, {
         promptTokens: usage.promptTokens,
         cacheReadTokens: usage.cacheReadTokens ?? 0,
         cacheCreationTokens: usage.cacheCreationTokens ?? 0,

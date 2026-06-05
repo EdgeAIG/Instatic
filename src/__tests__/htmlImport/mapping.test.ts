@@ -1114,6 +1114,26 @@ describe('walkAndMap + parseHtml as independent pipeline steps', () => {
 })
 
 // ---------------------------------------------------------------------------
+// base.outlet — <instatic-outlet> custom element
+// ---------------------------------------------------------------------------
+
+describe('base.outlet — <instatic-outlet>', () => {
+  it('maps <instatic-outlet> to a childless base.outlet node', () => {
+    const node = single('<instatic-outlet></instatic-outlet>')
+    expect(node.moduleId).toBe('base.outlet')
+    expect(node.children ?? []).toHaveLength(0)
+  })
+
+  it('survives import alongside sibling chrome, producing one outlet node', () => {
+    const result = importHtml(
+      '<header>Top</header><instatic-outlet></instatic-outlet><footer>Bottom</footer>',
+    )
+    const outlets = Object.values(result.nodes).filter((n) => n.moduleId === 'base.outlet')
+    expect(outlets).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // 13. Empty input and edge cases
 // ---------------------------------------------------------------------------
 

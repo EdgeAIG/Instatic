@@ -79,6 +79,7 @@ function makeRequest(bridge: AiBrowserBridge, serverCalls: unknown[]): AiStreamR
     messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
     tools: [echoTool, paintTool],
     modelId: 'claude-sonnet-4-6',
+    modelCapabilities: { toolCalling: true, visionInput: true, promptCache: true, streaming: true },
     credentials: { id: 'cr', providerId: 'anthropic', authMode: 'apiKey', apiKey: 'sk-test', baseUrl: null },
     signal: new AbortController().signal,
     bridge,
@@ -137,11 +138,18 @@ describe('runToolLoop via anthropicDriver', () => {
     const text = events.filter((e) => e.type === 'text').map((e) => (e as { text: string }).text).join('')
     expect(text).toBe('all done')
 
-    // Usage aggregates across both turns: input 20+30=50, output 15+5=20.
+    // Usage aggregates across both turns for BILLING: input 20+30=50, output 15+5=20.
     const usage = events.find((e) => e.type === 'usage') as { promptTokens: number; completionTokens: number } | undefined
     expect(usage).toBeDefined()
     expect(usage!.promptTokens).toBe(50)
     expect(usage!.completionTokens).toBe(20)
+
+    // The live meter is driven by per-round `context` events: ONE per provider
+    // round, each carrying THAT round's input (20, then 30) — NOT the running
+    // sum. The meter reads the latest (30 = current context size), so it climbs
+    // mid-turn and never over-counts by summing rounds.
+    const contextEvents = events.filter((e) => e.type === 'context') as Array<{ promptTokens: number }>
+    expect(contextEvents.map((e) => e.promptTokens)).toEqual([20, 30])
   })
 
   test('returns an error event (not a throw) on a non-OK HTTP status', async () => {

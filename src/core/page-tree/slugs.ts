@@ -34,6 +34,28 @@ export function pageSlugDuplicateError(
   return duplicate ? `Duplicate page slug "/${slug}".` : null
 }
 
+/**
+ * Make a desired slug unique within `pages` by auto-suffixing (`-2`, `-3`, …).
+ * Used by the page-creation mutations (addPage / duplicatePage) and by
+ * renamePage so two pages can never collide on a slug — a collision makes the
+ * whole site fail `validateSite` on save. `excludePageId` skips the page being
+ * renamed so re-saving its own slug is a no-op rather than a self-collision.
+ */
+export function uniquePageSlug(
+  desired: string,
+  pages: Page[],
+  excludePageId?: string,
+): string {
+  const base = normalizePageSlug(desired) || 'page'
+  let candidate = base
+  let suffix = 2
+  while (pages.some((page) => page.slug === candidate && page.id !== excludePageId)) {
+    candidate = `${base}-${suffix}`
+    suffix += 1
+  }
+  return candidate
+}
+
 export function createUniquePageSlug(title: string, pages: Page[]): string {
   const normalized = normalizePageSlug(title)
   const base = !normalized

@@ -6,14 +6,31 @@
  * entry route — leaves it here to render the current entry's body. The
  * `data-instatic-content-region` marker is what the Content workspace's Live
  * mode mounts Tiptap against, so it is emitted unconditionally.
+ *
+ * The outlet renders as an author-chosen semantic element (default `<main>`),
+ * sharing the tag-selection helpers with `base.container` / `base.loop`. The
+ * `html` prop is NOT author-editable — it is the binding target the publisher
+ * fills with the current entry's body (`{currentEntry.body}`), so it carries
+ * no panel control.
  */
 import type { ModuleDefinition } from '@core/module-engine'
 import { registry } from '@core/module-engine'
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
 import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
+import {
+  customHtmlTagControl,
+  htmlTagControl,
+  resolveHtmlTag,
+} from '@modules/base/utils/htmlTag'
 import { OutletEditor } from './OutletEditor'
 
 const OutletPropsSchema = Type.Object({
+  tag: Type.String({ default: 'main' }),
+  customTag: Type.String({ default: '' }),
+  /**
+   * Binding target only — the publisher fills this with the current entry's
+   * body HTML. Never hand-edited, so it carries no `schema` control.
+   */
   html: Type.String({ default: '' }),
 })
 
@@ -30,7 +47,8 @@ export const OutletModule: ModuleDefinition<OutletProps> = {
   canHaveChildren: false,
 
   schema: {
-    html: { type: 'richtext', label: 'HTML' },
+    tag: htmlTagControl(),
+    customTag: customHtmlTagControl(),
   },
 
   propsSchema: OutletPropsSchema,
@@ -38,11 +56,12 @@ export const OutletModule: ModuleDefinition<OutletProps> = {
 
   component: OutletEditor,
 
-  htmlTag: 'article',
+  htmlTag: (props) => resolveHtmlTag(props.tag, props.customTag),
 
   render: (props) => {
+    const tag = resolveHtmlTag(props.tag, props.customTag)
     const html = typeof props.html === 'string' ? props.html : ''
-    return { html: `<article data-instatic-content-region>${html}</article>` }
+    return { html: `<${tag} data-instatic-content-region>${html}</${tag}>` }
   },
 }
 

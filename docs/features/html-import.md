@@ -89,6 +89,7 @@ Callers splice the fragment into the page tree via `insertImportedNodes(parentId
 
 | Selector | Module | Props set | Recurse |
 |---|---|---|---|
+| `instatic-outlet` | `base.outlet` | none (the CMS content outlet) | **No** |
 | `h1`–`h6`, `p`, `span`, `small`, `strong`, `em` | `base.text` | `text` = `el.textContent`, `tag` = tag name | No |
 | `a` with class `btn` | `base.button` | `label` = `el.textContent`, `href`, `target` | No |
 | `a` (no `btn` class) | `base.link` | `text` = `el.textContent`, `href`, `target` | No |
@@ -108,6 +109,7 @@ Callers splice the fragment into the page tree via `insertImportedNodes(parentId
 
 **Key details:**
 
+- **`<instatic-outlet>` → `base.outlet`.** The custom element marks where matched content flows in a CMS template. It maps to a childless `base.outlet` node (any inner markup is ignored — the composer fills it). This rule lets the AI agent and hand-authored template HTML place the single content outlet inline via the normal import path. See [templates.md](templates.md) and [agent.md](agent.md).
 - `base.text` uses `tag` (not a separate `level` or heading prop) — the tag name is passed through directly.
 - **Direct text inside a recursing container is preserved.** The walker iterates `childNodes` (not just `children`): element children route through the rules, and each significant text node becomes a synthesized `base.text(tag:'span')` child in document order. So `<div class="num">98%</div>` and `<li>Buy milk</li>` import as a container holding their text — not an empty container. Whitespace-only text (indentation between tags) is skipped; internal whitespace runs collapse to single spaces.
 - `base.link` uses the prop `text` (not `label`). `base.button` uses `label` (not `text`). These match the module source.

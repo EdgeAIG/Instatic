@@ -45,3 +45,51 @@ describe('bridge tool-call settlement', () => {
     expect(__listActiveBridgesForTesting()).not.toContain(bridgeId)
   })
 })
+
+/**
+ * Snapshot refresh: a mutating browser tool posts its post-mutation snapshot
+ * back with the result. The bridge must hand that snapshot to onSnapshot BEFORE
+ * resolving the waiter, so the driver loop's next server read tool sees fresh
+ * state rather than the stale turn-start snapshot.
+ */
+describe('bridge snapshot refresh', () => {
+  test('onSnapshot fires with the posted snapshot before the call resolves', async () => {
+    let requestId = ''
+    const seen: unknown[] = []
+    const { bridgeId, bridge, destroy } = createBridge(
+      (ev: AiStreamEvent) => {
+        if (ev.type === 'toolRequest') requestId = ev.requestId
+      },
+      undefined,
+      1000,
+      (snapshot) => { seen.push(snapshot) },
+    )
+    const pending = bridge.callBrowser('addPage', { title: 'X' })
+    const fresh = { pages: ['home', 'x'] }
+    expect(
+      resolveBridgeToolResult(bridgeId, requestId, { ok: true, data: { pageId: 'x' } }, fresh),
+    ).toBe(true)
+    await expect(pending).resolves.toMatchObject({ ok: true })
+    // onSnapshot was invoked with exactly the posted snapshot.
+    expect(seen).toEqual([fresh])
+    destroy()
+  })
+
+  test('omitting the snapshot leaves onSnapshot uncalled (read-only tool)', async () => {
+    let requestId = ''
+    let calls = 0
+    const { bridgeId, bridge, destroy } = createBridge(
+      (ev: AiStreamEvent) => {
+        if (ev.type === 'toolRequest') requestId = ev.requestId
+      },
+      undefined,
+      1000,
+      () => { calls += 1 },
+    )
+    const pending = bridge.callBrowser('render_snapshot', {})
+    expect(resolveBridgeToolResult(bridgeId, requestId, { ok: true })).toBe(true)
+    await expect(pending).resolves.toMatchObject({ ok: true })
+    expect(calls).toBe(0)
+    destroy()
+  })
+})

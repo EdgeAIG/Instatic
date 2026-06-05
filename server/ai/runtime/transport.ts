@@ -53,6 +53,13 @@ interface PendingToolResolver {
 interface BridgeEntry {
   pending: Map<string, PendingToolResolver>
   emit(event: AiStreamEvent): void
+  /**
+   * Called with the browser's post-mutation snapshot when a tool-result POST
+   * carries one. Lets the turn refresh `toolContextBase.snapshot` so the NEXT
+   * server-side read tool sees the state the just-executed browser tool
+   * produced, instead of the stale turn-start snapshot.
+   */
+  onSnapshot?: (snapshot: unknown) => void
 }
 
 const activeBridges = new Map<string, BridgeEntry>()
@@ -71,13 +78,14 @@ export function createBridge(
   emit: (event: AiStreamEvent) => void,
   signal?: AbortSignal,
   timeoutMs: number = BROWSER_TOOL_TIMEOUT_MS,
+  onSnapshot?: (snapshot: unknown) => void,
 ): {
   bridgeId: string
   bridge: AiBrowserBridge
   destroy: () => void
 } {
   const bridgeId = nanoid()
-  const entry: BridgeEntry = { pending: new Map(), emit }
+  const entry: BridgeEntry = { pending: new Map(), emit, onSnapshot }
   activeBridges.set(bridgeId, entry)
 
   const bridge: AiBrowserBridge = {
@@ -149,6 +157,7 @@ export function resolveBridgeToolResult(
   bridgeId: string,
   requestId: string,
   result: AiToolOutput,
+  snapshot?: unknown,
 ): boolean {
   const entry = activeBridges.get(bridgeId)
   if (!entry) return false
@@ -156,6 +165,11 @@ export function resolveBridgeToolResult(
   if (!pending) return false
   entry.pending.delete(requestId)
   pending.cleanup()
+  // Refresh the turn snapshot BEFORE resolving the waiter: the driver loop
+  // resumes from `resolve()` and may run a server read tool next, which must
+  // see post-mutation state. `undefined` means the browser sent no snapshot
+  // (e.g. a read-only tool) — leave the existing one in place.
+  if (snapshot !== undefined) entry.onSnapshot?.(snapshot)
   pending.resolve(result)
   return true
 }

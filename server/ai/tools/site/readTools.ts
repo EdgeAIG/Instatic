@@ -13,6 +13,7 @@
 import { Type, type Static } from '@core/utils/typeboxHelpers'
 import type { AiTool } from '../types'
 import type { SiteAgentSnapshot } from './snapshot'
+import { listDataTablesWithCounts } from '../../../repositories/data'
 import {
   describeAgentModules,
   describeAgentTokens,
@@ -120,8 +121,40 @@ const listPagesTool: AiTool = {
       slug: p.slug,
       active: p.id === snap.page.id,
       isHomepage: p.slug === 'index',
+      // null for an ordinary page; otherwise the template config so the agent
+      // can see which pages are templates and what they target.
+      template: p.template
+        ? { target: p.template.target, priority: p.template.priority }
+        : null,
     }))
     return { pages }
+  },
+}
+
+// ---------------------------------------------------------------------------
+// list_post_types
+// ---------------------------------------------------------------------------
+
+const ListPostTypesInput = Type.Object({})
+
+const listPostTypesTool: AiTool = {
+  name: 'list_post_types',
+  scope: 'site',
+  execution: 'server',
+  description:
+    'List the post types (routable collections) a `postTypes` template can target. Each entry has { slug, label, routeBase, kind }; pass the `slug` values to setPageTemplate\'s `target.tableSlugs`. Only collections with a public route appear — non-routable data tables are excluded.',
+  inputSchema: ListPostTypesInput,
+  handler: async (_input, ctx) => {
+    const tables = await listDataTablesWithCounts(ctx.db)
+    const postTypes = tables
+      .filter((t) => t.routeBase.trim() !== '')
+      .map((t) => ({
+        slug: t.slug,
+        label: t.pluralLabel || t.name,
+        routeBase: t.routeBase,
+        kind: t.kind,
+      }))
+    return { postTypes }
   },
 }
 
@@ -156,5 +189,6 @@ export const siteReadTools: AiTool[] = [
   listModulesTool,
   listTokensTool,
   listPagesTool,
+  listPostTypesTool,
   listBreakpointsTool,
 ]

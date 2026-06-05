@@ -5,7 +5,7 @@ import type { SiteDocument } from './siteDocument'
 import type { NodeTree } from './treeSchema'
 import type { TreeOperation } from './operationSchema'
 import { getParent, isAncestor } from './selectors'
-import { normalizePageSlug } from './slugs'
+import { normalizePageSlug, uniquePageSlug } from './slugs'
 import { cloneScopedClassesForNodeMap } from './scopedClassClone'
 
 /**
@@ -763,7 +763,9 @@ export function addPage(site: SiteDocument, title: string, slug: string): Page {
   const page: Page = {
     id: nanoid(),
     title,
-    slug: normalizePageSlug(slug),
+    // Auto-unique so a repeated create (same title/slug) never collides — a
+    // duplicate slug fails validateSite and bricks every save.
+    slug: uniquePageSlug(slug, site.pages),
     rootNodeId: rootNode.id,
     nodes: { [rootNode.id]: rootNode },
   }
@@ -782,7 +784,15 @@ export function renamePage(site: SiteDocument, pageId: string, title: string, sl
   const page = site.pages.find((p) => p.id === pageId)
   if (!page) throw new Error(`[PageTree] Page "${pageId}" not found`)
   page.title = title
-  if (slug !== undefined) page.slug = normalizePageSlug(slug)
+  if (slug !== undefined) {
+    const normalized = normalizePageSlug(slug)
+    // 'index' is the homepage intent — set it verbatim (homepage swap is a
+    // separate concern). Any other slug is made unique against sibling pages
+    // (excluding this one) so a rename can't introduce a duplicate slug.
+    page.slug = normalized === 'index'
+      ? 'index'
+      : uniquePageSlug(slug, site.pages, pageId)
+  }
 }
 
 export function reorderPages(site: SiteDocument, fromIndex: number, toIndex: number): void {
@@ -856,7 +866,8 @@ export function duplicatePage(
   const newPage: Page = {
     id: nanoid(),
     title,
-    slug: normalizePageSlug(slug ?? title),
+    // Auto-unique — a duplicate ("Copy") must not collide with the source slug.
+    slug: uniquePageSlug(slug ?? title, site.pages),
     rootNodeId: newRootId,
     nodes: newNodes,
   }

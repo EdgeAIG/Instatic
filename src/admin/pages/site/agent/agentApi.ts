@@ -39,6 +39,7 @@ export async function postToolResult(
   requestId: string,
   result: AiToolOutput,
   signal: AbortSignal | null,
+  snapshot?: unknown,
 ): Promise<void> {
   try {
     await apiRequest(AGENT_TOOL_RESULT_PATH, {
@@ -47,6 +48,10 @@ export async function postToolResult(
         bridgeId,
         requestId,
         result,
+        // Post the fresh post-mutation snapshot so the server can refresh the
+        // turn context — server read tools later in the same turn then see the
+        // state this tool just produced. Omit when no snapshot was captured.
+        ...(snapshot !== undefined ? { snapshot } : {}),
       },
       signal,
       schema: ToolResultAckSchema,

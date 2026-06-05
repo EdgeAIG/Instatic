@@ -149,16 +149,20 @@ export type AiStreamEvent =
    *                              charged on the FIRST call that populates the
    *                              cache, then amortised across subsequent hits).
    * `promptTokens` is the BILLED non-cached input (Anthropic SDK convention —
-   * cache hits/writes are reported separately).
-   *
-   * `contextTokens` is NOT reported by drivers — the chat handler injects it
-   * on the wire copy as the provider-normalised total input the model
-   * processed this turn (Anthropic: prompt + cache buckets; others: prompt,
-   * which already includes any cached subset), so the composer can render its
-   * "context used" meter. The window half comes from the model catalogue
-   * client-side, so it isn't carried here.
+   * cache hits/writes are reported separately). Token counts are SUMMED across
+   * every round of the turn — correct for billing (you pay input per round).
+   * Billing only; the "context used" meter is driven by `context` (below).
    */
-  | { type: 'usage'; promptTokens: number; completionTokens: number; costUsd?: number; cacheReadTokens?: number; cacheCreationTokens?: number; contextTokens?: number }
+  | { type: 'usage'; promptTokens: number; completionTokens: number; costUsd?: number; cacheReadTokens?: number; cacheCreationTokens?: number }
+  /**
+   * Per-round context size — emitted ONCE PER provider round-trip (a turn with
+   * tool calls has several), carrying THAT round's input buckets. The "context
+   * used" meter is the CURRENT context size = the latest round's input (history
+   * + accumulated tool results), NOT the sum across rounds. The chat handler
+   * injects the provider-normalised `contextTokens` on the wire copy. Drives
+   * the live meter during a turn; `usage` stays billing.
+   */
+  | { type: 'context'; promptTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number; contextTokens?: number }
   /** Terminal error — stream is about to end abnormally. */
   | { type: 'error'; message: string }
   /** Stream ended cleanly. */

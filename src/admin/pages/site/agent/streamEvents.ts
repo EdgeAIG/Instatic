@@ -76,9 +76,12 @@ export const ServerStreamEventSchema = Type.Union([
     promptTokens: Type.Number(),
     completionTokens: Type.Number(),
     costUsd: Type.Optional(Type.Number()),
-    // Context meter (handler-injected): provider-normalised total input the
-    // model processed this turn. Window comes from the catalogue client-side.
-    contextTokens: Type.Optional(Type.Number()),
+  }),
+  Type.Object({
+    // Per-round context size — drives the live meter mid-turn. `contextTokens`
+    // is the handler-injected, provider-normalised input for that round.
+    type: Type.Literal('context'),
+    contextTokens: Type.Number(),
   }),
   Type.Object({ type: Type.Literal('done') }),
   Type.Object({ type: Type.Literal('error'), message: Type.String() }),
@@ -100,6 +103,12 @@ export async function processStreamEvent(
   bridge: AgentBridgeRuntime,
   signal: AbortSignal | null,
   dispatchTool: (toolName: string, input: unknown) => Promise<AiToolOutput>,
+  /**
+   * Capture the current scope snapshot AFTER a browser tool runs. Posted with
+   * the tool result so the server refreshes the turn context and later read
+   * tools see post-mutation state. Optional — omit and no snapshot is sent.
+   */
+  buildSnapshot?: () => unknown,
 ): Promise<void> {
   switch (event.type) {
     case 'text': {
@@ -130,7 +139,9 @@ export async function processStreamEvent(
         console.error('[AgentSlice] toolRequest received before bridgeReady')
         break
       }
-      await postToolResult(bridge.bridgeId, event.requestId, result, signal)
+      // Snapshot AFTER the tool ran so the server sees the mutation it made.
+      const snapshot = buildSnapshot?.()
+      await postToolResult(bridge.bridgeId, event.requestId, result, signal, snapshot)
       break
     }
 
@@ -193,16 +204,20 @@ export async function processStreamEvent(
     }
 
     case 'usage': {
-      // Token + cost totals are persisted server-side automatically. Surface
-      // the live "context used" count (handler-injected) so the composer meter
-      // updates after each turn. The window half is supplied by the view layer
-      // from the model catalogue.
-      if (event.contextTokens !== undefined) {
-        const used = event.contextTokens
-        set((state) => {
-          state.agentContextTokens = used
-        })
-      }
+      // Token + cost totals are persisted server-side automatically; nothing
+      // to do client-side. The context meter is driven by `context` events.
+      break
+    }
+
+    case 'context': {
+      // Live "context used" meter: each provider round reports the current
+      // context size (handler-injected, provider-normalised). Update on every
+      // round so the meter climbs DURING a turn, not only at the end. The
+      // window half is supplied by the view layer from the model catalogue.
+      const used = event.contextTokens
+      set((state) => {
+        state.agentContextTokens = used
+      })
       break
     }
 

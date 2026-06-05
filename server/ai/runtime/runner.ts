@@ -99,6 +99,17 @@ export async function runChat(args: RunChatArgs): Promise<void> {
           })
           break
         }
+        case 'context': {
+          // Track the latest round's context size in the persister (in-memory);
+          // it's written to the conversation row once, with the final usage
+          // event, so the meter restores to the true context on reload.
+          persister.recordContext({
+            promptTokens: event.promptTokens,
+            cacheReadTokens: event.cacheReadTokens,
+            cacheCreationTokens: event.cacheCreationTokens,
+          })
+          break
+        }
         case 'usage': {
           await persister.recordUsage({
             promptTokens: event.promptTokens,

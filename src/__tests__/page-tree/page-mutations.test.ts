@@ -88,6 +88,19 @@ describe('addPage', () => {
     expect(site.pages).toHaveLength(originalCount) // original unchanged
     expect(nextSite.pages).toHaveLength(originalCount + 1)
   })
+
+  it('auto-suffixes a colliding slug so a repeated create never duplicates', () => {
+    const site = makeSite({ pages: [] })
+    const first = addPage(site, 'Main Template', 'main-template')
+    const second = addPage(site, 'Main Template', 'main-template')
+    const third = addPage(site, 'Main Template', 'main-template')
+    expect(first.slug).toBe('main-template')
+    expect(second.slug).toBe('main-template-2')
+    expect(third.slug).toBe('main-template-3')
+    // No two pages share a slug — the site stays save-valid.
+    const slugs = site.pages.map((p) => p.slug)
+    expect(new Set(slugs).size).toBe(slugs.length)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -166,6 +179,27 @@ describe('renamePage', () => {
 
     expect(site.pages[0].title).toBe('Original') // original unchanged
     expect(nextSite.pages[0].title).toBe('Updated')
+  })
+
+  it('auto-suffixes a slug that collides with another page', () => {
+    const site = makeSite({
+      pages: [makePage({ id: 'a', slug: 'about' }), makePage({ id: 'b', slug: 'b' })],
+    })
+    renamePage(site, 'b', 'About', 'about')
+    expect(site.pages.find((p) => p.id === 'b')!.slug).toBe('about-2')
+  })
+
+  it('keeps the page own slug stable when renaming title only', () => {
+    const site = makeSite({ pages: [makePage({ id: 'a', slug: 'about' })] })
+    renamePage(site, 'a', 'About Us', 'about')
+    // Re-setting its own slug must not self-collide into about-2.
+    expect(site.pages[0].slug).toBe('about')
+  })
+
+  it('sets slug "index" verbatim (homepage intent), not deduped', () => {
+    const site = makeSite({ pages: [makePage({ id: 'a', slug: 'landing' })] })
+    renamePage(site, 'a', 'Home', 'index')
+    expect(site.pages[0].slug).toBe('index')
   })
 })
 

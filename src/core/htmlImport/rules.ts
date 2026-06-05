@@ -106,6 +106,15 @@ function submitLabel(el: Element): string {
 }
 
 export const HTML_TO_MODULE_RULES: ImportRule[] = [
+  // CMS content outlet → base.outlet (LEAF). The agent (and any hand-authored
+  // template HTML) writes `<instatic-outlet>` to mark where matched content —
+  // a page tree or the current entry body — flows in. base.outlet is childless,
+  // so we never recurse; any inner markup is ignored (the composer fills it).
+  {
+    match: 'instatic-outlet',
+    map: () => ({ moduleId: 'base.outlet', props: {} }),
+  },
+
   // Headings / paragraphs / inline phrasing → base.text (LEAF).
   // Props: `text` + `tag`.
   {
