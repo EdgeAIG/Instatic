@@ -9,6 +9,20 @@
 import type { AuditAction } from '../../../repositories/audit'
 
 // ---------------------------------------------------------------------------
+// Request context (input, not a response shape)
+// ---------------------------------------------------------------------------
+
+/**
+ * Request-scoped context passed to every dashboard reader, distinct from the
+ * boot-scoped `CmsHandlerOptions`. Carries the viewer's resolved IANA
+ * timezone so readers that bin timestamps per calendar day (the posts
+ * histogram) bucket into the operator's local day rather than UTC.
+ */
+export interface DashboardRequestContext {
+  timeZone: string
+}
+
+// ---------------------------------------------------------------------------
 // Pages
 // ---------------------------------------------------------------------------
 

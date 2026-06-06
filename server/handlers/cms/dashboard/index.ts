@@ -42,6 +42,7 @@ import { requireAuthenticatedUser, requireCapability } from '../../../auth/authz
 import type { CoreCapability } from '../../../auth/capabilities'
 import { jsonResponse, methodNotAllowed } from '../../../http'
 import { CMS_API_PREFIX, type CmsHandlerOptions } from '../shared'
+import { resolveTimeZone } from '../../../time'
 import { readPagesStats } from './pages'
 import { readPostsStats } from './posts'
 import { readMediaStats } from './media'
@@ -49,6 +50,7 @@ import { readPluginsStats } from './plugins'
 import { readPublishLineup } from './publishLineup'
 import { readRecentActivity } from './activity'
 import { readStorageStats } from './storage'
+import type { DashboardRequestContext } from './types'
 
 // Re-export the on-the-wire types so callers that need to type the
 // JSON response (currently `src/admin/pages/dashboard/hooks/
@@ -69,7 +71,11 @@ export type {
   StorageStats,
 } from './types'
 
-type DashboardReader = (db: DbClient, options: CmsHandlerOptions) => Promise<unknown>
+type DashboardReader = (
+  db: DbClient,
+  options: CmsHandlerOptions,
+  ctx: DashboardRequestContext,
+) => Promise<unknown>
 
 interface DashboardEndpoint {
   reader: DashboardReader
@@ -138,6 +144,9 @@ export async function handleDashboardRoutes(
     : await requireCapability(req, db, endpoint.capability)
   if (user instanceof Response) return user
 
-  const body = await endpoint.reader(db, options)
+  const ctx: DashboardRequestContext = {
+    timeZone: resolveTimeZone(url.searchParams.get('tz')),
+  }
+  const body = await endpoint.reader(db, options, ctx)
   return jsonResponse(body)
 }

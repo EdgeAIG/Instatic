@@ -12,7 +12,7 @@ import type { Migration } from './runMigrations'
  *   bytea            → blob
  *   bigint           → integer      (SQLite integers are 64-bit)
  *   boolean          → integer      (1 / 0; repos use Boolean(row.enabled))
- *   default now()    → default current_timestamp
+ *   default now()    → default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
  *   '{}'::jsonb      → '{}'         (no PG cast syntax)
  *   distinct on (…)  → window-function subquery (see repository code; the
  *                                     baseline does not need this form)
@@ -41,8 +41,8 @@ export const sqliteMigrations: Migration[] = [
         description text not null default '',
         is_system integer not null default 0,
         capabilities_json text not null default '[]',
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
       -- Built-in roles seed. Owner AND Admin rows are force-resynced from
@@ -66,7 +66,7 @@ export const sqliteMigrations: Migration[] = [
             description = excluded.description,
             is_system = excluded.is_system,
             capabilities_json = excluded.capabilities_json,
-            updated_at = current_timestamp;
+            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now');
 
       -- avatar_media_id is added via ALTER at the bottom (after media_assets
       -- exists) to mirror the PG dialect, which needs the deferred FK.
@@ -86,8 +86,8 @@ export const sqliteMigrations: Migration[] = [
         mfa_enabled_at text,
         mfa_totp_secret text,
         mfa_recovery_code_hashes_json text not null default '[]',
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp,
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         deleted_at text,
         constraint users_status_check check (status in ('active', 'suspended'))
       );
@@ -106,8 +106,8 @@ export const sqliteMigrations: Migration[] = [
         id text primary key default 'default',
         name text not null,
         settings_json text not null default '{}',
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
       -- ─── Sessions + Audit ──────────────────────────────────────────────────
@@ -115,8 +115,8 @@ export const sqliteMigrations: Migration[] = [
       create table if not exists sessions (
         id_hash text primary key,
         user_id text not null references users(id) on delete cascade,
-        created_at text not null default current_timestamp,
-        last_seen_at text not null default current_timestamp,
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        last_seen_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         expires_at text not null,
         revoked_at text,
         ip_address text,
@@ -137,14 +137,14 @@ export const sqliteMigrations: Migration[] = [
       -- Mirror of the PG user_preferences table — see migrations-pg.ts for
       -- the full rationale. value_json is text here (parsed by the SQLite
       -- adapter on read thanks to the _json suffix); updated_at is an ISO
-      -- string filled by current_timestamp. The composite primary key gives
+      -- string filled by the ISO-8601 strftime default. The composite primary key gives
       -- us (user_id, key) uniqueness AND the user_id-prefix lookup index in
       -- one declaration.
       create table if not exists user_preferences (
         user_id    text not null references users(id) on delete cascade,
         key        text not null,
         value_json text not null,
-        updated_at text not null default current_timestamp,
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         primary key (user_id, key)
       );
 
@@ -157,7 +157,7 @@ export const sqliteMigrations: Migration[] = [
         metadata_json text not null default '{}',
         ip_address text,
         user_agent text,
-        created_at text not null default current_timestamp
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
       create index if not exists audit_events_created_idx
@@ -168,7 +168,7 @@ export const sqliteMigrations: Migration[] = [
       -- label per row.
       create table if not exists login_attempts (
         id text primary key,
-        attempted_at text not null default current_timestamp,
+        attempted_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         email_norm text,
         ip_address text,
         user_agent text,
@@ -204,8 +204,8 @@ export const sqliteMigrations: Migration[] = [
         system integer not null default 0,
         created_by_user_id text references users(id) on delete set null,
         updated_by_user_id text references users(id) on delete set null,
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp,
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         deleted_at text,
         constraint data_tables_kind_check check (kind in ('postType', 'data', 'page', 'component'))
       );
@@ -232,7 +232,7 @@ export const sqliteMigrations: Migration[] = [
             primary_field_id = excluded.primary_field_id,
             system = excluded.system,
             fields_json = excluded.fields_json,
-            updated_at = current_timestamp,
+            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
             deleted_at = null;
 
       insert into data_tables (id, name, slug, kind, route_base, singular_label, plural_label, primary_field_id, system, fields_json)
@@ -248,7 +248,7 @@ export const sqliteMigrations: Migration[] = [
             primary_field_id = excluded.primary_field_id,
             system = excluded.system,
             fields_json = excluded.fields_json,
-            updated_at = current_timestamp,
+            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
             deleted_at = null;
 
       insert into data_tables (id, name, slug, kind, route_base, singular_label, plural_label, primary_field_id, system, fields_json)
@@ -264,7 +264,7 @@ export const sqliteMigrations: Migration[] = [
             primary_field_id = excluded.primary_field_id,
             system = excluded.system,
             fields_json = excluded.fields_json,
-            updated_at = current_timestamp,
+            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
             deleted_at = null;
 
       -- SQLite tolerates forward FK references when both tables are
@@ -281,8 +281,8 @@ export const sqliteMigrations: Migration[] = [
         created_by_user_id text references users(id) on delete set null,
         updated_by_user_id text references users(id) on delete set null,
         published_by_user_id text references users(id) on delete set null,
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp,
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         published_at text,
         deleted_at text,
         constraint data_rows_status_check check (status in ('draft', 'published', 'unpublished'))
@@ -311,8 +311,8 @@ export const sqliteMigrations: Migration[] = [
         cells_json text not null default '{}',
         slug text not null default '',
         published_by_user_id text references users(id) on delete set null,
-        published_at text not null default current_timestamp,
-        created_at text not null default current_timestamp,
+        published_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         unique (row_id, version_number)
       );
 
@@ -325,7 +325,7 @@ export const sqliteMigrations: Migration[] = [
         from_route_base text not null,
         from_slug text not null,
         target_row_id text not null references data_rows(id) on delete cascade,
-        created_at text not null default current_timestamp
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
       create unique index if not exists data_row_redirects_source_idx
@@ -346,8 +346,8 @@ export const sqliteMigrations: Migration[] = [
         lifecycle_status text not null default 'installed',
         last_error text,
         settings_json text not null default '{}',
-        installed_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp
+        installed_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
       create index if not exists installed_plugins_enabled_idx
@@ -358,8 +358,8 @@ export const sqliteMigrations: Migration[] = [
         plugin_id text not null references installed_plugins(id) on delete cascade,
         resource_id text not null,
         data_json text not null,
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
       create index if not exists plugin_records_resource_idx
@@ -368,7 +368,7 @@ export const sqliteMigrations: Migration[] = [
       create table if not exists plugin_crash_events (
         id text primary key,
         plugin_id text not null,
-        occurred_at text not null default current_timestamp,
+        occurred_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         reason text not null,
         stack text
       );
@@ -399,7 +399,7 @@ export const sqliteMigrations: Migration[] = [
         poster_path text,
         deleted_at text,
         replaced_at text,
-        created_at text not null default current_timestamp
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
       create index if not exists media_assets_deleted_idx
@@ -412,7 +412,7 @@ export const sqliteMigrations: Migration[] = [
         slug text not null,
         sort_order integer not null default 0,
         created_by_user_id text references users(id) on delete set null,
-        created_at text not null default current_timestamp
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
       create unique index if not exists media_folders_parent_slug_idx
@@ -432,7 +432,7 @@ export const sqliteMigrations: Migration[] = [
         name text not null,
         query_json text not null,
         created_by_user_id text references users(id) on delete set null,
-        created_at text not null default current_timestamp
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
       create table if not exists media_usage_refs (
@@ -440,7 +440,7 @@ export const sqliteMigrations: Migration[] = [
         ref_kind text not null,
         ref_id text not null,
         ref_path text not null default '',
-        computed_at text not null default current_timestamp,
+        computed_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         primary key (asset_id, ref_kind, ref_id, ref_path)
       );
 
@@ -454,7 +454,7 @@ export const sqliteMigrations: Migration[] = [
         public_path text not null unique,
         content_type text not null,
         content_bytes blob not null,
-        created_at text not null default current_timestamp
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
 
       create index if not exists published_runtime_assets_data_row_version_idx
@@ -497,8 +497,8 @@ export const sqliteMigrations: Migration[] = [
         running_token text,
         lock_until text,
         claimed_at text,
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp,
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         primary key (plugin_id, schedule_id)
       );
 
@@ -541,7 +541,7 @@ export const sqliteMigrations: Migration[] = [
       create table if not exists active_media_storage_adapter (
         role text primary key,
         adapter_id text not null default '',
-        elected_at text not null default current_timestamp,
+        elected_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         elected_by_user_id text references users(id) on delete set null
       );
 
@@ -573,7 +573,7 @@ export const sqliteMigrations: Migration[] = [
         variant_url_template text not null,
         widths_json text not null,
         formats_json text not null,
-        elected_at text not null default current_timestamp,
+        elected_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         elected_by_user_id text references users(id) on delete set null
       );
     `,
@@ -621,8 +621,8 @@ export const sqliteMigrations: Migration[] = [
         created_by_user_id text references users(id) on delete set null,
         updated_by_user_id text references users(id) on delete set null,
         published_by_user_id text references users(id) on delete set null,
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp,
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         published_at text,
         scheduled_publish_at text,
         deleted_at text,
@@ -674,7 +674,7 @@ export const sqliteMigrations: Migration[] = [
       -- Dialect translations from the PG version:
       --   bytea            → blob
       --   timestamptz      → text   (ISO 8601)
-      --   default now()    → default current_timestamp
+      --   default now()    → default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       --   bigint           → integer  (SQLite ints are 64-bit)
       --   numeric(10, 6)   → real
       --
@@ -691,8 +691,8 @@ export const sqliteMigrations: Migration[] = [
         iv blob,
         base_url text,
         key_fingerprint text,
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp,
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         last_used_at text,
         -- provider_id is validated at the application boundary by the TypeBox
         -- ProviderId union (server/ai/handlers/credentials.ts). A DB enum that
@@ -714,7 +714,7 @@ export const sqliteMigrations: Migration[] = [
         scope text primary key,
         credential_id text not null references ai_provider_credentials(id) on delete restrict,
         model_id text not null,
-        updated_at text not null default current_timestamp,
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         updated_by text references users(id) on delete set null,
         constraint ai_defaults_scope_check
           check (scope in ('site', 'content', 'data', 'plugin'))
@@ -730,8 +730,8 @@ export const sqliteMigrations: Migration[] = [
         prompt_tokens_total integer not null default 0,
         completion_tokens_total integer not null default 0,
         cost_usd_total real not null default 0,
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp,
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         deleted_at text,
         constraint ai_conv_scope_check
           check (scope in ('site', 'content', 'data', 'plugin'))
@@ -756,7 +756,7 @@ export const sqliteMigrations: Migration[] = [
         prompt_tokens integer not null default 0,
         completion_tokens integer not null default 0,
         cost_usd real not null default 0,
-        created_at text not null default current_timestamp,
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         constraint ai_msg_role_check
           check (role in ('user', 'assistant', 'tool'))
       );
@@ -845,8 +845,8 @@ export const sqliteMigrations: Migration[] = [
         iv blob,
         base_url text,
         key_fingerprint text,
-        created_at text not null default current_timestamp,
-        updated_at text not null default current_timestamp,
+        created_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        updated_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
         last_used_at text,
         constraint ai_creds_authmode_check
           check (auth_mode in ('apiKey', 'baseUrl')),
@@ -898,7 +898,7 @@ export const sqliteMigrations: Migration[] = [
         output_per_mtok real not null,
         cache_read_per_mtok real,
         cache_write_per_mtok real,
-        refreshed_at text not null default current_timestamp
+        refreshed_at text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
       );
     `,
   },

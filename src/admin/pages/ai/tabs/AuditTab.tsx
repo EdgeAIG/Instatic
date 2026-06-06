@@ -43,13 +43,18 @@ const ALL_TIME_LOOKBACK_DAYS = 365 * 10
 function rangeToSinceIso(range: Range): string {
   const now = new Date()
   if (range === 'today') {
+    // "Today" means since the start of the operator's LOCAL calendar day, not
+    // UTC midnight. setHours (local) then toISOString yields the correct UTC
+    // instant for that local-midnight boundary — so an operator at UTC+2 at
+    // 20:30 still sees the whole day's activity instead of an off-by-timezone
+    // empty window.
     const start = new Date(now)
-    start.setUTCHours(0, 0, 0, 0)
+    start.setHours(0, 0, 0, 0)
     return start.toISOString()
   }
   const days = range === '7d' ? 7 : range === '30d' ? 30 : ALL_TIME_LOOKBACK_DAYS
   const start = new Date(now)
-  start.setUTCDate(start.getUTCDate() - days)
+  start.setDate(start.getDate() - days)
   return start.toISOString()
 }
 
@@ -66,9 +71,13 @@ function formatCost(usd: number): string {
 
 export function AuditTab() {
   const [range, setRange] = useState<Range>('30d')
+  // Pass the viewer's IANA zone so the server buckets the daily rollup into
+  // the operator's calendar day, not UTC. Matches the local-day boundary that
+  // rangeToSinceIso already uses for the window filter.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const { data, loading, error } = useAsyncResource(
-    () => listAiAudit(rangeToSinceIso(range)),
-    [range],
+    () => listAiAudit(rangeToSinceIso(range), timeZone),
+    [range, timeZone],
     { fallbackError: 'Failed to load audit data.' },
   )
 

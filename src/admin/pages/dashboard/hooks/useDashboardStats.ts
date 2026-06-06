@@ -192,11 +192,21 @@ export type DashboardActivityStats = Static<typeof DashboardActivityStatsSchema>
  * Generic per-domain fetcher over {@link useAsyncResource}: TypeBox boundary
  * validation via `apiRequest`, abort-on-unmount, and `swallowErrors` so any
  * failure leaves the value `null` and the widget keeps its skeleton.
+ *
+ * Every request carries the viewer's IANA timezone (`tz`) so server readers
+ * that bin timestamps per calendar day (the Posts histogram) bucket into the
+ * operator's local day rather than UTC. Endpoints that don't bucket ignore it.
  */
 function useDashboardEndpoint<S extends TSchema>(endpoint: string, schema: S): Static<S> | null {
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
   return useAsyncResource(
-    (signal) => apiRequest(`/admin/api/cms/dashboard/${endpoint}`, { schema, signal }),
-    [endpoint, schema],
+    (signal) =>
+      apiRequest(`/admin/api/cms/dashboard/${endpoint}`, {
+        schema,
+        signal,
+        query: { tz: timeZone },
+      }),
+    [endpoint, schema, timeZone],
     { swallowErrors: true },
   ).data
 }

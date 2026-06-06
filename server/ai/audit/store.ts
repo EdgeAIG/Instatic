@@ -27,6 +27,7 @@
  */
 
 import type { DbClient } from '../../db/client'
+import { localDayKeyFactory } from '../../time'
 import type { AiProviderId, ToolScope } from '../runtime/types'
 
 export interface UsageRow {
@@ -77,8 +78,14 @@ interface ScopeAggregateRow extends AggregateRow {
   scope: string
 }
 
-interface DayAggregateRow extends AggregateRow {
-  day: string
+interface DayMessageRow {
+  created_at: string | Date
+  conversation_id: string
+  prompt_tokens: number | string | null
+  completion_tokens: number | string | null
+  cost_usd: number | string | null
+  cache_read_tokens: number | string | null
+  cache_creation_tokens: number | string | null
 }
 
 interface ModelAggregateRow extends AggregateRow {
@@ -236,37 +243,71 @@ export async function getUsageByModel(
 }
 
 /**
- * Daily rollup. The day key is computed in SQL so the rollup matches whatever
- * the server's local-time interpretation of `created_at` is — same convention
- * as the dashboard widgets. `substr(..., 1, 10)` works for both PG
- * `timestamptz` (rendered as ISO 8601) and SQLite `text default current_timestamp`
- * (which is "YYYY-MM-DD HH:MM:SS"). The leading 10 chars are the date in
- * either case.
+ * Daily rollup, bucketed into the VIEWER's calendar day.
+ *
+ * The day key is computed in JS rather than SQL — same convention as the
+ * dashboard's posts histogram (`readPostsHistogram`) — because portable
+ * date-truncation SQL is dialect-painful (PG `::text` is banned by the
+ * `db-postgres-isms` gate) and, critically, the bucket boundary depends on
+ * the operator's timezone, which the database doesn't know. A chat at
+ * 23:30 local sits on a different calendar day than the UTC instant suggests,
+ * so SQL-side `substr(created_at, 1, 10)` (UTC date) put it on the wrong bar.
+ *
+ * `timeZone` is an IANA zone (e.g. "Europe/Bratislava"). Using a full zone —
+ * not a fixed offset — keeps buckets correct across DST transitions inside a
+ * multi-week window and across sub-hour offsets (e.g. Asia/Kathmandu +5:45).
+ *
+ * Cardinality is bounded by the message count in the window; the same
+ * trade-off the posts histogram accepts. Each message is summed once.
  */
 export async function getUsageByDay(
   db: DbClient,
   sinceIso: string,
+  timeZone: string,
 ): Promise<UsageByDayRow[]> {
-  const { rows } = await db<DayAggregateRow>`
-    select substr(cast(m.created_at as text), 1, 10)  as day,
-           coalesce(sum(m.prompt_tokens), 0)          as prompt_tokens,
-           coalesce(sum(m.completion_tokens), 0)      as completion_tokens,
-           coalesce(sum(m.cost_usd), 0)               as cost_usd,
-           coalesce(sum(m.cache_read_tokens), 0)      as cache_read_tokens,
-           coalesce(sum(m.cache_creation_tokens), 0)  as cache_creation_tokens,
-           count(distinct m.conversation_id)          as chat_count
+  const { rows } = await db<DayMessageRow>`
+    select m.created_at        as created_at,
+           m.conversation_id   as conversation_id,
+           m.prompt_tokens     as prompt_tokens,
+           m.completion_tokens as completion_tokens,
+           m.cost_usd          as cost_usd,
+           m.cache_read_tokens as cache_read_tokens,
+           m.cache_creation_tokens as cache_creation_tokens
     from ai_messages m
     where m.created_at >= ${sinceIso}
-    group by day
-    order by day asc
   `
-  return rows.map((row) => ({
-    day: row.day,
-    promptTokens: toNumber(row.prompt_tokens),
-    completionTokens: toNumber(row.completion_tokens),
-    costUsd: toNumber(row.cost_usd),
-    chatCount: toNumber(row.chat_count),
-    cacheReadTokens: toNumber(row.cache_read_tokens),
-    cacheCreationTokens: toNumber(row.cache_creation_tokens),
-  }))
+
+  const dayKeyOf = localDayKeyFactory(timeZone)
+  const byDay = new Map<string, UsageByDayRow>()
+  const convsByDay = new Map<string, Set<string>>()
+
+  for (const row of rows) {
+    const day = dayKeyOf(row.created_at)
+    let acc = byDay.get(day)
+    if (!acc) {
+      acc = {
+        day,
+        promptTokens: 0,
+        completionTokens: 0,
+        costUsd: 0,
+        chatCount: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+      }
+      byDay.set(day, acc)
+      convsByDay.set(day, new Set())
+    }
+    acc.promptTokens += toNumber(row.prompt_tokens)
+    acc.completionTokens += toNumber(row.completion_tokens)
+    acc.costUsd += toNumber(row.cost_usd)
+    acc.cacheReadTokens += toNumber(row.cache_read_tokens)
+    acc.cacheCreationTokens += toNumber(row.cache_creation_tokens)
+    convsByDay.get(day)!.add(row.conversation_id)
+  }
+
+  for (const [day, convs] of convsByDay) {
+    byDay.get(day)!.chatCount = convs.size
+  }
+
+  return [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day))
 }

@@ -369,8 +369,16 @@ export type AiAuditResponse = Static<typeof AuditResponseSchema>
 /**
  * Fetch the AI usage rollups. `since` is an ISO date the server interprets
  * as "include any message at or after this instant". Omit to default to the
- * server's 30-day window.
+ * server's 30-day window. `timeZone` is an IANA zone the server uses to bucket
+ * the daily rollup into the viewer's calendar day (falls back to UTC server-side
+ * when omitted or invalid).
  */
-export async function listAiAudit(since?: string): Promise<AiAuditResponse> {
-  return apiRequest('/admin/api/ai/audit', { query: { since }, schema: AuditResponseSchema })
+export async function listAiAudit(
+  since?: string,
+  timeZone?: string,
+): Promise<AiAuditResponse> {
+  return apiRequest('/admin/api/ai/audit', {
+    query: { since, tz: timeZone },
+    schema: AuditResponseSchema,
+  })
 }
