@@ -10,39 +10,48 @@
 
 import { describe, it, expect } from 'bun:test'
 import { escapeProps, publishPage, renderNode } from '@core/publisher'
+import type { PropertySchema } from '@core/module-engine'
 import { makeModule, makeRegistry, makePage, makeSite, makeAccumulators } from './helpers'
 
 // ---------------------------------------------------------------------------
-// escapeProps richtext sanitization
+// escapeProps richtext sanitization — routed by the prop's declared TYPE.
+// `bodyContent` is deliberately named to miss the old html/richtext suffix
+// heuristic: it sanitises only because its schema type is 'richtext'.
 // ---------------------------------------------------------------------------
 
+const RICHTEXT_SCHEMA: PropertySchema = {
+  html: { type: 'richtext', label: 'HTML' },
+  richtext: { type: 'richtext', label: 'Richtext' },
+  bodyContent: { type: 'richtext', label: 'Body' },
+}
+
 describe('escapeProps richtext sanitization', () => {
-  it('strips <script> from html prop', () => {
-    const result = escapeProps({ html: '<p>ok</p><script>bad()</script>' })
+  it('strips <script> from a richtext-typed prop', () => {
+    const result = escapeProps({ html: '<p>ok</p><script>bad()</script>' }, RICHTEXT_SCHEMA)
     expect(result.html as string).not.toContain('<script>')
     expect(result.html as string).not.toContain('bad()')
   })
 
   it('strips <script> from richtext prop', () => {
-    const result = escapeProps({ richtext: '<p>safe</p><script>evil()</script>' })
+    const result = escapeProps({ richtext: '<p>safe</p><script>evil()</script>' }, RICHTEXT_SCHEMA)
     expect(result.richtext as string).not.toContain('<script>')
     expect(result.richtext as string).not.toContain('evil()')
   })
 
-  it('strips <script> from bodyHtml prop (suffix match)', () => {
-    const result = escapeProps({ bodyHtml: '<p>text</p><script>x()</script>' })
-    expect(result.bodyHtml as string).not.toContain('<script>')
+  it('strips <script> from a richtext-typed prop with an off-heuristic name', () => {
+    const result = escapeProps({ bodyContent: '<p>text</p><script>x()</script>' }, RICHTEXT_SCHEMA)
+    expect(result.bodyContent as string).not.toContain('<script>')
   })
 
   it('preserves safe HTML tags in richtext props', () => {
     // DOMPurify in happy-dom test environment preserves safe semantic tags
-    const result = escapeProps({ html: '<p><strong>Bold</strong></p>' })
+    const result = escapeProps({ html: '<p><strong>Bold</strong></p>' }, RICHTEXT_SCHEMA)
     expect(result.html as string).toContain('Bold')
     expect(result.html as string).not.toContain('<script>')
   })
 
   it('returns empty string for empty richtext prop', () => {
-    const result = escapeProps({ html: '' })
+    const result = escapeProps({ html: '' }, RICHTEXT_SCHEMA)
     expect(result.html).toBe('')
   })
 })
@@ -54,8 +63,9 @@ describe('escapeProps richtext sanitization', () => {
 describe('publishPage richtext sanitization (Constraint #368)', () => {
   const site = makeSite()
 
-  // content module: prop key is 'html' — a richtext key
+  // content module: prop key is 'html', declared as a richtext-typed control
   const contentModule = makeModule('test.content', {
+    schema: { html: { type: 'richtext', label: 'HTML' } },
     render: (props) => {
       const html = typeof props.html === 'string' ? props.html : ''
       return { html: `<article>${html}</article>` }
@@ -92,6 +102,7 @@ describe('publishPage richtext sanitization (Constraint #368)', () => {
     // sanitized props — not the raw HTML with <script>
     let receivedHtml = ''
     const spyModule = makeModule('spy.content', {
+      schema: { html: { type: 'richtext', label: 'HTML' } },
       render: (props) => {
         receivedHtml = typeof props.html === 'string' ? props.html : ''
         return { html: receivedHtml }

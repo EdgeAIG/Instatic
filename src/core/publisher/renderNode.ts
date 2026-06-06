@@ -159,7 +159,7 @@ function renderStandardNode(
 
   // Escape all string props (Constraint #211) before calling render(), then
   // attach derived assets that survive the escape boundary unchanged.
-  const safeProps = escapeProps(validatedProps)
+  const safeProps = escapeProps(validatedProps, def.schema)
   attachResolvedMediaByKey(safeProps, def, validatedProps, config.mediaAssets)
   attachResolvedAutoSizes(safeProps, def, node, validatedProps, config)
 

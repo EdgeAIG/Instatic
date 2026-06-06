@@ -349,17 +349,27 @@ describe('Publisher + real modules — quote and multi-character escaping', () =
 
 describe('Publisher — richtext prop pass-through (Constraint #299)', () => {
   /**
-   * A minimal module that injects richtext/html/bodyHtml props directly into output HTML.
-   * This simulates any future richtext-capable module (e.g. a WYSIWYG content block).
+   * A minimal module that injects three richtext-typed props directly into
+   * output HTML. This simulates any future richtext-capable module (e.g. a
+   * WYSIWYG content block).
+   *
+   * `bodyContent` is deliberately named to MISS the old html/richtext suffix
+   * heuristic — it is passed through unescaped purely because its schema
+   * declares `type: 'richtext'`, proving escapeProps routes by type, not name.
    *
    * The contract (Constraint #299):
-   *   - Publisher's escapeProps() must NOT HTML-escape richtext-keyed props.
+   *   - Publisher's escapeProps() must NOT HTML-escape richtext-typed props.
    *   - DOMPurify is the sanitizer, applied at WRITE TIME (Contribution #411).
    *   - Publisher trusts the pre-sanitized value — re-escaping would break the output.
    */
   const richtextModule = makeModule('test.richtextBlock', {
+    schema: {
+      richtext: { type: 'richtext', label: 'Richtext' },
+      html: { type: 'richtext', label: 'HTML' },
+      bodyContent: { type: 'richtext', label: 'Body' },
+    },
     render: (props) => ({
-      html: `<div class="richtext-block">${(props.richtext as string) ?? ''}${(props.html as string) ?? ''}${(props.bodyHtml as string) ?? ''}</div>`,
+      html: `<div class="richtext-block">${(props.richtext as string) ?? ''}${(props.html as string) ?? ''}${(props.bodyContent as string) ?? ''}</div>`,
     }),
   })
   const richtextRegistry = makeRegistry({ 'test.richtextBlock': richtextModule })
@@ -396,10 +406,10 @@ describe('Publisher — richtext prop pass-through (Constraint #299)', () => {
     expect(html).not.toContain('&lt;ul&gt;')
   })
 
-  it('prop with "Html" suffix (e.g. bodyHtml) is passed through unescaped', () => {
+  it('richtext-typed prop with an off-heuristic name (bodyContent) is passed through unescaped', () => {
     const sanitizedHtml = '<a href="https://example.com" rel="noopener">Visit site</a>'
     const page = makePage({
-      root: { moduleId: 'test.richtextBlock', props: { bodyHtml: sanitizedHtml } },
+      root: { moduleId: 'test.richtextBlock', props: { bodyContent: sanitizedHtml } },
     })
     const html = render('root', rtCtx(page))
     expect(html).toContain('<a href="https://example.com"')

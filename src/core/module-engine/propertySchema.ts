@@ -65,6 +65,15 @@ const PropertyControlBaseSchema = {
   breakpointOverridable: Type.Optional(Type.Boolean()),
   /** Edit-permission category — see `PropertyControlCategorySchema`. */
   category: Type.Optional(PropertyControlCategorySchema),
+  /**
+   * Hidden controls carry a declared `type` for engine purposes (the publisher
+   * dispatches escaping on it — see `escapeProps`) but render NO editor control.
+   * Use for publisher-injected binding targets the author never hand-edits,
+   * e.g. `base.outlet.html`, which the publisher fills with the current entry's
+   * richtext body. Without the declared type the prop would fall to the
+   * escapeHtml default and its sanitised richtext would be entity-encoded.
+   */
+  hidden: Type.Optional(Type.Boolean()),
 }
 
 const PropertyControlOptionSchema = Type.Object(

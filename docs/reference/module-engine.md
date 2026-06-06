@@ -181,6 +181,30 @@ Only `'content'` and `'layout'` are valid. Defaults: `text / textarea / richtext
 
 `layout: 'inline'` puts the control on the same row as its label. `layout: 'stacked'` (default) puts it below.
 
+### Hidden controls
+
+`hidden: true` declares a control's `type` for the engine while rendering **no** editor surface. The publisher's `escapeProps` dispatches its escaper on the control `type`, so a publisher-injected binding target the author never hand-edits must still declare its type — otherwise it falls to the `escapeHtml` default.
+
+```ts
+// base.outlet — `html` is filled by the publisher with the current entry's
+// richtext body; declared hidden+richtext so escapeProps sanitises it
+// (DOMPurify) instead of HTML-escaping the rendered body.
+html: { type: 'richtext', label: 'Content', hidden: true }
+```
+
+### How `escapeProps` uses `type`
+
+`escapeProps(props, schema)` chooses each string prop's escaper from its declared control `type` — **never** from the prop's key name:
+
+| control `type`            | escaper at the publisher boundary                          |
+|---------------------------|------------------------------------------------------------|
+| `url` / `image` / `media` | `isSafeUrl` (blocks `javascript:` etc.; passed raw for the module's `safeUrl`) |
+| `richtext`                | `sanitizeRichtext` (DOMPurify)                             |
+| `svg`                     | `sanitizeSvg` (DOMPurify SVG profile)                      |
+| everything else, or a prop absent from `schema` | `escapeHtml` (safe default)          |
+
+A prop that needs URL/richtext/SVG handling **must** declare the matching `type` (use `hidden` if it should not appear in the panel). There is no key-name fallback.
+
 ---
 
 ## Editor canvas component

@@ -2,80 +2,75 @@
  * Publisher — prop escaping (Constraint #211)
  *
  * Every string prop is escaped BEFORE being handed to a module's pure
- * render() function. Three categories with distinct rules:
+ * render() function. The escaper for each prop is chosen by the prop's
+ * declared control `type` in the module's `PropertySchema` — NOT by guessing
+ * from the prop's key name. Routing by name is a shadow type-system that
+ * silently mis-escapes any prop whose name misses the heuristic (a
+ * `richtext`-typed `pageBody` HTML-escaped instead of sanitised → broken
+ * markup AND unsanitised stored XSS; a `url`-typed `assetPath` escaped instead
+ * of scheme-checked → `javascript:` not blocked). The schema already knows the
+ * type, so we dispatch on it.
  *
- * - URL-typed props (`href` / `src` / `action` / `*url` / `*src` / `*href`):
+ * Four categories with distinct rules:
+ *
+ * - URL-typed props (`type: 'url' | 'image' | 'media'`):
  *   validated by isSafeUrl() to neutralise `javascript:` / `vbscript:` /
  *   `data:` schemes (replaced with `#`). The raw safe URL is passed through
  *   un-escaped so module render() can call safeUrl() once — calling
  *   escapeHtml() here would double-escape ampersands in query strings.
  *
- * - Richtext / HTML props (`richtext` / `html` / `*richtext` / `*html`):
+ * - Richtext props (`type: 'richtext'`):
  *   passed through sanitizeRichtext() (DOMPurify when a runtime is available,
  *   conservative tag stripping otherwise) as defense-in-depth on top of the
  *   editor-side sanitisation at write time.
  *
- * - Plain strings: HTML-escaped via escapeHtml().
+ * - Inline-SVG props (`type: 'svg'`):
+ *   passed through sanitizeSvg() (DOMPurify SVG profile) so the `base.svg`
+ *   module can emit raw `<svg>` markup.
+ *
+ * - Everything else, AND any prop with no matching schema entry:
+ *   HTML-escaped via escapeHtml() — the safe default.
  *
  * Non-string values pass through unchanged so derived assets like
  * `_resolvedMediaByKey` (attached after this step) survive the boundary.
  */
 
+import type { PropertyControl, PropertySchema } from '@core/module-engine'
 import { escapeHtml, isSafeUrl } from './utils'
 import { sanitizeRichtext, sanitizeSvg } from '@core/sanitize'
 
 /**
- * URL-related prop key suffixes and exact keys.
- * These receive URL validation rather than HTML escaping.
+ * Resolve the control declared for `key`. Top-level keys are a direct lookup;
+ * `group` controls hold their children under `.children` but DO NOT nest the
+ * data shape (group is visual-only), so a child's key is still a flat prop key
+ * — recurse one group level to find it.
  */
-const URL_PROP_KEYS = new Set(['href', 'src', 'action', 'url'])
-const URL_PROP_SUFFIXES = ['url', 'href', 'src']
-
-/**
- * Richtext / HTML prop keys — passed through sanitizeRichtext() rather
- * than escapeHtml() so the module can emit tagged content. MUST have been
- * sanitized at the editor boundary; this is a second pass at the publisher.
- */
-const RICHTEXT_PROP_KEYS = new Set(['richtext', 'html'])
-const RICHTEXT_PROP_SUFFIXES = ['html', 'richtext']
-
-/**
- * Inline-SVG prop keys — passed through `sanitizeSvg()` (DOMPurify SVG profile)
- * rather than `escapeHtml()` so the `base.svg` module can emit raw `<svg>`
- * markup. Escaping would turn `<svg>` into `&lt;svg&gt;`; richtext
- * sanitisation would strip every SVG tag. SVG needs its own boundary.
- */
-const SVG_PROP_KEYS = new Set(['svg'])
-const SVG_PROP_SUFFIXES = ['svg']
-
-function isUrlKey(key: string): boolean {
-  const k = key.toLowerCase()
-  if (URL_PROP_KEYS.has(k)) return true
-  return URL_PROP_SUFFIXES.some((s) => k.endsWith(s))
-}
-
-function isRichtextKey(key: string): boolean {
-  const k = key.toLowerCase()
-  if (RICHTEXT_PROP_KEYS.has(k)) return true
-  return RICHTEXT_PROP_SUFFIXES.some((s) => k.endsWith(s))
-}
-
-function isSvgKey(key: string): boolean {
-  const k = key.toLowerCase()
-  if (SVG_PROP_KEYS.has(k)) return true
-  return SVG_PROP_SUFFIXES.some((s) => k.endsWith(s))
+function controlForKey(schema: PropertySchema, key: string): PropertyControl | undefined {
+  const direct = schema[key]
+  if (direct) return direct
+  for (const control of Object.values(schema)) {
+    if (control.type === 'group') {
+      const child = controlForKey(control.children, key)
+      if (child) return child
+    }
+  }
+  return undefined
 }
 
 /**
- * Escape every string prop before passing them to a module's render().
+ * Escape every string prop before passing them to a module's render(),
+ * dispatching per key on the prop's declared control `type`.
  *
- * - String props → escapeHtml()
- * - URL props → isSafeUrl() (unsafe → '#'), no HTML escape (module's safeUrl() handles that)
- * - Richtext / HTML props → sanitizeRichtext() (DOMPurify; text fallback)
+ * - `type: 'url' | 'image' | 'media'` → isSafeUrl() (unsafe → '#'), no HTML
+ *   escape (module's safeUrl() handles that)
+ * - `type: 'richtext'` → sanitizeRichtext() (DOMPurify; text fallback)
+ * - `type: 'svg'` → sanitizeSvg() (DOMPurify SVG profile)
+ * - everything else, and any key absent from `schema` → escapeHtml()
  * - Non-string props → unchanged
  */
 export function escapeProps(
   props: Record<string, unknown>,
+  schema: PropertySchema,
 ): Record<string, unknown> {
   const escaped: Record<string, unknown> = {}
 
@@ -85,12 +80,14 @@ export function escapeProps(
       continue
     }
 
-    if (isSvgKey(key)) {
+    const type = controlForKey(schema, key)?.type
+
+    if (type === 'svg') {
       // Inline SVG: sanitise with the SVG DOMPurify profile (defense-in-depth
       // on top of the editor/importer write-time sanitisation). Passed through
       // raw — NOT escapeHtml'd — so the module emits real `<svg>` markup.
       escaped[key] = sanitizeSvg(value)
-    } else if (isRichtextKey(key)) {
+    } else if (type === 'richtext') {
       // Richtext: defense-in-depth sanitization via DOMPurify (Constraint #368).
       // DOMPurify runs at write time (editor/Properties Panel boundary); this is a
       // second pass at the publisher boundary so that corrupted or injected richtext
@@ -98,7 +95,7 @@ export function escapeProps(
       // sanitizeRichtext falls back to conservative tag stripping only in
       // runtimes that have not installed DOMPurify (for example one-off scripts).
       escaped[key] = sanitizeRichtext(value)
-    } else if (isUrlKey(key)) {
+    } else if (type === 'url' || type === 'image' || type === 'media') {
       // URLs: block javascript: and vbscript: schemes; pass safe URLs through raw
       // so that module render() functions can HTML-escape them via safeUrl() from
       // modules/base/utils/escape.ts.  Publisher HTML-escaping plain strings is the
@@ -110,7 +107,9 @@ export function escapeProps(
       // strings that never pass through a module's safeUrl() call.
       escaped[key] = isSafeUrl(value) ? value : '#'
     } else {
-      // Plain strings: HTML-escape
+      // Plain strings, and any prop with no matching schema entry: HTML-escape
+      // (the safe default — a prop the schema doesn't describe is never trusted
+      // to carry markup or a URL).
       escaped[key] = escapeHtml(value)
     }
   }

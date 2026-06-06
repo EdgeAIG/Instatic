@@ -10,8 +10,9 @@
  * The outlet renders as an author-chosen semantic element (default `<main>`),
  * sharing the tag-selection helpers with `base.container` / `base.loop`. The
  * `html` prop is NOT author-editable — it is the binding target the publisher
- * fills with the current entry's body (`{currentEntry.body}`), so it carries
- * no panel control.
+ * fills with the current entry's body (`{currentEntry.body}`). It is declared as
+ * a `hidden` richtext control: typed so `escapeProps` sanitises it, but rendered
+ * with no panel control.
  */
 import type { ModuleDefinition } from '@core/module-engine'
 import { registry } from '@core/module-engine'
@@ -29,7 +30,8 @@ const OutletPropsSchema = Type.Object({
   customTag: Type.String({ default: '' }),
   /**
    * Binding target only — the publisher fills this with the current entry's
-   * body HTML. Never hand-edited, so it carries no `schema` control.
+   * body HTML. Never hand-edited; its `schema` control is `hidden: true` so it
+   * carries a richtext type for escaping but renders no panel control.
    */
   html: Type.String({ default: '' }),
 })
@@ -49,6 +51,15 @@ export const OutletModule: ModuleDefinition<OutletProps> = {
   schema: {
     tag: htmlTagControl(),
     customTag: customHtmlTagControl(),
+    /**
+     * Binding target only — the publisher fills this with the current entry's
+     * richtext body (`{currentEntry.body}`) or a bound VC param. Declared as a
+     * hidden richtext control so the publisher's `escapeProps` sanitises it via
+     * DOMPurify (rather than HTML-escaping it, which would entity-encode the
+     * rendered body). `hidden: true` keeps it out of the Properties panel — it
+     * is never hand-edited.
+     */
+    html: { type: 'richtext', label: 'Content', hidden: true },
   },
 
   propsSchema: OutletPropsSchema,

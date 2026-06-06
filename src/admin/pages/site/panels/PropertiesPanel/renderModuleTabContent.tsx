@@ -107,6 +107,10 @@ export function renderModuleTabContent(args: ModuleTabContentArgs): React.ReactN
       )}
 
       {Object.entries(definition.schema).map(([key, control]: [string, PropertyControl]) => {
+        // Hidden controls carry a type for the engine (escaping dispatch) but
+        // render no editor surface — e.g. base.outlet.html, a publisher-filled
+        // binding target the author never edits.
+        if (control.hidden) return null
         if (isPromotedFormProperty(selectedNode, key)) return null
         if (control.condition && !evaluateCondition(control.condition, resolvedPropsForBreakpoint)) {
           return null

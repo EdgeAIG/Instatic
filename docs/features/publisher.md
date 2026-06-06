@@ -30,7 +30,7 @@ src/core/publisher/
 ├── renderConfig.ts                 — RenderConfig (read-only inputs) + RenderAccumulators (mutable outputs) + RenderNodeFn
 ├── renderVisualComponentRef.ts     — inline a Visual Component instance into the page
 ├── renderLoop.ts                   — iterate a loop source, round-robin child variants
-├── escapeProps.ts                  — HTML-escape string props at the render boundary
+├── escapeProps.ts                  — escape string props at the render boundary, dispatched per-prop on the schema control `type`
 ├── classInjection.ts               — inject author classIds into rendered HTML
 ├── classCss.ts                     — compile user StyleRule → CSS
 ├── cssCollector.ts                 — CssCollector + collectClassCSS + sanitizeModuleCSS
@@ -92,7 +92,7 @@ For each node, bottom-up:
   1. children = node.children.map(renderNode)            ← recurse first
   2. resolvedProps  = resolveProps(node, breakpoint)     ← merge breakpoint overrides
   3. dynamicProps   = resolveDynamicProps(...)           ← apply data bindings
-  4. safeProps      = escapeProps(dynamicProps, schema)  ← HTML-escape strings
+  4. safeProps      = escapeProps(dynamicProps, schema)  ← escape per schema TYPE
   5. attachResolvedMediaByKey(safeProps, def, ...)       ← attach <picture>/<srcset>
   6. attachAutoSizes(safeProps, def, ...)                ← auto <img sizes>
   7. { html, css } = def.render(safeProps, children)                  ← MODULE BOUNDARY

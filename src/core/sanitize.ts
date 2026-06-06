@@ -230,12 +230,3 @@ export function sanitizeSvg(value: unknown): string {
 
   return String(purifier.sanitize(str, SVG_CONFIG))
 }
-
-/**
- * Check whether a module schema prop key holds inline-SVG markup.
- * Mirrors `isSvgKey()` in the publisher's `escapeProps.ts`.
- */
-export function isSvgPropKey(key: string): boolean {
-  const k = key.toLowerCase()
-  return k === 'svg' || k.endsWith('svg')
-}

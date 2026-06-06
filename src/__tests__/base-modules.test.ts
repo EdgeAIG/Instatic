@@ -136,7 +136,7 @@ describe('base.text — unified text module', () => {
   })
 
   it('escapes text content through the publisher pipeline', async () => {
-    const safeProps = escapeProps({ ...TextModule.defaults, text: '<script>xss()</script>' })
+    const safeProps = escapeProps({ ...TextModule.defaults, text: '<script>xss()</script>' }, TextModule.schema)
     const { html } = TextModule.render(safeProps, [])
 
     expect(html).toBeCleanHTML()
@@ -172,7 +172,7 @@ describe('base.button — render() specifics', () => {
 
   it('XSS: escapes label text', () => {
     // Simulate the publisher pipeline (Constraint #211)
-    const safeProps = escapeProps({ ...ButtonModule.defaults, label: '<script>alert(1)</script>', href: '' })
+    const safeProps = escapeProps({ ...ButtonModule.defaults, label: '<script>alert(1)</script>', href: '' }, ButtonModule.schema)
     const { html } = ButtonModule.render(safeProps, [])
     expect(html).toBeCleanHTML()
     expect(html).toContain('&lt;script&gt;')
@@ -374,7 +374,7 @@ describe('base.image — render() specifics', () => {
     // Alt text comes from the library asset (`_resolvedMediaByKey.src.altText`),
     // which is raw — the module's render() HTML-escapes at the boundary so
     // malicious metadata in a library row can't break out of the attribute.
-    const safeProps = escapeProps({ ...ImageModule.defaults, src: '/img.jpg' })
+    const safeProps = escapeProps({ ...ImageModule.defaults, src: '/img.jpg' }, ImageModule.schema)
     const html = ImageModule.render(
       {
         ...safeProps,
@@ -397,7 +397,7 @@ describe('base.image — render() specifics', () => {
   })
 
   it('includes alt attribute from the library asset for accessibility', () => {
-    const safeProps = escapeProps({ ...ImageModule.defaults, src: '/img.jpg' })
+    const safeProps = escapeProps({ ...ImageModule.defaults, src: '/img.jpg' }, ImageModule.schema)
     const html = ImageModule.render(
       {
         ...safeProps,
@@ -603,7 +603,7 @@ describe('base.list — render() specifics', () => {
   it('XSS: HTML-escapes items via publisher pipeline (Constraint #211)', () => {
     // Publisher's escapeProps() is the sole escaping layer (Option A fix).
     // Items are pre-escaped before render() is called.
-    const safeProps = escapeProps({ ...ListModule.defaults, items: '<script>alert(1)</script>\nSafe item' })
+    const safeProps = escapeProps({ ...ListModule.defaults, items: '<script>alert(1)</script>\nSafe item' }, ListModule.schema)
     const { html } = ListModule.render(safeProps, [])
     expect(html).toBeCleanHTML()
     expect(html).not.toContain('<script>')
@@ -611,7 +611,7 @@ describe('base.list — render() specifics', () => {
   })
 
   it('XSS: escapes & in item text without double-escaping', () => {
-    const safeProps = escapeProps({ ...ListModule.defaults, items: 'Cats & Dogs\nBread & Butter' })
+    const safeProps = escapeProps({ ...ListModule.defaults, items: 'Cats & Dogs\nBread & Butter' }, ListModule.schema)
     const { html } = ListModule.render(safeProps, [])
     expect(html).toContain('&amp;')
     expect(html).not.toContain('&amp;amp;')

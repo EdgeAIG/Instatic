@@ -8,7 +8,7 @@ import {
   type RenderConfig,
   type RenderAccumulators,
 } from '@core/publisher'
-import type { ModuleDefinition } from '@core/module-engine'
+import type { ModuleDefinition, PropertySchema } from '@core/module-engine'
 import {
   frameworkColorClassId,
   generateFrameworkColorUtilityClasses,
@@ -87,40 +87,80 @@ describe('isSafeUrl', () => {
 // ---------------------------------------------------------------------------
 
 describe('escapeProps', () => {
-  it('HTML-escapes plain string props', () => {
-    const result = escapeProps({ text: '<b>bold</b> & "quoted"' })
+  // escapeProps dispatches PER KEY on the prop's declared control `type` in the
+  // module schema — NOT on the key NAME. These schemas use deliberately
+  // off-heuristic key names (pageBody, assetPath, diagram) to prove the router
+  // follows the type, not a name-suffix guess.
+  const schema: PropertySchema = {
+    text: { type: 'text', label: 'Text' },
+    href: { type: 'url', label: 'Link' },
+    src: { type: 'url', label: 'Source' },
+    poster: { type: 'image', label: 'Poster' },
+    videoUrl: { type: 'media', label: 'Video', mediaKind: 'video' },
+    pageBody: { type: 'richtext', label: 'Body' },
+    diagram: { type: 'svg', label: 'Diagram' },
+    level: { type: 'number', label: 'Level' },
+  }
+
+  it('HTML-escapes plain (text-typed) string props', () => {
+    const result = escapeProps({ text: '<b>bold</b> & "quoted"' }, schema)
     expect(result.text).toBe('&lt;b&gt;bold&lt;/b&gt; &amp; &quot;quoted&quot;')
   })
 
-  it('replaces javascript: href with #', () => {
-    expect(escapeProps({ href: 'javascript:alert(1)' }).href).toBe('#')
+  it('replaces javascript: url-typed props with #', () => {
+    expect(escapeProps({ href: 'javascript:alert(1)' }, schema).href).toBe('#')
+    expect(escapeProps({ src: 'javascript:evil()' }, schema).src).toBe('#')
   })
 
-  it('replaces javascript: src with #', () => {
-    expect(escapeProps({ src: 'javascript:evil()' }).src).toBe('#')
+  it('allows safe url-typed values, unescaped (& survives for safeUrl)', () => {
+    expect(escapeProps({ href: 'https://example.com' }, schema).href).toBe('https://example.com')
+    expect(escapeProps({ src: '/images/logo.png' }, schema).src).toBe('/images/logo.png')
+    expect(escapeProps({ href: 'https://x.com/?a=1&b=2' }, schema).href).toBe('https://x.com/?a=1&b=2')
   })
 
-  it('allows safe href/src values', () => {
-    expect(escapeProps({ href: 'https://example.com' }).href).toBe('https://example.com')
-    expect(escapeProps({ src: '/images/logo.png' }).src).toBe('/images/logo.png')
+  it('routes richtext-typed props by TYPE even when the name misses the old suffix', () => {
+    // `pageBody` does NOT end in html/richtext — the old name heuristic would
+    // have HTML-escaped it (breaking markup AND leaving stored XSS unsanitised).
+    const result = escapeProps(
+      { pageBody: '<p>ok</p><script>alert(1)</script>' },
+      schema,
+    )
+    expect(result.pageBody).not.toContain('<script>')
+    expect(result.pageBody).not.toContain('&lt;p&gt;') // sanitised, not escaped
+    expect(result.pageBody).toContain('<p>ok</p>')
   })
 
-  it('passes through richtext/html props unescaped', () => {
-    const html = '<p><b>bold</b></p>'
-    expect(escapeProps({ richtext: html }).richtext).toBe(html)
-    expect(escapeProps({ html }).html).toBe(html)
-    expect(escapeProps({ bodyHtml: html }).bodyHtml).toBe(html) // suffix match
+  it('routes url-typed props by TYPE even when the name misses the old suffix', () => {
+    // `assetPath` matches no URL key/suffix — old heuristic HTML-escaped it,
+    // skipping isSafeUrl() so javascript: was NOT blocked and & was broken.
+    const urlSchema: PropertySchema = { assetPath: { type: 'url', label: 'Asset' } }
+    expect(escapeProps({ assetPath: 'javascript:alert(1)' }, urlSchema).assetPath).toBe('#')
+    expect(escapeProps({ assetPath: '/a?x=1&y=2' }, urlSchema).assetPath).toBe('/a?x=1&y=2')
+  })
+
+  it('routes svg-typed props by TYPE even when the name is not exactly "svg"', () => {
+    const result = escapeProps(
+      { diagram: '<svg onload="evil()"><rect/></svg>' },
+      schema,
+    )
+    expect(result.diagram).not.toContain('onload')
+    expect(result.diagram).toContain('<svg') // sanitised SVG, not escaped literal
+  })
+
+  it('URL-validates image/media-typed props (poster), no double-escape', () => {
+    expect(escapeProps({ poster: 'javascript:x' }, schema).poster).toBe('#')
+    expect(escapeProps({ poster: '/p.jpg?a=1&b=2' }, schema).poster).toBe('/p.jpg?a=1&b=2')
+    expect(escapeProps({ videoUrl: 'javascript:x' }, schema).videoUrl).toBe('#')
+  })
+
+  it('HTML-escapes any prop absent from the schema (safe default)', () => {
+    const result = escapeProps({ unknownProp: '<script>alert(1)</script>' }, schema)
+    expect(result.unknownProp).toBe('&lt;script&gt;alert(1)&lt;/script&gt;')
   })
 
   it('passes through non-string values unchanged', () => {
     const input = { level: 2, visible: true, count: 42, arr: [1, 2] }
-    expect(escapeProps(input)).toEqual(input)
-  })
-
-  it('handles URL-suffix keys (imageUrl, linkHref)', () => {
-    expect(escapeProps({ imageUrl: 'javascript:x' }).imageUrl).toBe('#')
-    expect(escapeProps({ imageUrl: '/img.jpg' }).imageUrl).toBe('/img.jpg')
-    expect(escapeProps({ linkHref: 'javascript:x' }).linkHref).toBe('#')
+    expect(escapeProps(input, schema)).toEqual(input)
   })
 })
 
@@ -309,6 +349,7 @@ describe('renderNode', () => {
 
   it('XSS: blocks javascript: href before render()', () => {
     const linkDef = makeModule('base.link', {
+      schema: { href: { type: 'url', label: 'Link' } },
       render: (props, _) => ({
         html: `<a href="${(props as { href: string }).href}">click</a>`,
       }),
