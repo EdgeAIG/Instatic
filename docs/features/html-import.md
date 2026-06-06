@@ -163,11 +163,11 @@ Three entry points all open the same `ImportHtmlModal`:
 2. **DOM panel context menu** — right-click any container node → **Paste HTML here…**. The clipboard is read and pre-fills the editor; `parentId` is pre-set to the right-clicked node.
 3. **Canvas context menu** — same as DOM panel, via `CanvasRoot.handlePasteHtml`.
 
-The modal:
-- **CodeMirror HTML editor** — paste or type HTML in the shared lazy-loaded editor surface.
+The modal is a two-column dialog — HTML editor on the left (wider), tree preview on the right (narrower):
+- **CodeMirror HTML editor** (left column) — paste or type HTML. Error alerts appear inline in the column header when insertion fails.
+- **Tree preview** (right column) — 200 ms debounced DOM-style tree view using the same row components as the Layers panel. Updates as the user types.
 - **Insertion target** — taken from the opener's `parentId`; Spotlight defaults to the page root. There is no parent picker in the modal.
-- **Live preview** — 200 ms debounced DOM-style tree preview using the same row components as the Layers panel. Updates as the user types.
-- **Insert** button — runs `importHtml`, calls `insertImportedNodes`, shows a success toast (with optional stripped-count detail), closes the modal.
+- **Insert** button (footer) — runs `importHtml`, calls `insertImportedNodes`, shows a success toast (with optional stripped-count detail), closes the modal.
 
 After insert, every produced node is a normal canvas node. It can be selected, moved, re-styled, and deleted like any other node.
 
