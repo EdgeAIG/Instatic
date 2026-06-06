@@ -26,6 +26,14 @@
     padding: 3px 8px;
 }
 
+/* Active selector — the rule the Properties panel is currently editing (chosen
+ * here, or the selected layer's active class). The ghost button carries no
+ * active affordance of its own, so mirror its hover surface to mark the row. */
+.rowMain[data-active="true"] {
+    background: var(--editor-surface-4);
+    color: var(--editor-text);
+}
+
 /* Leading control: paint-bucket icon at rest, Checkbox primitive on hover /
  * while selecting. Both occupy the same 22px slot so swapping them never
  * shifts the row. */

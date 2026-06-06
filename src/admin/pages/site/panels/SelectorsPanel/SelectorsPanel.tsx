@@ -104,6 +104,7 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
   const removeNodeClass = useEditorStore((s) => s.removeNodeClass)
   const selectedNode = useEditorStore(selectSelectedNode)
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
+  const activeClassId = useEditorStore((s) => s.activeClassId)
 
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<SelectorFilter>('all')
@@ -157,6 +158,12 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
   const hasMore = filteredClasses.length > visibleClasses.length
   const selectedClass = reusableClasses.find((cls) => cls.id === selectedSelectorClassId) ?? null
   const contextClass = contextMenu ? site?.styleRules[contextMenu.classId] ?? null : null
+
+  // The selector the Properties panel is currently editing. Mirrors that
+  // panel's priority: an explicitly-selected selector wins, otherwise it's the
+  // active class of the selected layer. Highlighting this row keeps the
+  // Selectors panel in sync with whatever rule the user is actually styling.
+  const activeSelectorClassId = selectedSelectorClassId ?? (selectedNodeId ? activeClassId : null)
 
   // The panel stays mounted and returns null while closed, so opening it is a
   // re-render rather than a remount. `deferredOpen` lags `isOpen` by one
@@ -348,7 +355,7 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
                 <SelectorRow
                   key={cls.id}
                   cls={cls}
-                  active={selectedSelectorClassId === cls.id}
+                  active={activeSelectorClassId === cls.id}
                   selected={selectedIdSet.has(cls.id)}
                   selecting={selecting}
                   usage={resolveSelectorUsage(cls, usageMap, classTokenUsage).label}
