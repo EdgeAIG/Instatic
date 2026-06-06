@@ -62,6 +62,14 @@ export interface CanvasSlice {
    * after edits that React reconciles away.
    */
   runScripts: boolean
+  /**
+   * Breakpoint IDs whose design-canvas frame is collapsed to a slim header
+   * (heavy iframe dropped) so the author can avoid rendering every breakpoint
+   * at once. EDITOR-SESSION-ONLY and ephemeral — not persisted to the site
+   * document, distinct from the breakpoint's `previewFrame` flag (which removes
+   * the frame entirely via Settings). Reloading the editor clears it.
+   */
+  collapsedBreakpointIds: string[]
 
   setZoom: (zoom: number) => void
   setPan: (x: number, y: number) => void
@@ -74,6 +82,8 @@ export interface CanvasSlice {
   setCanvasView: (view: CanvasView) => void
   /** Toggle (or set) whether runtime scripts run inside the editable iframes. */
   setRunScripts: (run: boolean) => void
+  /** Toggle whether a breakpoint's design-canvas frame is collapsed to its slim header. */
+  toggleBreakpointCollapsed: (id: string) => void
   resetView: () => void
   /**
    * Step zoom up to the next preset level. When `originX`/`originY` are
@@ -105,6 +115,7 @@ export const createCanvasSlice: EditorStoreSliceCreator<CanvasSlice> = (set, get
   canvasMode: 'select',
   canvasView: 'design',
   runScripts: false,
+  collapsedBreakpointIds: [],
 
   setZoom: (zoom) => set({ zoom: clampZoom(zoom) }),
 
@@ -129,6 +140,12 @@ export const createCanvasSlice: EditorStoreSliceCreator<CanvasSlice> = (set, get
   setCanvasView: (view) => set({ canvasView: view }),
 
   setRunScripts: (run) => set({ runScripts: run }),
+
+  toggleBreakpointCollapsed: (id) => set((s) => {
+    const idx = s.collapsedBreakpointIds.indexOf(id)
+    if (idx === -1) s.collapsedBreakpointIds.push(id)
+    else s.collapsedBreakpointIds.splice(idx, 1)
+  }),
 
   resetView: () => set({ zoom: DEFAULT_ZOOM, panX: 0, panY: 0 }),
 

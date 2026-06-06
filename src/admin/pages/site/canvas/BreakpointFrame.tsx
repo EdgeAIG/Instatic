@@ -28,6 +28,9 @@ import { CanvasFrameSkeleton } from '@admin/shared/CanvasFrameSkeleton'
 import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import { Button } from '@ui/components/Button'
 import { CursorTooltip, type CursorTooltipPoint } from '@ui/components/Tooltip'
+import { ArrowsScaleIcon } from 'pixel-art-icons/icons/arrows-scale'
+import { EyeSolidIcon } from 'pixel-art-icons/icons/eye-solid'
+import { EyeOffSolidIcon } from 'pixel-art-icons/icons/eye-off-solid'
 import { cn } from '@ui/cn'
 import { useEditorPermissions } from '@site/editorPermissionsContext'
 import { useEditorStore } from '@site/store/store'
@@ -90,6 +93,20 @@ export function BreakpointFrame({
   // inlined component, outlet preview) on double-click.
   const openPageInCanvas = useEditorStore((s) => s.openPageInCanvas)
   const setActiveDocument = useEditorStore((s) => s.setActiveDocument)
+
+  // Per-frame chrome actions: open this breakpoint in live mode, and collapse
+  // the frame to its slim header so not every breakpoint renders at once. The
+  // collapsed set is ephemeral editor state (see canvasSlice).
+  const setCanvasView = useEditorStore((s) => s.setCanvasView)
+  const setActiveBreakpoint = useEditorStore((s) => s.setActiveBreakpoint)
+  const toggleBreakpointCollapsed = useEditorStore((s) => s.toggleBreakpointCollapsed)
+  const isCollapsed = useEditorStore((s) => s.collapsedBreakpointIds.includes(breakpoint.id))
+
+  const handleOpenLive = () => {
+    setActiveBreakpoint(breakpoint.id)
+    setCanvasView('live')
+  }
+  const handleToggleCollapsed = () => toggleBreakpointCollapsed(breakpoint.id)
   const handleReadonlyOpen = (kind: 'page' | 'component', id: string) => {
     if (kind === 'component') {
       setActiveDocument({ kind: 'visualComponent', vcId: id })
@@ -167,6 +184,34 @@ export function BreakpointFrame({
             {breakpoint.label}
             <span className={styles.pxBadge}>{breakpoint.width}px</span>
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            iconOnly
+            onClick={handleOpenLive}
+            tooltip={`Open ${breakpoint.label} in live mode`}
+            aria-label={`Open ${breakpoint.label} breakpoint in live mode`}
+            data-testid={`canvas-frame-live-${breakpoint.id}`}
+          >
+            <ArrowsScaleIcon size={14} aria-hidden="true" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            iconOnly
+            pressed={isCollapsed}
+            onClick={handleToggleCollapsed}
+            tooltip={isCollapsed ? `Show ${breakpoint.label} frame` : `Collapse ${breakpoint.label} frame`}
+            aria-label={isCollapsed ? `Show ${breakpoint.label} frame` : `Collapse ${breakpoint.label} frame`}
+            aria-pressed={isCollapsed}
+            data-testid={`canvas-frame-collapse-${breakpoint.id}`}
+          >
+            {isCollapsed ? (
+              <EyeOffSolidIcon size={14} aria-hidden="true" />
+            ) : (
+              <EyeSolidIcon size={14} aria-hidden="true" />
+            )}
+          </Button>
         </div>
       )}
 
@@ -174,7 +219,12 @@ export function BreakpointFrame({
           instead of a plain `<div>`. The outer wrapper div is still here so
           the selection overlay has a positioning context and so the
           breakpoint's `data-breakpoint-id` is observable to canvas-level
-          DOM tools that don't cross the iframe boundary. */}
+          DOM tools that don't cross the iframe boundary.
+
+          Collapsed: the slim label header above stays, but the heavy iframe is
+          dropped entirely so this breakpoint isn't rendered alongside the
+          others. */}
+      {!isCollapsed && (
       <div
         ref={viewportRef}
         data-breakpoint-id={breakpoint.id}
@@ -217,6 +267,7 @@ export function BreakpointFrame({
           point={readonlyHint ? readonlyHint.point : null}
         />
       </div>
+      )}
     </div>
   )
 }
