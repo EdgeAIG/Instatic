@@ -6,10 +6,10 @@
  * Covers:
  *   PP-1  No role="tablist" in PropertiesPanel.tsx (static gate)
  *   PP-2  ClassPicker (pills + input) visible immediately on node selection — no tab click
- *   PP-3  Clicking class pill opens ClassComposer; clicking again closes it
+ *   PP-3  Clicking class pill opens StyleRuleComposer; clicking again closes it
  *   PP-4  Module props in collapsible Section (defaultOpen=true), titled definition.name
  *   PP-5  Advanced Section removed from the Properties panel
- *   PP-6  Both ClassComposer + PropertiesPanel import Section from same path (static gate)
+ *   PP-6  Both StyleRuleComposer + PropertiesPanel import Section from same path (static gate)
  *   PP-7  Order superscript removed — chips render without ¹ ² ³ badges (position conveys order)
  *   PP-8  Class pill context menu owns reorder actions; hover arrows are not mounted
  *   PP-9  Pill × has title="Remove from this element" (static gate)
@@ -147,7 +147,7 @@ describe('PP-2 — ClassPicker visible immediately on element selection', () => 
 })
 
 // ---------------------------------------------------------------------------
-// PP-3: Pill click opens minimal ClassComposer; clicking again closes it
+// PP-3: Pill click opens minimal StyleRuleComposer; clicking again closes it
 // ---------------------------------------------------------------------------
 
 describe('PP-3 — Pill click toggles CSS editor; locked preview shown with no active class', () => {
@@ -207,7 +207,7 @@ describe('SelectorHeader delete action', () => {
   })
 })
 
-describe('ClassComposer inline style filtering', () => {
+describe('StyleRuleComposer inline style filtering', () => {
   it('filters the inline style catalog without opening an autocomplete menu', () => {
     const { nodeId } = loadSiteWithClasses(1)
     selectNode(nodeId)
@@ -226,8 +226,8 @@ describe('ClassComposer inline style filtering', () => {
     expect(screen.queryByRole('option')).toBeNull()
   })
 
-  it('does not keep bespoke autocomplete result styles in ClassComposer.module.css', () => {
-    const css = readFileSync(join(PP_DIR, 'ClassComposer.module.css'), 'utf-8')
+  it('does not keep bespoke autocomplete result styles in StyleRuleComposer.module.css', () => {
+    const css = readFileSync(join(PP_DIR, 'StyleRuleComposer.module.css'), 'utf-8')
 
     expect(css).not.toMatch(/\.searchResults\b/)
     expect(css).not.toMatch(/\.searchGroup\b/)
@@ -387,9 +387,9 @@ describe("PP-6 — StyleSurface used by PropertiesPanel; Section shared in Style
   })
 
   it('StyleSectionsEditor.tsx imports Section from the shared @ui/components/Section primitive', () => {
-    // Section moved from ClassComposer into StyleSectionsEditor when inline-styles
+    // Section moved from StyleRuleComposer into StyleSectionsEditor when inline-styles
     // refactoring (commit ee346c41) extracted the style-section rendering into a
-    // shared target-agnostic renderer used by both ClassComposer and InlineStyleComposer.
+    // shared target-agnostic renderer used by both StyleRuleComposer and InlineStyleComposer.
     const src = readFileSync(join(PP_DIR, 'StyleSectionsEditor.tsx'), 'utf-8')
     expect(src).toMatch(/import\s*\{\s*Section\s*\}\s*from\s+['"]@ui\/components\/Section['"]/)
   })
@@ -505,10 +505,10 @@ describe('PP-9 — Pill × button tooltip "Remove from this element"', () => {
 })
 
 // ---------------------------------------------------------------------------
-// PP-10: Class and module style controls are visible in ClassComposer
+// PP-10: Class and module style controls are visible in StyleRuleComposer
 // ---------------------------------------------------------------------------
 
-describe('PP-10 — Class and module style controls visible in ClassComposer', () => {
+describe('PP-10 — Class and module style controls visible in StyleRuleComposer', () => {
   it('a class with a fontFamily style shows a CSS property row', () => {
     const { nodeId } = loadSiteWithHeading()
     const state = useEditorStore.getState()
@@ -518,14 +518,14 @@ describe('PP-10 — Class and module style controls visible in ClassComposer', (
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
-    // Open the ClassComposer by clicking the pill
+    // Open the StyleRuleComposer by clicking the pill
     const pill = screen.getByRole('button', { name: /edit class \.styled-class/i })
     fireEvent.click(pill)
 
     expect(document.querySelector('[data-testid="css-property-row-fontFamily"]')).not.toBeNull()
   })
 
-  it('no textarea element is present in ClassComposer (PP-17)', () => {
+  it('no textarea element is present in StyleRuleComposer (PP-17)', () => {
     const { nodeId } = loadSiteWithClasses(1)
     selectNode(nodeId)
     render(<PropertiesPanel />)
@@ -533,7 +533,7 @@ describe('PP-10 — Class and module style controls visible in ClassComposer', (
     const pill = screen.getByRole('button', { name: /edit class \.class-1/i })
     fireEvent.click(pill)
 
-    // Phase 3 removes the former ClassComposer "Edit CSS" textarea.
+    // Phase 3 removes the former StyleRuleComposer "Edit CSS" textarea.
     expect(screen.queryByRole('textbox', { name: /edit css/i })).toBeNull()
   })
 })
@@ -606,7 +606,7 @@ describe('PP-11 — Editing a text-type class property via TextControl updates c
   })
 })
 
-describe('ClassComposer unset CSS property placeholders', () => {
+describe('StyleRuleComposer unset CSS property placeholders', () => {
   it('renders the display switcher with no segment pressed when display is unset', () => {
     const { nodeId } = loadSiteWithClasses(1)
     selectNode(nodeId)
@@ -1045,7 +1045,7 @@ describe('ClassPropertyRow — token-aware properties', () => {
   })
 })
 
-describe('ClassComposer set style indicators', () => {
+describe('StyleRuleComposer set style indicators', () => {
   it('marks category rail icons and section headers that contain stored class styles', () => {
     const { nodeId, classIds } = loadSiteWithClasses(1)
     const clsId = classIds[0]
@@ -1155,8 +1155,8 @@ describe('PP-16 — No inline styles / no Tailwind / no !important in new files'
     { file: 'ClassRenameDialog.tsx', dir: PP_DIR },
     { file: 'classPickerUiState.ts', dir: PP_DIR },
     { file: 'useClassPickerDerivedState.ts', dir: PP_DIR },
-    { file: 'ClassComposer.tsx', dir: PP_DIR },
-    { file: 'ClassComposer.module.css', dir: PP_DIR },
+    { file: 'StyleRuleComposer.tsx', dir: PP_DIR },
+    { file: 'StyleRuleComposer.module.css', dir: PP_DIR },
     { file: 'ClassPropertyRow.tsx', dir: PP_DIR },
     { file: 'ClassPropertyRow.module.css', dir: PP_DIR },
     { file: 'cssControlTypes.ts', dir: PP_DIR },
@@ -1212,16 +1212,16 @@ describe('HF-1 — Class pill actions are keyboard-reachable (no tabIndex={-1})'
 })
 
 // ---------------------------------------------------------------------------
-// HF-2: ClassComposer state isolation — switching class pills resets state
+// HF-2: StyleRuleComposer state isolation — switching class pills resets state
 // ---------------------------------------------------------------------------
 
-describe('HF-2 — Switching class pills resets ClassComposer local state', () => {
+describe('HF-2 — Switching class pills resets StyleRuleComposer local state', () => {
   it('property search resets and updates placeholder after switching classes (no state leak)', () => {
     const { nodeId } = loadSiteWithClasses(2)
     selectNode(nodeId)
     render(<PropertiesPanel />)
 
-    // Activate class-1 — ClassComposer mounts
+    // Activate class-1 — StyleRuleComposer mounts
     const pill1 = screen.getByRole('button', { name: /edit class \.class-1/i })
     fireEvent.click(pill1)
 
@@ -1232,7 +1232,7 @@ describe('HF-2 — Switching class pills resets ClassComposer local state', () =
     fireEvent.change(searchInput1, { target: { value: 'font' } })
     expect(searchInput1.value).toBe('font')
 
-    // Switch to class-2 — ClassComposer should remount (key={activeClassId})
+    // Switch to class-2 — StyleRuleComposer should remount (key={activeClassId})
     const pill2 = screen.getByRole('button', { name: /edit class \.class-2/i })
     fireEvent.click(pill2)
 
@@ -1274,16 +1274,16 @@ describe('HF-2 — Switching class pills resets ClassComposer local state', () =
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// PP-17: No <textarea> in ClassComposer (static gate)
+// PP-17: No <textarea> in StyleRuleComposer (static gate)
 // ---------------------------------------------------------------------------
 
-describe('PP-17 — No textarea element in ClassComposer (Phase 3)', () => {
-  it('ClassComposer.tsx source does not contain <textarea', () => {
-    const src = readFileSync(join(PP_DIR, 'ClassComposer.tsx'), 'utf-8')
+describe('PP-17 — No textarea element in StyleRuleComposer (Phase 3)', () => {
+  it('StyleRuleComposer.tsx source does not contain <textarea', () => {
+    const src = readFileSync(join(PP_DIR, 'StyleRuleComposer.tsx'), 'utf-8')
     expect(src).not.toContain('<textarea')
   })
 
-  it('rendered ClassComposer contains no textarea element in the DOM', () => {
+  it('rendered StyleRuleComposer contains no textarea element in the DOM', () => {
     const { nodeId } = loadSiteWithClasses(1)
     selectNode(nodeId)
     render(<PropertiesPanel />)
@@ -1479,21 +1479,21 @@ describe('PP-22 — Module settings is the first visible accordion', () => {
 })
 
 // ---------------------------------------------------------------------------
-// PP-24: ClassComposer shows only assigned style categories and uses shared Section
+// PP-24: StyleRuleComposer shows only assigned style categories and uses shared Section
 // ---------------------------------------------------------------------------
 
 describe('PP-24 — StyleSectionsEditor assigned categories use shared Section', () => {
   it('StyleSectionsEditor.tsx imports Section from the shared @ui/components/Section primitive', () => {
-    // Section ownership moved from ClassComposer → StyleSectionsEditor in the
-    // inline-styles refactor (commit ee346c41). ClassComposer now delegates all
+    // Section ownership moved from StyleRuleComposer → StyleSectionsEditor in the
+    // inline-styles refactor (commit ee346c41). StyleRuleComposer now delegates all
     // style-section rendering to StyleSectionsEditor, which is the file that
     // legitimately imports and uses the Section primitive.
     const src = readFileSync(join(PP_DIR, 'StyleSectionsEditor.tsx'), 'utf-8')
     expect(src).toMatch(/import\s*\{\s*Section\s*\}\s*from\s+['"]@ui\/components\/Section['"]/)
   })
 
-  it('ClassComposer.tsx does not contain sectionsArea CSS class reference', () => {
-    const src = readFileSync(join(PP_DIR, 'ClassComposer.tsx'), 'utf-8')
+  it('StyleRuleComposer.tsx does not contain sectionsArea CSS class reference', () => {
+    const src = readFileSync(join(PP_DIR, 'StyleRuleComposer.tsx'), 'utf-8')
     expect(src).not.toContain('sectionsArea')
   })
 

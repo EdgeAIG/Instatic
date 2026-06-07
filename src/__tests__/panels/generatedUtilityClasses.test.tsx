@@ -108,7 +108,7 @@ describe('generated utility classes in editor panels', () => {
   it('shows the locked state when a generated utility is opened from the selectors panel', () => {
     // Reproduces the regression where clicking a utility class in the
     // SelectorsPanel routes through `SelectorInspector` and previously
-    // rendered an editable ClassComposer instead of the locked state.
+    // rendered an editable StyleRuleComposer instead of the locked state.
     useEditorStore.setState({
       selectedNodeId: null,
     selectedNodeIds: [],
