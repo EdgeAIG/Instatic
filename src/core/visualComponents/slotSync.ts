@@ -10,13 +10,13 @@
  *     a VC ref's children into alignment with its VC's slot params.
  *
  *   applySlotSyncResult — helper that applies a SyncResult to a mutable
- *     nodes map (called inside Immer producers in siteSlice / visualComponentsSlice).
+ *     nodes map (called inside Mutative producers in siteSlice / visualComponentsSlice).
  *
  * Constraint #269: This file must NOT import from editor/ or editor-store/.
  */
 
 import { nanoid } from 'nanoid'
-import type { BaseNode } from '@core/page-tree'
+import { deleteSubtree, type BaseNode } from '@core/page-tree'
 import type { VisualComponent } from './schemas'
 
 // ---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ export interface SyncResult {
  * Running on an already-synced ref produces an empty ops array and an
  * orderedChildIds that matches vcRefNode.children exactly (idempotent).
  *
- * This function is PURE — no Immer, no store, no side effects.
+ * This function is PURE — no Mutative producer, no store, no side effects.
  */
 export function syncSlotInstances(
   vcRefNode: BaseNode,
@@ -252,8 +252,8 @@ export function syncSlotInstances(
 /**
  * Apply a SyncResult (from syncSlotInstances) to a mutable nodes map.
  *
- * Intended to be called inside an Immer producer where `treeNodes` is an
- * Immer draft (or a plain object in tests).
+ * Intended to be called inside a Mutative producer where `treeNodes` is a
+ * Mutative draft (or a plain object in tests).
  *
  * Steps:
  *   1. Add newNodes entries to the tree.
@@ -279,7 +279,9 @@ export function applySlotSyncResult(
         n.props = { ...n.props, slotName: op.newSlotName }
       }
     } else if (op.kind === 'delete') {
-      deleteSubtreeFromNodes(treeNodes, op.nodeId)
+      // unlinkParent: false — the VC ref's children array is overwritten
+      // wholesale below (step 4), so this must NOT touch the parent here.
+      deleteSubtree(treeNodes, op.nodeId, { unlinkParent: false })
     }
     // insert ops: handled by adding to newNodes above
   }
@@ -292,29 +294,5 @@ export function applySlotSyncResult(
       const child = treeNodes[childId]
       if (child) child.parentId = vcRefNodeId
     }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// deleteSubtreeFromNodes — cascade-delete a node and all its descendants
-// ---------------------------------------------------------------------------
-
-/**
- * Recursively delete a node and all its descendants from a flat nodes map.
- * The node's entry in the parent's children array is NOT removed — the caller
- * is responsible for updating the parent (via applySlotSyncResult setting
- * orderedChildIds, which naturally omits deleted IDs).
- */
-function deleteSubtreeFromNodes(
-  treeNodes: Record<string, BaseNode>,
-  rootId: string,
-): void {
-  const node = treeNodes[rootId]
-  if (!node) return
-  // Snapshot children before deleting to avoid modifying while iterating
-  const children = [...node.children]
-  delete treeNodes[rootId]
-  for (const childId of children) {
-    deleteSubtreeFromNodes(treeNodes, childId)
   }
 }

@@ -4,10 +4,11 @@ import type { PageNode } from './pageNode'
 import type { SiteDocument } from './siteDocument'
 import type { NodeTree } from './treeSchema'
 import type { TreeOperation } from './operationSchema'
-import { getParent, isAncestor } from './selectors'
+import { getParent, isAncestor, collectSubtreeIds } from './selectors'
 import { normalizePageSlug, uniquePageSlug } from './slugs'
 import { cloneScopedClassesForNodeMap } from './scopedClassClone'
 import { reindexNodeParents } from './parentIndex'
+import { deleteSubtree } from './subtreeRemoval'
 
 // ---------------------------------------------------------------------------
 // parentId maintenance helper
@@ -29,10 +30,82 @@ function linkChildrenParents(nodes: Record<string, PageNode>, parentNodeId: stri
   }
 }
 
+// ---------------------------------------------------------------------------
+// cloneNodeWithRemap — the single node deep-clone primitive
+// ---------------------------------------------------------------------------
+
 /**
- * Pure Immer-compatible mutation helpers for the page tree.
+ * Deep-clone a single node, assigning a fresh `id` and remapping its child /
+ * class references. This is THE one place that knows the full persisted shape
+ * of a node, so adding a new persisted `BaseNode`/`PageNode` field means editing
+ * exactly one clone site — `duplicateNode`, `pasteSubtree`, and `duplicatePage`
+ * all route through here and keep only their own id-map construction + insertion
+ * placement (the genuinely-different part).
  *
- * These are called inside Zustand's Immer middleware — they mutate a draft
+ * Every persisted sub-object is copied so NOTHING is shared by reference with
+ * the source:
+ *   - `props` — shallow-copied (prop values are content, mutated via replace).
+ *   - `breakpointOverrides` — deep-copied one level (per-breakpoint bags).
+ *   - `inlineStyles` / `propBindings` / `dynamicBindings` — copied when present.
+ *   - `children` — remapped through `idMap`; ids absent from the map are dropped
+ *     (a self-contained subtree has every child in the map, so for well-formed
+ *     trees this is a no-op; dangling ids are corrupt data and pruned).
+ *
+ * `classIdRemap` is the per-caller class policy: return a new id to remap, the
+ * same id to keep, or `null` to drop the class. Omit it to copy classIds as-is.
+ * Same-document clones (duplicateNode / duplicatePage) keep unknown classIds
+ * (they reference shared site-level classes that still exist); foreign-source
+ * paste drops classIds the target document can't resolve.
+ */
+export function cloneNodeWithRemap(
+  node: PageNode,
+  options: {
+    newId: string
+    idMap: ReadonlyMap<string, string>
+    classIdRemap?: (classId: string) => string | null
+  },
+): PageNode {
+  const { newId, idMap, classIdRemap } = options
+
+  const cloned: PageNode = {
+    ...node,
+    id: newId,
+    props: { ...node.props },
+    breakpointOverrides: Object.fromEntries(
+      Object.entries(node.breakpointOverrides).map(([k, v]) => [k, { ...v }]),
+    ),
+    children: node.children
+      .map((childId) => idMap.get(childId))
+      .filter((cid): cid is string => typeof cid === 'string'),
+    classIds: classIdRemap
+      ? node.classIds.flatMap((cid) => {
+          const next = classIdRemap(cid)
+          return next === null ? [] : [next]
+        })
+      : [...node.classIds],
+  }
+
+  // Deep-copy the remaining optional persisted sub-objects so the clone never
+  // shares a mutable object with its source.
+  if (node.inlineStyles) cloned.inlineStyles = { ...node.inlineStyles }
+  if (node.propBindings) {
+    cloned.propBindings = Object.fromEntries(
+      Object.entries(node.propBindings).map(([k, v]) => [k, { ...v }]),
+    )
+  }
+  if (node.dynamicBindings) {
+    cloned.dynamicBindings = Object.fromEntries(
+      Object.entries(node.dynamicBindings).map(([k, v]) => [k, { ...v }]),
+    )
+  }
+
+  return cloned
+}
+
+/**
+ * Pure Mutative-compatible mutation helpers for the page tree.
+ *
+ * These are called inside Zustand's Mutative middleware — they mutate a draft
  * NodeTree/SiteDocument directly. Every function here is also safe to call as
  * a pure function when given a structuredClone'd object.
  *
@@ -106,25 +179,7 @@ export function deleteNode(tree: NodeTree<PageNode>, nodeId: string): void {
   if (nodeId === tree.rootNodeId) {
     throw new Error(`[PageTree] Cannot delete the root node.`)
   }
-  // Collect all descendant IDs to delete
-  const toDelete = new Set<string>()
-  const stack = [nodeId]
-  while (stack.length > 0) {
-    const id = stack.pop()!
-    const node = tree.nodes[id]
-    if (!node) continue
-    toDelete.add(id)
-    stack.push(...node.children)
-  }
-  // Remove from parent's children array
-  const parent = getParent(tree, nodeId)
-  if (parent) {
-    parent.children = parent.children.filter((id) => id !== nodeId)
-  }
-  // Remove all collected nodes
-  for (const id of toDelete) {
-    delete tree.nodes[id]
-  }
+  deleteSubtree(tree.nodes, nodeId, { unlinkParent: true })
 }
 
 // ---------------------------------------------------------------------------
@@ -267,33 +322,22 @@ export function duplicateNode(
   // already walked the subtree (typically to build a class-id remap against
   // the same set of node ids).
   if (idMap.size === 0) {
-    const stack = [nodeId]
-    while (stack.length > 0) {
-      const id = stack.pop()!
-      if (idMap.has(id)) continue
-      const node = tree.nodes[id]
-      if (!node) continue
+    for (const id of collectSubtreeIds(tree.nodes, nodeId)) {
       idMap.set(id, nanoid())
-      stack.push(...node.children)
     }
   }
+
+  // Same-document duplication keeps unknown classIds (they reference shared
+  // site-level classes); the optional map only remaps node-scoped class ids.
+  const remapClassId = classIdRemap
+    ? (cid: string) => classIdRemap.get(cid) ?? cid
+    : undefined
 
   // Clone all nodes with remapped IDs, children, and (optionally) classIds.
   for (const [oldId, newId] of idMap) {
     const original = tree.nodes[oldId]
     if (!original) continue
-    tree.nodes[newId] = {
-      ...original,
-      id: newId,
-      props: { ...original.props },
-      breakpointOverrides: Object.fromEntries(
-        Object.entries(original.breakpointOverrides).map(([k, v]) => [k, { ...v }])
-      ),
-      children: original.children.map((childId) => idMap.get(childId) ?? childId),
-      classIds: classIdRemap
-        ? original.classIds.map((cid) => classIdRemap.get(cid) ?? cid)
-        : [...original.classIds],
-    }
+    tree.nodes[newId] = cloneNodeWithRemap(original, { newId, idMap, classIdRemap: remapClassId })
   }
 
   // Re-link parentId across the cloned subtree: every clone's children point
@@ -335,14 +379,8 @@ export function buildSubtreeNodeIdMap(
   nodes: Record<string, PageNode>,
 ): Map<string, string> {
   const idMap = new Map<string, string>()
-  const stack = [rootNodeId]
-  while (stack.length > 0) {
-    const id = stack.pop()!
-    const node = nodes[id]
-    if (!node) continue
-    if (idMap.has(id)) continue
+  for (const id of collectSubtreeIds(nodes, rootNodeId)) {
     idMap.set(id, nanoid())
-    stack.push(...node.children)
   }
   return idMap
 }
@@ -385,31 +423,13 @@ export function pasteSubtree(
   const idMap = options.nodeIdMap ?? buildSubtreeNodeIdMap(payload.rootNodeId, payload.nodes)
   const { classIdRemap } = options
 
-  // Clone every node with remapped ID, props, breakpointOverrides, children,
-  // and (optionally) filtered classIds.
+  // Clone every node with remapped ID and (optionally) filtered classIds. The
+  // foreign payload may reference classes the target document can't resolve, so
+  // `classIdRemap` returns `null` to drop those.
   for (const [oldId, newId] of idMap) {
     const original = payload.nodes[oldId]
     if (!original) continue
-
-    const remappedClassIds = classIdRemap
-      ? original.classIds.flatMap((cid) => {
-          const next = classIdRemap(cid)
-          return next === null ? [] : [next]
-        })
-      : [...original.classIds]
-
-    tree.nodes[newId] = {
-      ...original,
-      id: newId,
-      props: { ...original.props },
-      breakpointOverrides: Object.fromEntries(
-        Object.entries(original.breakpointOverrides).map(([k, v]) => [k, { ...v }])
-      ),
-      children: original.children
-        .map((childId) => idMap.get(childId))
-        .filter((cid): cid is string => typeof cid === 'string'),
-      classIds: remappedClassIds,
-    }
+    tree.nodes[newId] = cloneNodeWithRemap(original, { newId, idMap, classIdRemap })
   }
 
   // Re-link parentId across the freshly inserted subtree from its children
@@ -901,22 +921,13 @@ export function duplicatePage(
   }
 
   // Clone each node with remapped IDs, remapped child references, and
-  // remapped scoped-class ids.
+  // remapped scoped-class ids. Non-scoped classes (absent from classIdRemap)
+  // are kept as-is — they're shared site-level classes that still exist.
+  const remapClassId = (cid: string) => classIdRemap.get(cid) ?? cid
   const newNodes: Record<string, PageNode> = {}
   for (const [oldId, oldNode] of Object.entries(source.nodes)) {
     const newId = idMap.get(oldId)!
-    newNodes[newId] = {
-      ...oldNode,
-      id: newId,
-      props: { ...oldNode.props },
-      breakpointOverrides: Object.fromEntries(
-        Object.entries(oldNode.breakpointOverrides).map(([k, v]) => [k, { ...v }]),
-      ),
-      children: oldNode.children
-        .map((childId) => idMap.get(childId))
-        .filter((cid): cid is string => typeof cid === 'string'),
-      classIds: oldNode.classIds.map((cid) => classIdRemap.get(cid) ?? cid),
-    }
+    newNodes[newId] = cloneNodeWithRemap(oldNode, { newId, idMap, classIdRemap: remapClassId })
   }
 
   const newRootId = idMap.get(source.rootNodeId)

@@ -110,6 +110,7 @@ export {
   moveNode,
   moveNodes,
   duplicateNode,
+  cloneNodeWithRemap,
   buildSubtreeNodeIdMap,
   pasteSubtree,
   wrapNode,
@@ -124,7 +125,7 @@ export {
 
 export { reindexNodeParents } from './parentIndex'
 
-export { removeNodeSubtrees } from './subtreeRemoval'
+export { removeNodeSubtrees, deleteSubtree } from './subtreeRemoval'
 
 export { cloneScopedClassesForNodeMap } from './scopedClassClone'
 
@@ -135,6 +136,7 @@ export {
   getParent,
   getAncestors,
   flattenSubtree,
+  collectSubtreeIds,
   isAncestor,
   resolveProps,
   evaluateCondition,

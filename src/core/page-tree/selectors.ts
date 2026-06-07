@@ -75,19 +75,29 @@ export function getAncestors<TNode extends BaseNode>(tree: NodeTree<TNode>, node
 }
 
 /**
- * Return all node IDs in depth-first pre-order starting at nodeId.
- * Useful for virtual-scroll flattening in the DOM tree panel.
+ * Collect a node + all its descendants in depth-first pre-order, operating on a
+ * raw flat node Record.
+ *
+ * This is THE single descendant-collection primitive for the whole engine —
+ * every deletion / duplication path that needs "this node and everything under
+ * it" routes through here (or through `flattenSubtree`, its NodeTree-typed
+ * sibling). The `visited` Set is a hard cycle guard: a corrupt tree whose
+ * `children` arrays form a cycle terminates here instead of looping forever.
+ * No caller may re-implement this walk without that guard.
+ *
+ * Returns IDs in pre-order (root first, then each subtree left-to-right) — the
+ * order the DOM tree panel relies on for virtual-scroll flattening.
  */
-export function flattenSubtree<TNode extends BaseNode>(tree: NodeTree<TNode>, nodeId: string): string[] {
+export function collectSubtreeIds(nodes: Record<string, BaseNode>, rootId: string): string[] {
   const result: string[] = []
-  const stack: string[] = [nodeId]
+  const stack: string[] = [rootId]
   const visited = new Set<string>()
 
   while (stack.length > 0) {
     const id = stack.pop()!
-    if (visited.has(id)) continue
+    if (visited.has(id)) continue // cycle guard
     visited.add(id)
-    const node = tree.nodes[id]
+    const node = nodes[id]
     if (!node) continue
     result.push(id)
     // Push children in reverse so leftmost child is processed first (stack is LIFO)
@@ -96,6 +106,16 @@ export function flattenSubtree<TNode extends BaseNode>(tree: NodeTree<TNode>, no
     }
   }
   return result
+}
+
+/**
+ * Return all node IDs in depth-first pre-order starting at nodeId.
+ * Useful for virtual-scroll flattening in the DOM tree panel.
+ *
+ * Thin NodeTree-typed wrapper over `collectSubtreeIds` — same cycle-safe walk.
+ */
+export function flattenSubtree<TNode extends BaseNode>(tree: NodeTree<TNode>, nodeId: string): string[] {
+  return collectSubtreeIds(tree.nodes, nodeId)
 }
 
 /**
