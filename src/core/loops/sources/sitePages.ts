@@ -22,7 +22,15 @@ import type { LoopEntitySource, LoopFetchResult, LoopItem } from '@core/loops/ty
 import type { Page } from '@core/page-tree'
 import { primaryTemplateTableSlug } from '@core/templates'
 
-function pageToLoopItem(page: Page): LoopItem {
+/**
+ * Project a page into the loop-item field bag (slug → permalink
+ * normalization + the exposed fields). This is the single source of truth
+ * for the `site.pages` loop item shape — both the publisher (via this
+ * source's `fetch`/`preview`) and the editor canvas preview
+ * (`useLoopPreviewItems`) import it through the `@core/loops` barrel so the
+ * canvas and the published output can never silently disagree.
+ */
+export function pageToLoopItem(page: Page): LoopItem {
   const slug = page.slug.startsWith('/') ? page.slug : `/${page.slug}`
   const permalink = slug === '/index' ? '/' : slug
   return {
@@ -38,7 +46,15 @@ function pageToLoopItem(page: Page): LoopItem {
   }
 }
 
-function filterPages(pages: readonly Page[], filters: Record<string, unknown>): Page[] {
+/**
+ * Apply the `templateOnly` / `excludeTemplates` include-exclude filter for
+ * `site.pages` loops. Shared with the editor canvas preview so template
+ * filtering matches between canvas and published output.
+ */
+export function filterPagesForLoop(
+  pages: readonly Page[],
+  filters: Record<string, unknown>,
+): Page[] {
   const templateOnly = filters.templateOnly === true
   const excludeTemplates = filters.excludeTemplates === true
 
@@ -87,7 +103,7 @@ export const SitePagesSource: LoopEntitySource = {
   ],
 
   async fetch(ctx): Promise<LoopFetchResult> {
-    const filtered = filterPages(ctx.site.pages, ctx.filters)
+    const filtered = filterPagesForLoop(ctx.site.pages, ctx.filters)
     const sorted =
       ctx.orderBy === 'title' || ctx.orderBy === 'slug'
         ? [...filtered].sort((a, b) => compare(a, b, ctx.orderBy, ctx.direction))
@@ -103,7 +119,7 @@ export const SitePagesSource: LoopEntitySource = {
   },
 
   preview(ctx) {
-    const filtered = filterPages(ctx.site.pages, ctx.filters)
+    const filtered = filterPagesForLoop(ctx.site.pages, ctx.filters)
     return filtered.slice(0, ctx.limit).map(pageToLoopItem)
   },
 }

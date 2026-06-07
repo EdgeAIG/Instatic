@@ -27,13 +27,12 @@
 import { useEffect, useState } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { loopSourceRegistry } from '@core/loops/registry'
-import type { LoopItem } from '@core/loops/types'
+import { type LoopItem, pageToLoopItem, filterPagesForLoop } from '@core/loops'
 import type { DataTable } from '@core/data/schemas'
 import type { Page, PageNode } from '@core/page-tree'
 import { getCmsDataTable, previewCmsDataLoopItems } from '@core/persistence/cmsData'
 import { listCmsMediaAssets, type CmsMediaAsset } from '@core/persistence/cmsMedia'
 import { dataTablePreviewToLoopItem } from '@core/templates/templatePreviewData'
-import { primaryTemplateTableSlug } from '@core/templates'
 
 // ---------------------------------------------------------------------------
 // Loop prop reader
@@ -137,32 +136,9 @@ function mediaAssetToLoopItem(asset: CmsMediaAsset): LoopItem {
   }
 }
 
-function pageToLoopItem(page: Page): LoopItem {
-  const slug = page.slug.startsWith('/') ? page.slug : `/${page.slug}`
-  const permalink = slug === '/index' ? '/' : slug
-  return {
-    id: page.id,
-    fields: {
-      id: page.id,
-      title: page.title,
-      slug: page.slug,
-      permalink,
-      isTemplate: page.template?.enabled === true,
-      templateTableSlug: primaryTemplateTableSlug(page),
-    },
-  }
-}
-
-function filterPagesForLoop(pages: readonly Page[], filters: Record<string, unknown>): Page[] {
-  const templateOnly = filters.templateOnly === true
-  const excludeTemplates = filters.excludeTemplates === true
-  return pages.filter((page) => {
-    const isTemplate = page.template?.enabled === true
-    if (templateOnly && !isTemplate) return false
-    if (excludeTemplates && isTemplate) return false
-    return true
-  })
-}
+// `pageToLoopItem` and `filterPagesForLoop` are imported from `@core/loops`
+// so the canvas preview consumes the engine's loop-item projection rather
+// than re-deriving it — keeping editor previews and published output in sync.
 
 // ---------------------------------------------------------------------------
 // Hook
