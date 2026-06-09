@@ -20,6 +20,27 @@
  */
 export const CMS_SITE_RELOAD_EVENT = 'cms-site-reload'
 
+let cmsSiteReloadPending = false
+
+/**
+ * Request an editor-site reload and retain that request if the Site editor is
+ * not mounted yet. Callers that mutate site-backed storage outside the editor
+ * should use this helper instead of dispatching `CMS_SITE_RELOAD_EVENT`
+ * directly.
+ */
+export function requestCmsSiteReload(): void {
+  cmsSiteReloadPending = true
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(CMS_SITE_RELOAD_EVENT))
+  }
+}
+
+export function consumePendingCmsSiteReload(): boolean {
+  if (!cmsSiteReloadPending) return false
+  cmsSiteReloadPending = false
+  return true
+}
+
 /**
  * Fired after a CMS-exported SiteBundle has been imported successfully through
  * the global Site Import modal. Data/content views that cache table or row

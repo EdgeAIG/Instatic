@@ -22,7 +22,7 @@ import type {
   PluginManifest,
   PluginPermission,
 } from '@core/plugin-sdk'
-import { CMS_SITE_RELOAD_EVENT } from '@admin/state/adminEvents'
+import { requestCmsSiteReload } from '@admin/state/adminEvents'
 import type { WorkspaceLoadState } from '@admin/lib/workspaceLoadState'
 import {
   getEditorActivationErrors,
@@ -99,7 +99,7 @@ export interface PluginsWorkspaceVM extends WorkspaceLoadState {
 const emptyPayload: CmsPluginsPayload = { plugins: [], adminPages: [] }
 
 function notifyCmsSiteReload(): void {
-  window.dispatchEvent(new Event(CMS_SITE_RELOAD_EVENT))
+  requestCmsSiteReload()
 }
 
 /**

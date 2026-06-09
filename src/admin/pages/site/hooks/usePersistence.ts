@@ -32,6 +32,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorStore } from '@site/store/store'
+import type { SiteDocument } from '@core/page-tree'
 import type { IPersistenceAdapter } from '@core/persistence/types'
 import { cmsAdapter } from '@core/persistence/cms'
 import { SiteValidationError } from '@core/persistence/validate'
@@ -51,7 +52,7 @@ import { getKeybindingForCommand } from '@admin/spotlight/keybindings'
  * non-editor admin bundle.
  */
 export { CMS_SITE_RELOAD_EVENT } from '@admin/state/adminEvents'
-import { CMS_SITE_RELOAD_EVENT } from '@admin/state/adminEvents'
+import { CMS_SITE_RELOAD_EVENT, consumePendingCmsSiteReload } from '@admin/state/adminEvents'
 
 export interface PersistenceSaveStatus {
   state: 'loading' | 'saved' | 'unsaved' | 'saving' | 'error'
@@ -66,6 +67,25 @@ interface PersistenceController {
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message.trim() ? err.message : fallback
+}
+
+function currentEditorDataDeepLink(): { table: 'pages' | 'components'; rowId: string } | null {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  const table = params.get('table')
+  const rowId = params.get('row')
+  if (!rowId) return null
+  if (table !== 'pages' && table !== 'components') return null
+  return { table, rowId }
+}
+
+function siteMissesEditorDataDeepLink(site: SiteDocument): boolean {
+  const deepLink = currentEditorDataDeepLink()
+  if (!deepLink) return false
+  if (deepLink.table === 'pages') {
+    return !site.pages.some((page) => page.id === deepLink.rowId)
+  }
+  return !site.visualComponents.some((component) => component.id === deepLink.rowId)
 }
 
 /**
@@ -145,7 +165,11 @@ export function usePersistence(
         setHasUnsavedChanges,
       } = useEditorStore.getState()
 
-      if (existingSite) {
+      const shouldReloadExistingSite = existingSite
+        ? consumePendingCmsSiteReload() || siteMissesEditorDataDeepLink(existingSite)
+        : false
+
+      if (existingSite && !shouldReloadExistingSite) {
         loadedRef.current = true
         setSaveStatus(
           hasUnsavedChanges
@@ -183,6 +207,18 @@ export function usePersistence(
         }
       }
 
+      if (cancelled) return
+
+      if (existingSite) {
+        loadedRef.current = true
+        setSaveStatus(
+          hasUnsavedChanges
+            ? { state: 'unsaved', message: 'Unsaved changes' }
+            : { state: 'saved', lastSavedAt: Date.now() },
+        )
+        return
+      }
+
       // Bootstrap a fresh draft once for new installs that have an admin/site row
       // but no instatic document yet.
       if (!cancelled) {
@@ -207,10 +243,9 @@ export function usePersistence(
     return () => { cancelled = true }
   }, [enabled, markNewSiteUnsaved, requestedSiteId])
 
-  // External "site changed at the server" hook — the Plugins admin page fires
-  // `CMS_SITE_RELOAD_EVENT` after installing a plugin pack so the editor pulls
-  // the fresh draft document and the new VCs / pages / classes show up
-  // without a browser reload.
+  // External "site changed at the server" hook. Non-editor workspaces call
+  // `requestCmsSiteReload()`, which retains the reload if this hook is not
+  // mounted yet and dispatches `CMS_SITE_RELOAD_EVENT` for live editor mounts.
   useEffect(() => {
     if (!enabled) return undefined
 
@@ -234,6 +269,7 @@ export function usePersistence(
     }
 
     function handleReload() {
+      consumePendingCmsSiteReload()
       void reload()
     }
 

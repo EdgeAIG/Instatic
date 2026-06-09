@@ -9,7 +9,7 @@ import {
 import { getErrorMessage } from '@core/utils/errorMessage'
 import {
   CMS_SITE_BUNDLE_IMPORTED_EVENT,
-  CMS_SITE_RELOAD_EVENT,
+  requestCmsSiteReload,
 } from '@admin/state/adminEvents'
 import type {
   BundlePreview,
@@ -147,8 +147,8 @@ export function useCmsBundleImport({
       })
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event(CMS_SITE_BUNDLE_IMPORTED_EVENT))
-        window.dispatchEvent(new Event(CMS_SITE_RELOAD_EVENT))
       }
+      requestCmsSiteReload()
       onImportComplete?.()
       closeModal()
     } catch (err) {

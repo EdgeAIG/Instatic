@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useInitialQueryParams, useUrlQuerySync } from '@admin/lib/urlState'
+import { requestCmsSiteReload } from '@admin/state/adminEvents'
 import {
   createCmsDataRow,
   createCmsDataTable,
@@ -30,6 +31,10 @@ function updateRowList(rows: DataRow[], row: DataRow): DataRow[] {
   const next = [...rows]
   next[idx] = row
   return next
+}
+
+function tableBacksSiteDocument(table: DataTableListItem | null): boolean {
+  return table?.kind === 'page' || table?.kind === 'component'
 }
 
 /**
@@ -301,6 +306,7 @@ export function useDataWorkspace(): DataWorkspace {
     const payload = cells ?? buildEmptyCells(selectedTable.fields)
     const row = await createCmsDataRow(selectedTable.id, { cells: payload })
     setRows((current) => updateRowList(current, row))
+    if (tableBacksSiteDocument(selectedTable)) requestCmsSiteReload()
     return row
   }
 
@@ -313,6 +319,7 @@ export function useDataWorkspace(): DataWorkspace {
     })
     setRows((current) => updateRowList(current, row))
     setSelectedRowId(row.id)
+    if (tableBacksSiteDocument(selectedTable)) requestCmsSiteReload()
     return row
   }
 
@@ -320,6 +327,7 @@ export function useDataWorkspace(): DataWorkspace {
     setRowsError(null)
     const row = await saveCmsDataRowDraft(rowId, { cells })
     setRows((current) => updateRowList(current, row))
+    if (tableBacksSiteDocument(selectedTable)) requestCmsSiteReload()
     return row
   }
 
@@ -328,6 +336,7 @@ export function useDataWorkspace(): DataWorkspace {
     await deleteCmsDataRow(rowId)
     setRows((current) => current.filter((r) => r.id !== rowId))
     setSelectedRowId((cur) => (cur === rowId ? null : cur))
+    if (tableBacksSiteDocument(selectedTable)) requestCmsSiteReload()
   }
 
   const selectRow = (rowId: string | null) => {

@@ -154,6 +154,8 @@ useUrlQuerySync(
 1. **READ (once, after load):** consumes `?page=<slug>` or `?table=…&row=…` from the initial URL and applies the selection to the editor store. Guarded by a ref so it fires at most once per mount.
 2. **WRITE (ongoing):** mirrors the active page's slug back into the URL so the address bar stays current. The home page (`slug === 'index'`) is always represented as the bare `/admin/site` — the `?page=` param is omitted.
 
+`usePersistence` reloads an already-hydrated editor store before URL consumption when the initial URL points at a page/component row that is missing from memory. Data-workspace mutations to system `page` and `component` tables also call `requestCmsSiteReload()` (`src/admin/state/adminEvents.ts`), which is retained if the Site editor is not mounted yet and consumed by `usePersistence` on the next mount.
+
 ---
 
 ## Auth and access

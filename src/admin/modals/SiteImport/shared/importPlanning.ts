@@ -22,7 +22,7 @@ import {
 } from '@core/siteImport'
 import type { SiteDocument } from '@core/page-tree'
 import { cmsAdapter } from '@core/persistence/cms'
-import { CMS_SITE_RELOAD_EVENT } from '@admin/state/adminEvents'
+import { requestCmsSiteReload } from '@admin/state/adminEvents'
 import { useEditorStore } from '@site/store/store'
 import { getErrorMessage } from '@core/utils/errorMessage'
 
@@ -161,7 +161,5 @@ export async function saveImportedDraftSite(): Promise<void> {
   if (!site) throw new Error('Import completed, but no draft site is loaded.')
   await cmsAdapter.saveSite(site)
   useEditorStore.getState().setHasUnsavedChanges(false)
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event(CMS_SITE_RELOAD_EVENT))
-  }
+  requestCmsSiteReload()
 }

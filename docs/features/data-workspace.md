@@ -16,6 +16,7 @@ The Data workspace lets operators define and edit table schemas (field types, ro
 - **TableSettings** owns field management via `FieldsSection`, which is split into `FieldRow`, `FieldEditForm`, `fieldGuards`, and `fieldEditState`.
 - Field classification: three tiers — mandatory built-ins (locked), optional built-ins (editable/deletable with badge), custom fields (fully editable/deletable).
 - Field edit state uses a flat `FieldEditState` draft that `fieldToEditState` / `applyEditState` convert to/from the persisted `DataField`.
+- Mutations to system `page` and `component` rows request a retained Site-editor reload through `requestCmsSiteReload()` so `/admin/site` sees Data-created pages and Visual Components even when the editor store was already hydrated.
 
 ---
 
