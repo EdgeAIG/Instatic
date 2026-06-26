@@ -5,6 +5,7 @@ import {
   setUserPreference,
   type ModuleInserterItemRef,
 } from '@core/persistence/userPreferences'
+import { ApiError } from '@core/http'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import {
   dedupeModuleInserterRefs,
@@ -132,6 +133,14 @@ function ensureModuleInserterPreferenceLoaded() {
         error: null,
       })
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setSnapshot({
+          favorites: [...DEFAULT_FAVORITES],
+          loading: false,
+          error: null,
+        })
+        return
+      }
       const message = getErrorMessage(err, 'Failed to load module inserter preferences')
       console.error('[module-inserter] failed to load user preference:', err)
       setSnapshot({

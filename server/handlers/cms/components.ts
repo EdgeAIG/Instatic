@@ -16,12 +16,12 @@
  *                                   rules run against the merged post-save
  *                                   roster (see validateVisualComponentsForPartialWrite).
  *
- *                                   **Gated by `site.structure.edit`** — the
- *                                   reconcile soft-deletes any VC not in the
- *                                   incoming roster. The previous `SITE_WRITE_*`
- *                                   gate let a Client with `site.content.edit`
- *                                   only wipe every Visual Component by sending
- *                                   an empty roster. (A1 fix.)
+ *                                   Gated by any site-write capability, then
+ *                                   restricted to no-op saves unless the caller
+ *                                   has `site.structure.edit`. The reconcile
+ *                                   can soft-delete any VC missing from the
+ *                                   incoming roster, so actual VC changes and
+ *                                   roster reaps remain structural work.
  *
  * The GET response returns raw DataRow objects (not VisualComponent objects) so
  * the client adapter can reconstruct VCs via visualComponentFromRow without a
@@ -29,7 +29,8 @@
  * validateVisualComponents immediately after conversion.
  */
 import type { DbClient } from '../../db/client'
-import { requireCapability } from '../../auth/authz'
+import { requireAnyCapability, requireCapability } from '../../auth/authz'
+import type { CoreCapability } from '../../auth/capabilities'
 import { listDataRows, reconcileDataRowRoster } from '../../repositories/data'
 import { visualComponentToCells, visualComponentFromRow } from '../../../src/core/data/componentFromRow'
 import { SiteValidationError, validateVisualComponentsForPartialWrite } from '@core/persistence/validate'
@@ -37,6 +38,13 @@ import { VisualComponentSchema, vcSlugFromName, type VisualComponent } from '@co
 import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../http'
 import { Type } from '@core/utils/typeboxHelpers'
 import { CMS_API_PREFIX } from './shared'
+import { ForbiddenSiteChangeError } from './siteDiff'
+
+const COMPONENT_WRITE_CAPABILITIES = [
+  'site.structure.edit',
+  'site.content.edit',
+  'site.style.edit',
+] satisfies CoreCapability[]
 
 export async function handleComponentsRoutes(req: Request, db: DbClient): Promise<Response | null> {
   const url = new URL(req.url)
@@ -51,8 +59,7 @@ export async function handleComponentsRoutes(req: Request, db: DbClient): Promis
   }
 
   if (req.method === 'PUT') {
-    // Structural gate — reconcile soft-deletes missing VCs. See A1.
-    const user = await requireCapability(req, db, 'site.structure.edit')
+    const user = await requireAnyCapability(req, db, COMPONENT_WRITE_CAPABILITIES)
     if (user instanceof Response) return user
 
     const ComponentsBodySchema = Type.Object({
@@ -65,6 +72,7 @@ export async function handleComponentsRoutes(req: Request, db: DbClient): Promis
     if (!body) return badRequest('Invalid request body')
 
     const componentIds = new Set(body.componentIds)
+    const canEditStructure = user.capabilities.includes('site.structure.edit')
 
     // The cross-VC rules (identity, refs, dependency-graph acyclicity) are
     // roster-wide — a changed VC can create a cycle THROUGH an unchanged one —
@@ -76,6 +84,21 @@ export async function handleComponentsRoutes(req: Request, db: DbClient): Promis
       const vc = visualComponentFromRow(r)
       return vc ? [vc] : []
     })
+    const reapedIds = existingVCs.filter((vc) => !componentIds.has(vc.id)).map((vc) => vc.id)
+    if (!canEditStructure && (body.changedComponents.length > 0 || reapedIds.length > 0)) {
+      return jsonResponse(
+        {
+          error: new ForbiddenSiteChangeError(
+            'structure',
+            'componentIds',
+            reapedIds.length > 0 ? `component roster removed ${reapedIds.join(', ')}` : 'component changed',
+          ).message,
+          kind: 'structure',
+          path: 'componentIds',
+        },
+        { status: 403 },
+      )
+    }
 
     let components: VisualComponent[]
     try {

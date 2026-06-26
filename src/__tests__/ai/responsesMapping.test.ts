@@ -8,6 +8,7 @@ import {
   type ResponsesTurn,
 } from '../../../server/ai/drivers/responses-shared'
 import { openaiDriver } from '../../../server/ai/drivers/openai'
+import { openrouterDriver } from '../../../server/ai/drivers/openrouter'
 import type { AiStreamRequest } from '../../../server/ai/drivers/types'
 import type { AiMessage, AiBrowserBridge, AiStreamEvent, AiTool, AiToolOutput } from '../../../server/ai/runtime/types'
 import type { SseFrame } from '../../../server/ai/drivers/http/sse'
@@ -236,5 +237,118 @@ describe('runToolLoop via openaiDriver (Responses)', () => {
     const usage = events.find((e) => e.type === 'usage') as { promptTokens: number; completionTokens: number } | undefined
     expect(usage!.promptTokens).toBe(45)
     expect(usage!.completionTokens).toBe(15)
+  })
+})
+
+describe('openrouterDriver', () => {
+  test('streams through OpenRouter Responses and passes native cost through', async () => {
+    const requestBodies: Array<Record<string, unknown>> = []
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      expect(url).toBe('https://openrouter.ai/api/v1/responses')
+      expect((init.headers as Record<string, string>).Authorization).toBe('Bearer sk-or-test')
+      requestBodies.push(JSON.parse(init.body as string))
+      return sseResponse(
+        responsesSse(
+          { type: 'response.output_text.delta', delta: 'openrouter reply' },
+          {
+            type: 'response.completed',
+            response: { usage: { input_tokens: 12, output_tokens: 3, cost: 0.00042 } },
+          },
+        ),
+      )
+    }) as typeof fetch
+
+    const bridge: AiBrowserBridge = { async callBrowser(): Promise<AiToolOutput> { return { ok: true } } }
+    const req: AiStreamRequest = {
+      systemPrompt: ['You are a test.'],
+      messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
+      tools: [],
+      modelId: 'openai/gpt-5.4',
+      modelCapabilities: { toolCalling: true, visionInput: true, promptCache: false, streaming: true },
+      credentials: { id: 'cr', providerId: 'openrouter', authMode: 'apiKey', apiKey: 'sk-or-test', baseUrl: null },
+      signal: new AbortController().signal,
+      bridge,
+      toolContextBase: {
+        db: {} as never,
+        userId: 'u1',
+        capabilities: [],
+        scope: 'site',
+        conversationId: 'c1',
+        snapshot: {},
+      },
+    }
+
+    const events: AiStreamEvent[] = []
+    for await (const ev of openrouterDriver.stream(req)) events.push(ev)
+
+    expect(requestBodies).toHaveLength(1)
+    expect(requestBodies[0]!.model).toBe('openai/gpt-5.4')
+    expect(requestBodies[0]!.stream).toBe(true)
+    expect(requestBodies[0]!).not.toHaveProperty('prompt_cache_key')
+    expect(events.filter((e) => e.type === 'text').map((e) => (e as { text: string }).text).join('')).toBe(
+      'openrouter reply',
+    )
+    const usage = events.find((e) => e.type === 'usage') as
+      | { promptTokens: number; completionTokens: number; costUsd?: number }
+      | undefined
+    expect(usage).toBeDefined()
+    expect(usage!.promptTokens).toBe(12)
+    expect(usage!.completionTokens).toBe(3)
+    expect(usage!.costUsd).toBe(0.00042)
+  })
+
+  test('lists OpenRouter models with catalogue pricing, context, and capabilities', async () => {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      expect(url).toBe('https://openrouter.ai/api/v1/models')
+      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer sk-or-test')
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'openai/gpt-5.4',
+              name: 'GPT 5.4',
+              architecture: { input_modalities: ['text', 'image'] },
+              supported_parameters: ['tools'],
+              context_length: 128_000,
+              pricing: { prompt: '0.000005', completion: '0.000025' },
+            },
+            {
+              id: 'anthropic/claude-opus-4.8',
+              name: 'Claude Opus 4.8',
+              architecture: { input_modalities: ['text'] },
+              supported_parameters: [],
+              context_length: 200_000,
+              pricing: { prompt: '0.00001', completion: '0.00005' },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as typeof fetch
+
+    const models = await openrouterDriver.listModels({
+      id: 'cr',
+      providerId: 'openrouter',
+      authMode: 'apiKey',
+      apiKey: 'sk-or-test',
+      baseUrl: null,
+    })
+
+    expect(models).toEqual([
+      {
+        id: 'openai/gpt-5.4',
+        label: 'GPT 5.4',
+        capabilities: { toolCalling: true, visionInput: true, promptCache: false, streaming: true },
+        pricing: { inputPerMTok: 5, outputPerMTok: 25 },
+        contextWindow: 128_000,
+      },
+      {
+        id: 'anthropic/claude-opus-4.8',
+        label: 'Claude Opus 4.8',
+        capabilities: { toolCalling: false, visionInput: false, promptCache: false, streaming: true },
+        pricing: { inputPerMTok: 10, outputPerMTok: 50 },
+        contextWindow: 200_000,
+      },
+    ])
   })
 })

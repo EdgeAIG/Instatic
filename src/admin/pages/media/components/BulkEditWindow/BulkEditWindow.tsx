@@ -12,6 +12,8 @@
 import { useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { Input, Textarea } from '@ui/components/Input'
+import { canDeleteMedia, canWriteMedia } from '@admin/access'
+import { useCurrentAdminUser } from '@admin/sessionContext'
 import { CheckIcon } from 'pixel-art-icons/icons/check'
 import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
 import { FolderGlyphIcon } from 'pixel-art-icons/icons/folder-glyph'
@@ -142,6 +144,7 @@ async function runRestoreAll(
 }
 
 export function BulkEditWindow({ workspace, open, onClose }: BulkEditWindowProps) {
+  const currentUser = useCurrentAdminUser()
   const [plan, setPlan] = useState<BatchPlan>(EMPTY_PLAN)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
@@ -149,27 +152,29 @@ export function BulkEditWindow({ workspace, open, onClose }: BulkEditWindowProps
   const assets = workspace.selectedAssets
   const count = assets.length
   const allImages = assets.every((a) => a.mimeType.startsWith('image/'))
+  const canWrite = canWriteMedia(currentUser)
+  const canDelete = canDeleteMedia(currentUser)
 
   function resetPlan() {
     setPlan(EMPTY_PLAN)
   }
 
   async function applyPlan() {
-    if (!planHasChanges(plan) || busy) return
+    if (!canWrite || !planHasChanges(plan) || busy) return
     setBusy(true)
     setProgress({ done: 0, total: count })
     await runApplyPlan(plan, assets, workspace, setBusy, setProgress, resetPlan)
   }
 
   async function trashAll() {
-    if (busy) return
+    if (!canDelete || busy) return
     setBusy(true)
     setProgress({ done: 0, total: count })
     await runTrashAll(assets, workspace, setBusy, setProgress)
   }
 
   async function restoreAll() {
-    if (busy) return
+    if (!canWrite || busy) return
     setBusy(true)
     setProgress({ done: 0, total: count })
     await runRestoreAll(assets, workspace, setBusy, setProgress)
@@ -195,119 +200,131 @@ export function BulkEditWindow({ workspace, open, onClose }: BulkEditWindowProps
         — adds merge with each asset's existing tags, removes only drop matching tags.
       </p>
 
-      {!allImages && (
+      {!canWrite && (
+        <p className={styles.notice} role="status">
+          Media metadata and folder edits are read-only for your role.
+        </p>
+      )}
+
+      {canWrite && !allImages && (
         <p className={styles.notice} role="status">
           Alt text is only applied to image assets in the selection.
         </p>
       )}
 
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Alt text</h3>
-        <Textarea
-          value={plan.altText ?? ''}
-          onChange={(e) => setPlan((prev) => ({ ...prev, altText: e.target.value || null }))}
-          placeholder={plan.altText === null ? 'Leave existing alt text untouched' : ''}
-          rows={2}
-          aria-label="Bulk alt text"
-        />
-        {plan.altText !== null && (
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => setPlan((prev) => ({ ...prev, altText: null }))}
-          >
-            Don't change
-          </Button>
-        )}
-      </section>
+      {canWrite && (
+        <>
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Alt text</h3>
+            <Textarea
+              value={plan.altText ?? ''}
+              onChange={(e) => setPlan((prev) => ({ ...prev, altText: e.target.value || null }))}
+              placeholder={plan.altText === null ? 'Leave existing alt text untouched' : ''}
+              rows={2}
+              aria-label="Bulk alt text"
+            />
+            {plan.altText !== null && (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setPlan((prev) => ({ ...prev, altText: null }))}
+              >
+                Don't change
+              </Button>
+            )}
+          </section>
 
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Add tags</h3>
-        <TagEditor
-          value={plan.addTags}
-          onChange={(next) => setPlan((prev) => ({ ...prev, addTags: next }))}
-          palette={workspace.tagPalette}
-          placeholder="Tags to add"
-        />
-      </section>
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Add tags</h3>
+            <TagEditor
+              value={plan.addTags}
+              onChange={(next) => setPlan((prev) => ({ ...prev, addTags: next }))}
+              palette={workspace.tagPalette}
+              placeholder="Tags to add"
+            />
+          </section>
 
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Remove tags</h3>
-        <TagEditor
-          value={plan.removeTags}
-          onChange={(next) => setPlan((prev) => ({ ...prev, removeTags: next }))}
-          palette={workspace.tagPalette}
-          placeholder="Tags to remove"
-        />
-      </section>
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Remove tags</h3>
+            <TagEditor
+              value={plan.removeTags}
+              onChange={(next) => setPlan((prev) => ({ ...prev, removeTags: next }))}
+              palette={workspace.tagPalette}
+              placeholder="Tags to remove"
+            />
+          </section>
 
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Folders</h3>
-        <FolderPicker
-          label="Add to folders"
-          selected={plan.addFolders}
-          onChange={(next) => setPlan((prev) => ({ ...prev, addFolders: next }))}
-          folders={workspace.folders}
-        />
-        <FolderPicker
-          label="Remove from folders"
-          selected={plan.removeFolders}
-          onChange={(next) => setPlan((prev) => ({ ...prev, removeFolders: next }))}
-          folders={workspace.folders}
-        />
-      </section>
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Folders</h3>
+            <FolderPicker
+              label="Add to folders"
+              selected={plan.addFolders}
+              onChange={(next) => setPlan((prev) => ({ ...prev, addFolders: next }))}
+              folders={workspace.folders}
+            />
+            <FolderPicker
+              label="Remove from folders"
+              selected={plan.removeFolders}
+              onChange={(next) => setPlan((prev) => ({ ...prev, removeFolders: next }))}
+              folders={workspace.folders}
+            />
+          </section>
 
-      <div className={styles.applyRow}>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={resetPlan}
-          disabled={busy || !planHasChanges(plan)}
-        >
-          Reset
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => void applyPlan()}
-          disabled={busy || !planHasChanges(plan)}
-        >
-          {busy && progress ? `Applying ${progress.done}/${progress.total}…` : (
-            <>
-              <CheckIcon size={13} />
-              <span>Apply to {count}</span>
-            </>
-          )}
-        </Button>
-      </div>
-
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Actions</h3>
-        <div className={styles.actionsRow}>
-          {anyActive && (
+          <div className={styles.applyRow}>
             <Button
-              variant="destructive"
+              variant="ghost"
               size="sm"
-              onClick={() => void trashAll()}
-              disabled={busy}
+              onClick={resetPlan}
+              disabled={busy || !planHasChanges(plan)}
             >
-              <TrashSolidIcon size={13} />
-              <span>Move to Trash</span>
+              Reset
             </Button>
-          )}
-          {anyTrashed && (
             <Button
-              variant="secondary"
+              variant="primary"
               size="sm"
-              onClick={() => void restoreAll()}
-              disabled={busy}
+              onClick={() => void applyPlan()}
+              disabled={busy || !planHasChanges(plan)}
             >
-              <ReloadIcon size={13} />
-              <span>Restore</span>
+              {busy && progress ? `Applying ${progress.done}/${progress.total}…` : (
+                <>
+                  <CheckIcon size={13} />
+                  <span>Apply to {count}</span>
+                </>
+              )}
             </Button>
-          )}
-        </div>
-      </section>
+          </div>
+        </>
+      )}
+
+      {(canDelete || canWrite) && (
+        <section className={styles.section}>
+          <h3 className={styles.sectionTitle}>Actions</h3>
+          <div className={styles.actionsRow}>
+            {canDelete && anyActive && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => void trashAll()}
+                disabled={busy}
+              >
+                <TrashSolidIcon size={13} />
+                <span>Move to Trash</span>
+              </Button>
+            )}
+            {canWrite && anyTrashed && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void restoreAll()}
+                disabled={busy}
+              >
+                <ReloadIcon size={13} />
+                <span>Restore</span>
+              </Button>
+            )}
+          </div>
+        </section>
+      )}
     </FloatingWindow>
   )
 }

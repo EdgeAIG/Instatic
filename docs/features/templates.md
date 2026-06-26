@@ -199,7 +199,7 @@ Context frames are unchanged from before templates were added — the merged tre
 interface TemplateRenderDataContext {
   page?:        PageFrame       // page id, slug, title, templateTableSlug
   site?:        SiteFrame       // site name, settings, breakpoints
-  route?:       RouteFrame      // URL parts
+  route?:       RouteFrame      // URL path, slug, segments, and query params
   entryStack:   LoopItem[]      // pushed by loops + entry route render
 }
 ```
@@ -215,7 +215,7 @@ See the "Dynamic bindings" section below for the full source table.
 | `currentEntry` | Top of `entryStack`       | Inside loops, inside entry templates                    |
 | `parentEntry`  | Second-from-top           | Nested loops                                            |
 | `site`         | `ctx.site`                | Anywhere — site name, primary color                     |
-| `route`        | `ctx.route`               | URL-driven (route.segments, route.slug)                 |
+| `route`        | `ctx.route`               | URL-driven (`route.segments`, `route.slug`, `route.query.*`) |
 | `page`         | `ctx.page`                | Current page metadata                                   |
 
 ---

@@ -164,6 +164,19 @@
     text-transform: capitalize;
 }
 
+.defaultActions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--space-m);
+}
+
+.defaultActions .testResult {
+    flex-basis: 100%;
+    text-align: right;
+}
+
 .dialogBody {
     display: grid;
     gap: var(--space-2xl);

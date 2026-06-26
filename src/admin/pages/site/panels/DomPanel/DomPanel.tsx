@@ -54,6 +54,7 @@ import { useDomPanelDnd } from './useDomPanelDnd'
 import { TreeContainer, TreeIconSlot, TreeLabel, TreeRow } from '@site/ui/Tree'
 import { TagPill } from '@ui/components/TagPill'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
+import { isNarrowEditorChromeViewport } from '@site/layout/responsiveChrome'
 import { SearchBar } from '@ui/components/SearchBar'
 import { SkeletonTree } from '@ui/components/Skeleton'
 import { PanelHeader } from '@admin/shared/PanelHeader'
@@ -483,7 +484,10 @@ function DomPanelInner({ variant = 'floating', editable = true }: { variant?: Pa
                 rows={searchRows}
                 showTag={showTag}
                 showClasses={showClasses}
-                onSelect={(nodeId) => useEditorStore.getState().selectNode(nodeId)}
+                onSelect={(nodeId) =>
+                  useEditorStore.getState().selectNode(nodeId, undefined, {
+                    preservePropertiesPanelCollapse: isNarrowEditorChromeViewport(),
+                  })}
               />
             </TreeContainer>
           ) : (

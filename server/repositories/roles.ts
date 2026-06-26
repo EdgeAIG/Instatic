@@ -81,6 +81,27 @@ async function getRole(db: DbClient, roleId: string): Promise<Role | null> {
   return rows[0] ? rowToRole(rows[0]) : null
 }
 
+async function getRoleBySlug(db: DbClient, slug: string): Promise<Role | null> {
+  const { rows } = await db<RoleRow>`
+    select id, slug, name, description, is_system, capabilities_json, created_at, updated_at
+    from roles
+    where slug = ${slug}
+    limit 1
+  `
+  return rows[0] ? rowToRole(rows[0]) : null
+}
+
+async function assertRoleSlugAvailable(
+  db: DbClient,
+  slug: string,
+  currentRoleId?: string,
+): Promise<void> {
+  const existing = await getRoleBySlug(db, slug)
+  if (existing && existing.id !== currentRoleId) {
+    throw new RoleMutationError('Role slug is already in use', 409)
+  }
+}
+
 export async function createCustomRole(
   db: DbClient,
   input: {
@@ -95,6 +116,7 @@ export async function createCustomRole(
 
   const slug = slugFromRoleName(input.slug || name)
   if (!slug) throw new RoleMutationError('Role slug is required')
+  await assertRoleSlugAvailable(db, slug)
 
   const id = nanoid()
   const { rows } = await db<RoleRow>`
@@ -135,6 +157,7 @@ export async function updateRole(
   if (!name) throw new RoleMutationError('Role name is required')
   const slug = input.slug === undefined ? current.slug : slugFromRoleName(input.slug)
   if (!slug) throw new RoleMutationError('Role slug is required')
+  await assertRoleSlugAvailable(db, slug, current.id)
   const description = input.description === undefined ? current.description : input.description.trim()
   const capabilities = input.capabilities ?? current.capabilities
 

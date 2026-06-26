@@ -118,6 +118,20 @@ function clickSection(name: string) {
 }
 
 describe('ModulePickerDropdown — Visual Components', () => {
+  it('exposes stable names for inserter category buttons when labels are visually hidden', () => {
+    loadSite()
+    render(<ModulePickerDropdown />)
+
+    const dialog = openInserter()
+    const categories = within(dialog).getByRole('navigation', { name: 'Module categories' })
+    for (const name of ['Modules', 'Layouts', 'Components', 'Recent']) {
+      const button = within(categories).getByRole('button', {
+        name: new RegExp(`^${name}\\b`),
+      })
+      expect(button.getAttribute('aria-label')).toBe(name)
+    }
+  })
+
   it('lists site VCs as items inside the Components section', () => {
     loadSite([
       makeVC('vc-1', 'HeroCard', 3),

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test'
-import { classKindSelector, type StyleRule, type SiteShell } from '@core/page-tree'
+import { classKindSelector, type Page, type StyleRule, type SiteShell } from '@core/page-tree'
+import { pageFromRow } from '@core/data/pageFromRow'
+import type { DataRow } from '@core/data/schemas'
 import { selectToolsForScope } from '../../../server/ai/tools'
 import {
   createCapabilityTestHarness,
@@ -17,6 +19,16 @@ async function loadSiteShell(
   expect(res.status).toBe(200)
   const body = await readJson<{ site: SiteShell }>(res)
   return body.site
+}
+
+async function loadPages(
+  harness: Awaited<ReturnType<typeof createCapabilityTestHarness>>,
+  cookie: string,
+): Promise<Page[]> {
+  const res = await harness.cms('/admin/api/cms/pages', { method: 'GET', cookie })
+  expect(res.status).toBe(200)
+  const body = await readJson<{ rows: DataRow[] }>(res)
+  return body.rows.map(pageFromRow)
 }
 
 function userClass(id: string): StyleRule {
@@ -170,13 +182,34 @@ describe('capability route matrix', () => {
         cookie: reader.cookie,
       })
       expect(pagesRead.status).toBe(200)
+      const existingPages = await loadPages(harness, reader.cookie)
+      const existingPageIds = existingPages.map((page) => page.id)
 
       const contentCannotReconcile = await harness.cms('/admin/api/cms/pages', {
         method: 'PUT',
         cookie: contentEditor.cookie,
-        json: { pages: [] },
+        json: {
+          changedPages: [],
+          pageIds: [],
+          baselinePageIds: existingPageIds,
+        },
       })
-      await expectForbidden(contentCannotReconcile)
+      expect(contentCannotReconcile.status).toBe(403)
+      expect(await readJson<{ kind?: string }>(contentCannotReconcile)).toMatchObject({ kind: 'structure' })
+
+      const contentNoopComponents = await harness.cms('/admin/api/cms/components', {
+        method: 'PUT',
+        cookie: contentEditor.cookie,
+        json: { changedComponents: [], componentIds: [] },
+      })
+      expect(contentNoopComponents.status).toBe(200)
+
+      const contentNoopLayouts = await harness.cms('/admin/api/cms/layouts', {
+        method: 'PUT',
+        cookie: contentEditor.cookie,
+        json: { changedLayouts: [], layoutIds: [] },
+      })
+      expect(contentNoopLayouts.status).toBe(200)
 
       const structureCanReachReconcile = await harness.cms('/admin/api/cms/pages', {
         method: 'PUT',
@@ -203,6 +236,64 @@ describe('capability route matrix', () => {
         cookie: steppedPublisher,
       })
       expectPastAuth(publisherCanReachPublish)
+    } finally {
+      await harness.cleanup()
+    }
+  })
+
+  it('lets content editors save content-only changes to existing page nodes', async () => {
+    const harness = await createCapabilityTestHarness()
+    try {
+      const ownerCookie = await harness.setupOwner()
+      const contentEditor = await harness.createRoleUser({
+        name: 'Existing Page Content Editor',
+        slug: 'existing-page-content-editor',
+        capabilities: ['site.read', 'site.content.edit'],
+      })
+
+      const pages = await loadPages(harness, ownerCookie)
+      const pageIds = pages.map((page) => page.id)
+      const seededPage = structuredClone(pages[0])
+      const textNodeId = 'content-edit-target'
+      seededPage.nodes[seededPage.rootNodeId].children.push(textNodeId)
+      seededPage.nodes[textNodeId] = {
+        id: textNodeId,
+        moduleId: 'base.text',
+        props: { text: 'Owner seed', tag: 'p' },
+        children: [],
+        breakpointOverrides: {},
+        classIds: [],
+      }
+
+      const seedRes = await harness.cms('/admin/api/cms/pages', {
+        method: 'PUT',
+        cookie: ownerCookie,
+        json: {
+          changedPages: [seededPage],
+          pageIds,
+          baselinePageIds: pageIds,
+        },
+      })
+      expect(seedRes.status).toBe(200)
+
+      const editorPages = await loadPages(harness, contentEditor.cookie)
+      const editedPage = structuredClone(editorPages.find((page) => page.id === seededPage.id)!)
+      editedPage.nodes[textNodeId].props.text = 'Content editor update'
+
+      const editRes = await harness.cms('/admin/api/cms/pages', {
+        method: 'PUT',
+        cookie: contentEditor.cookie,
+        json: {
+          changedPages: [editedPage],
+          pageIds: editorPages.map((page) => page.id),
+          baselinePageIds: editorPages.map((page) => page.id),
+        },
+      })
+      expect(editRes.status).toBe(200)
+
+      const saved = await loadPages(harness, ownerCookie)
+      const savedPage = saved.find((page) => page.id === seededPage.id)!
+      expect(savedPage.nodes[textNodeId].props.text).toBe('Content editor update')
     } finally {
       await harness.cleanup()
     }

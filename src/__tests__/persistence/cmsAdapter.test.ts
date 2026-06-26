@@ -292,4 +292,30 @@ describe('CmsAdapter incremental save wire shapes', () => {
     expect(ids(layoutsBody.changedLayouts)).toEqual(['layout-1', 'layout-2'])
     expect(layoutsBody.layoutIds).toEqual(['layout-1', 'layout-2'])
   })
+
+  it('writes components before pages so new component refs validate on page save', async () => {
+    const events: string[] = []
+    const adapter = new CmsAdapter(async (input) => {
+      const path = String(input)
+      events.push(`start:${path}`)
+      if (path === '/admin/api/cms/components') {
+        await Promise.resolve()
+      }
+      events.push(`finish:${path}`)
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    })
+
+    await adapter.saveSite(multiDocSite(), {
+      dirty: {
+        all: false,
+        pageIds: new Set(['page-1']),
+        componentIds: new Set(['vc-1']),
+        layoutIds: new Set(),
+      },
+    })
+
+    expect(events.indexOf('finish:/admin/api/cms/components')).toBeLessThan(
+      events.indexOf('start:/admin/api/cms/pages'),
+    )
+  })
 })

@@ -78,7 +78,7 @@ import { EditorChromeInjector } from './EditorChromeInjector'
 import { RuntimeScriptInjector } from './RuntimeScriptInjector'
 import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import { useIframeCursorBridge } from './useIframeCursorBridge'
-import { iframeWheelPointToParentClientPoint } from './iframeWheelForwarding'
+import { iframeLocalPointToParentClientPoint } from './iframeEventCoordinates'
 import { useCanvasFormControlSuppression } from './useCanvasFormControlSuppression'
 import { CANVAS_VIEWPORT_HEIGHT, type CanvasViewport } from './resolveViewportUnits'
 import { useIframeFrameAutoHeight } from './useIframeFrameAutoHeight'
@@ -341,7 +341,7 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
         // The iframe event reports unscaled, iframe-local CSS pixels. The
         // parent canvas needs transformed client pixels so zoom-to-cursor
         // stays anchored under the user's pointer at every canvas scale.
-        const clientPoint = iframeWheelPointToParentClientPoint(
+        const clientPoint = iframeLocalPointToParentClientPoint(
           rect,
           { width: iframe.clientWidth, height: iframe.clientHeight },
           { x: e.clientX || 0, y: e.clientY || 0 },
@@ -482,8 +482,11 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
 
       const forwardPointer = (e: PointerEvent, overridePointerId?: number) => {
         const rect = iframe.getBoundingClientRect()
-        const clientX = rect.left + (e.clientX || 0)
-        const clientY = rect.top + (e.clientY || 0)
+        const clientPoint = iframeLocalPointToParentClientPoint(
+          rect,
+          { width: iframe.clientWidth, height: iframe.clientHeight },
+          { x: e.clientX || 0, y: e.clientY || 0 },
+        )
         const forwarded = new PointerEvent(e.type, {
           bubbles: true,
           cancelable: true,
@@ -491,8 +494,8 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
           pointerType: e.pointerType,
           button: e.button,
           buttons: e.buttons,
-          clientX,
-          clientY,
+          clientX: clientPoint.x,
+          clientY: clientPoint.y,
           ctrlKey: e.ctrlKey,
           shiftKey: e.shiftKey,
           altKey: e.altKey,

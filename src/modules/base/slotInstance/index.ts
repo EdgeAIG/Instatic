@@ -23,7 +23,7 @@ import { SlotInstanceEditor } from './SlotInstanceEditor'
 import { Value } from '@core/utils/typeboxHelpers'
 import { SlotInstancePropsSchema, type SlotInstanceStoredProps } from './props'
 
-const SlotInstanceModule: ModuleDefinition<SlotInstanceStoredProps> = {
+export const SlotInstanceModule: ModuleDefinition<SlotInstanceStoredProps> = {
   id: 'base.slot-instance',
   name: 'Slot',
   description: 'A materialized slot for component content',

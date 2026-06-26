@@ -1,0 +1,11 @@
+.cancelRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-l);
+}
+
+.error {
+  margin: var(--space-m) 0 0;
+  color: var(--danger);
+  font-size: var(--text-s);
+}

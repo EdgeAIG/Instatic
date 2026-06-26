@@ -95,7 +95,6 @@
     box-shadow: var(--shadow-panel);
     color: var(--text);
     pointer-events: auto;
-    transform: translate(var(--canvas-toolbar-x), var(--canvas-toolbar-y));
     /* Sits inside the canvas root's coordinate space (clipped by its
    * overflow: hidden) so it cannot bleed over sidebars, modals, or
    * dialogs. z-index sits one above PluginCanvasOverlayLayer (50) so it

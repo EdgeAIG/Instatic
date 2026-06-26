@@ -33,6 +33,7 @@ import { ModulePicker } from '@site/module-picker'
 import type { AnyModuleDefinition } from '@core/module-engine'
 import { FilesStack2SolidIcon } from 'pixel-art-icons/icons/files-stack-2-solid'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
+import { isNarrowEditorChromeViewport } from '@site/layout/responsiveChrome'
 
 interface TreeBackgroundContextMenuProps {
   x: number
@@ -70,7 +71,9 @@ export function TreeBackgroundContextMenu({
 
   const handleSelectModule = (mod: AnyModuleDefinition) => {
     if (!rootNodeId) return
-    insertModule(mod, rootNodeId)
+    insertModule(mod, rootNodeId, {
+      preservePropertiesPanelCollapse: isNarrowEditorChromeViewport(),
+    })
     onClose()
   }
 

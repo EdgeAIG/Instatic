@@ -64,6 +64,8 @@ import {
   canEditStructure as accessCanEditStructure,
   canEditStyle as accessCanEditStyle,
   canSaveDraftSite,
+  canRunPluginBackgroundWork,
+  canUseAiChat,
   hasCapability,
 } from '@admin/access'
 import { EditorPermissionsProvider } from '@site/EditorPermissionsProvider'
@@ -72,6 +74,7 @@ import type { EditorPermissions } from '@site/editorPermissionsContext'
 interface AdminCanvasEditorBodyProps {
   canEditDraftSite: boolean
   canSaveSite: boolean
+  canUseAiChat: boolean
   loadError: string | null
 }
 
@@ -120,6 +123,7 @@ export function AdminCanvasLayout() {
   const settingsOpen = useAdminUi((s) => s.settingsOpen)
   const publishSiteSummary = useAdminUi((s) => s.setSiteSummary)
   const currentUser = useCurrentAdminUser()
+  const pluginBackgroundWorkEnabled = canRunPluginBackgroundWork(currentUser)
 
   // Keep the adminUi site summary in sync with whatever the editor store
   // currently holds. AdminPageLayout reads siteName / faviconUrl from
@@ -141,6 +145,7 @@ export function AdminCanvasLayout() {
   const canEditContentFlag = accessCanEditContent(currentUser)
   const canEditStyleFlag = accessCanEditStyle(currentUser)
   const canSaveSite = canSaveDraftSite(currentUser)
+  const canUseAgent = canUseAiChat(currentUser)
   // Legacy "anything-editable" flag — true when the caller can drag/drop and
   // structurally modify the canvas. Most existing call sites are structural
   // by nature (DnD, context menu, rename, delete keyboard shortcut, plugin
@@ -167,11 +172,11 @@ export function AdminCanvasLayout() {
     loaded: persistence.saveStatus.state !== 'loading',
   })
   useEditorLayoutPersistence()
-  useInstalledEditorPlugins()
+  useInstalledEditorPlugins(pluginBackgroundWorkEnabled)
   // Mount the SSE bridge ONCE per admin tab — gives toasts on plugin
   // crashes from any route, drives the red dot on the Plugins nav link,
   // and keeps the open Plugins page list refreshed.
-  usePluginEventBridge()
+  usePluginEventBridge(pluginBackgroundWorkEnabled)
 
   // UI density preference — `data-editor-density` on the editor root drives
   // CSS variables consumed by tree rows, toolbar buttons, and other density-
@@ -240,6 +245,7 @@ export function AdminCanvasLayout() {
             <AdminCanvasEditorBody
               canEditDraftSite={canEditDraftSite}
               canSaveSite={canSaveSite}
+              canUseAiChat={canUseAgent}
               loadError={loadError}
             />
           </LazyChunkBoundary>

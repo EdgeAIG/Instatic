@@ -244,8 +244,8 @@ export async function updateDataRowTable(
 /**
  * Flip a row between `draft` and `unpublished` (the only states reachable
  * from this endpoint — `published` goes through the dedicated publish flow).
- * Always clears `published_at` / `published_by_user_id` since neither remains
- * meaningful in the new state.
+ * Always clears publish and schedule metadata since neither remains meaningful
+ * in the retracted state.
  */
 export async function updateDataRowStatus(
   db: DbClient,
@@ -258,6 +258,7 @@ export async function updateDataRowStatus(
     set status = ${status},
         published_at = null,
         published_by_user_id = null,
+        scheduled_publish_at = null,
         updated_by_user_id = ${actorUserId},
         updated_at = current_timestamp
     where id = ${rowId}

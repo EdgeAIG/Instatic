@@ -25,10 +25,11 @@ interface MediaDnd {
   handleDrop: (event: DragEvent<HTMLElement>, targetFolderId: string | null) => Promise<void>
 }
 
-export function useMediaDnd(workspace: MediaDndTarget): MediaDnd {
+export function useMediaDnd(workspace: MediaDndTarget, enabled = true): MediaDnd {
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null)
 
   function handleDragOver(event: DragEvent<HTMLElement>, targetFolderId: string | null) {
+    if (!enabled) return
     if (!hasMediaDropData(event.dataTransfer)) return
     const payload = readMediaDropPayload(event.dataTransfer)
     if (!canAcceptDrop(workspace, payload, targetFolderId)) return
@@ -45,6 +46,7 @@ export function useMediaDnd(workspace: MediaDndTarget): MediaDnd {
   }
 
   async function handleDrop(event: DragEvent<HTMLElement>, targetFolderId: string | null) {
+    if (!enabled) return
     if (!hasMediaDropData(event.dataTransfer)) return
     event.preventDefault()
     event.stopPropagation()
@@ -55,7 +57,7 @@ export function useMediaDnd(workspace: MediaDndTarget): MediaDnd {
   }
 
   return {
-    isDropTarget: (targetFolderId) => dropTargetKey === folderDropKey(targetFolderId),
+    isDropTarget: (targetFolderId) => enabled && dropTargetKey === folderDropKey(targetFolderId),
     clearDropTarget: () => setDropTargetKey(null),
     handleDragOver,
     handleDragLeave,

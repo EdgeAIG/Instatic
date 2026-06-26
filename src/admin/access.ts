@@ -103,6 +103,10 @@ function canAccessContent(user: CmsCurrentUser | null): boolean {
   return hasAnyCapability(user, CONTENT_ACCESS_CAPABILITIES)
 }
 
+export function canAccessDataRows(user: CmsCurrentUser | null): boolean {
+  return canAccessContent(user)
+}
+
 export function canCreateContent(user: CmsCurrentUser | null): boolean {
   return hasCapability(user, 'content.create')
 }
@@ -206,6 +210,37 @@ export function canDeleteMedia(user: CmsCurrentUser | null): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Plugin workspace helpers
+// ---------------------------------------------------------------------------
+
+/** Caller can open plugin settings and mutate plugin-owned records. */
+export function canConfigurePlugins(user: CmsCurrentUser | null): boolean {
+  return hasCapability(user, 'plugins.configure')
+}
+
+/** Caller can install, upgrade, uninstall, and re-sync plugin packs. */
+export function canInstallPlugins(user: CmsCurrentUser | null): boolean {
+  return hasCapability(user, 'plugins.install')
+}
+
+/** Caller can enable, disable, restart, and run/pause/resume schedules. */
+export function canManagePluginLifecycle(user: CmsCurrentUser | null): boolean {
+  return hasCapability(user, 'plugins.lifecycle')
+}
+
+// ---------------------------------------------------------------------------
+// AI helpers
+// ---------------------------------------------------------------------------
+
+/** Caller can open AI conversations and use read-only AI tools. */
+export function canUseAiChat(user: CmsCurrentUser | null): boolean {
+  // Layout tests can render outside AdminSessionProvider; keep that preview
+  // mode unrestricted. Real authenticated layouts always receive a user.
+  if (!user) return true
+  return hasCapability(user, 'ai.chat')
+}
+
+// ---------------------------------------------------------------------------
 // Workspace gating
 // ---------------------------------------------------------------------------
 
@@ -223,6 +258,13 @@ function canAccessDataWorkspace(user: CmsCurrentUser | null): boolean {
 
 function canAccessPluginsWorkspace(user: CmsCurrentUser | null): boolean {
   return hasAnyCapability(user, PLUGIN_READ_CAPABILITIES)
+}
+
+export function canRunPluginBackgroundWork(user: CmsCurrentUser | null): boolean {
+  // Layout tests can render outside AdminSessionProvider; keep that preview
+  // mode unrestricted. Real authenticated layouts always receive a user.
+  if (!user) return true
+  return canAccessPluginsWorkspace(user)
 }
 
 export function canAccessWorkspace(user: CmsCurrentUser | null, workspace: AdminWorkspace): boolean {

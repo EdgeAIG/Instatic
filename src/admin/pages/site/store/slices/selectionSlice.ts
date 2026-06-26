@@ -16,6 +16,10 @@ import { flattenSubtree, getParent } from '@core/page-tree'
  */
 type SelectionMode = 'replace' | 'toggle' | 'range'
 
+interface SelectNodeOptions {
+  preservePropertiesPanelCollapse?: boolean
+}
+
 interface SelectionSlice {
   /**
    * The full multi-selection set, ordered. The LAST entry is the "anchor"
@@ -44,7 +48,7 @@ interface SelectionSlice {
    * Modifier-aware callers pass `mode` based on `e.metaKey || e.ctrlKey` (toggle)
    * or `e.shiftKey` (range).
    */
-  selectNode: (id: string | null, mode?: SelectionMode) => void
+  selectNode: (id: string | null, mode?: SelectionMode, options?: SelectNodeOptions) => void
   /** Replace the current selection with the given set. */
   selectMany: (ids: string[]) => void
   /** Add a node to the selection set (no-op if already present). */
@@ -67,7 +71,7 @@ export const createSelectionSlice: EditorStoreSliceCreator<SelectionSlice> = (se
   hoveredNodeId: null,
   hoveredBreakpointId: null,
 
-  selectNode: (id, mode = 'replace') => {
+  selectNode: (id, mode = 'replace', options) => {
     const current = get()
 
     // Clearing — only valid in 'replace' mode (toggle/range need a target id).
@@ -125,7 +129,7 @@ export const createSelectionSlice: EditorStoreSliceCreator<SelectionSlice> = (se
       nextIds = [id]
     }
 
-    applySelection(set, current, nextIds)
+    applySelection(set, current, nextIds, options)
   },
 
   selectMany: (ids) => {
@@ -248,12 +252,18 @@ function applySelection(
   set: (updater: (state: Draft<EditorStore>) => void) => void,
   current: EditorStore,
   nextIds: string[],
+  options: SelectNodeOptions = {},
 ): void {
   const nextAnchor = nextIds.length > 0 ? nextIds[nextIds.length - 1] : null
   const nextActiveClassId = getSelectionActiveClassId(current, nextAnchor)
   // A node with inline styles but no class opens directly in inline-edit mode.
   const nextInlineEditing = nextActiveClassId === null && nodeHasInlineStyles(current, nextAnchor)
-  const shouldCollapseProperties = !nextAnchor && !current.selectedSelectorClassId
+  const shouldPreservePropertiesCollapse =
+    options.preservePropertiesPanelCollapse &&
+    current.propertiesPanel.collapsed &&
+    nextAnchor !== null
+  const shouldCollapseProperties =
+    shouldPreservePropertiesCollapse || (!nextAnchor && !current.selectedSelectorClassId)
 
   const idsChanged = !arraysEqual(current.selectedNodeIds, nextIds)
   const anchorChanged = !Object.is(current.selectedNodeId, nextAnchor)
@@ -275,6 +285,9 @@ function applySelection(
     state.selectedNodeId = nextAnchor
     if (nextAnchor) state.selectedSelectorClassId = null
     state.activeClassId = nextActiveClassId
+    if (shouldPreservePropertiesCollapse) {
+      state.propertiesPanelAutoOpenSuppressed = true
+    }
     // Each new selection seeds its own edit target — inline mode for an
     // inline-only node, otherwise class/empty — never carrying a prior node's
     // inline-editing mode across.

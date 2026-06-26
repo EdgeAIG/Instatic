@@ -10,10 +10,12 @@ import { useState } from 'react'
 import { useAsyncResource } from '@admin/lib/useAsyncResource'
 import { Button } from '@ui/components/Button'
 import { ModelPicker, type ModelChoice } from '@admin/ai/ModelPicker'
+import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { SaveSolidIcon } from 'pixel-art-icons/icons/save-solid'
 import {
   type AiDefaults,
   type CredentialView,
+  clearDefault,
   listCredentials,
   listDefaults,
   setDefault,
@@ -51,6 +53,32 @@ async function saveScope(
         ? err.message
         : 'Failed to save.'
     setStatusByScope((prev) => ({ ...prev, [scope]: message }))
+  } finally {
+    setSavingScope(null)
+  }
+}
+
+async function clearScope(
+  scope: ToolScope,
+  refresh: () => void,
+  setSavingScope: (value: ToolScope | null) => void,
+  setStatusByScope: (updater: (prev: Record<string, string>) => Record<string, string>) => void,
+): Promise<boolean> {
+  setSavingScope(scope)
+  setStatusByScope((prev) => ({ ...prev, [scope]: '' }))
+  try {
+    await clearDefault(scope)
+    setStatusByScope((prev) => ({ ...prev, [scope]: 'Cleared.' }))
+    refresh()
+    return true
+  } catch (err) {
+    const message = err instanceof ApiError
+      ? err.message
+      : err instanceof Error
+        ? err.message
+        : 'Failed to clear.'
+    setStatusByScope((prev) => ({ ...prev, [scope]: message }))
+    return false
   } finally {
     setSavingScope(null)
   }
@@ -95,6 +123,7 @@ export function DefaultsTab() {
               busy={savingScope === scope}
               status={statusByScope[scope]}
               onSave={(credentialId, modelId) => saveScope(scope, credentialId, modelId, refresh, setSavingScope, setStatusByScope)}
+              onClear={() => clearScope(scope, refresh, setSavingScope, setStatusByScope)}
             />
           ))}
         </div>
@@ -110,6 +139,7 @@ function ScopeRow({
   busy,
   status,
   onSave,
+  onClear,
 }: {
   scope: ToolScope
   credentials: CredentialView[]
@@ -117,6 +147,7 @@ function ScopeRow({
   busy: boolean
   status: string | undefined
   onSave: (credentialId: string, modelId: string) => Promise<void>
+  onClear: () => Promise<boolean>
 }) {
   // Track ONLY the user's pick. The displayed value falls back to the saved
   // default when it still resolves to a credential this user can access.
@@ -140,6 +171,7 @@ function ScopeRow({
     override != null &&
     (override.credentialId !== current?.credentialId || override.modelId !== current?.modelId)
   const canSave = !busy && value != null && dirty
+  const canClear = !busy && current != null
 
   return (
     <div className={styles.defaultRow}>
@@ -161,7 +193,7 @@ function ScopeRow({
         value={value}
         onChange={setOverride}
       />
-      <div>
+      <div className={styles.defaultActions}>
         <Button
           type="button"
           variant="primary"
@@ -172,10 +204,26 @@ function ScopeRow({
           <SaveSolidIcon size={14} aria-hidden="true" />
           <span>Save</span>
         </Button>
+        {current && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={!canClear}
+            onClick={() => {
+              void onClear().then((cleared) => {
+                if (cleared) setOverride(null)
+              })
+            }}
+          >
+            <CloseIcon size={14} aria-hidden="true" />
+            <span>Clear</span>
+          </Button>
+        )}
         {status && (
           <p
             role="status"
-            className={`${styles.testResult} ${status === 'Saved.' ? styles.success : styles.danger}`}
+            className={`${styles.testResult} ${status === 'Saved.' || status === 'Cleared.' ? styles.success : styles.danger}`}
           >
             {status}
           </p>

@@ -130,6 +130,14 @@ describe('AccountMenuButton', () => {
     expect(screen.getByTestId('account-menu-sign-out-all')).toBeTruthy()
   })
 
+  it('renders the display name once in the dropdown header', () => {
+    renderWithUser(makeUser())
+    fireEvent.click(screen.getByTestId('account-menu-trigger'))
+
+    const menuText = screen.getByRole('menu', { name: 'Account menu' }).textContent ?? ''
+    expect(menuText.match(/Olivia Owner/g)).toHaveLength(1)
+  })
+
   it('calls /logout and navigates to /admin on sign out', async () => {
     let logoutCalled = false
     globalThis.fetch = mock(async (input: RequestInfo | URL) => {

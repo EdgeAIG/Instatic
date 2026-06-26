@@ -1,13 +1,15 @@
 .window {
     position: fixed;
-    /* Sit above the sidebars (z-index 55, see LeftSidebar.module.css) so the
+    /* Sit above the sidebars (z-index 85, see LeftSidebar.module.css) so the
      viewer always wins when dragged across them. The toolbar's own dropdowns
      and modals live at 200+ which is intentionally still above us. */
-    z-index: 70;
-    left: var(--panel-x);
-    top: var(--panel-y);
-    width: min(880px, calc(100vw - 32px));
-    height: min(640px, calc(100vh - 32px));
+    z-index: 90;
+    --media-viewer-width: min(880px, calc(100vw - var(--space-2xl)));
+    --media-viewer-height: min(640px, calc(100vh - var(--space-2xl)));
+    left: max(var(--space-m), min(var(--panel-x), calc(100vw - var(--media-viewer-width) - var(--space-m))));
+    top: max(var(--space-m), min(var(--panel-y), calc(100vh - var(--media-viewer-height) - var(--space-m))));
+    width: var(--media-viewer-width);
+    height: var(--media-viewer-height);
     background: var(--bg-surface);
     border: 1px solid var(--overlay-10);
     border-radius: var(--panel-radius);
@@ -141,4 +143,15 @@
     font-size: var(--text-xs);
     color: var(--warning);
     margin: 0 0 var(--space-xs) 0;
+}
+
+@media (max-width: 700px) {
+    .body {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(180px, 36%) minmax(0, 1fr);
+    }
+
+    .sidebar {
+        min-height: 0;
+    }
 }

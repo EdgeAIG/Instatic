@@ -95,6 +95,21 @@
     );
 }
 
+@media (max-width: 900px) {
+    .shell {
+        top: 40px;
+    }
+
+    .notch {
+        border-radius: var(--breakpoint-notch-radius) 0 0 var(--breakpoint-notch-radius);
+    }
+
+    .notch::before,
+    .notch::after {
+        display: none;
+    }
+}
+
 .triggerPill.triggerPill {
     display: inline-flex;
     align-items: center;

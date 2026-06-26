@@ -256,4 +256,24 @@ describe('SET_QUERY', () => {
     expect(state.highlightedIndex).toBe(0)
     expect(state.query).toBe('hello')
   })
+
+  it('clears stale async provider state when the query changes', () => {
+    let state = makeOpenState()
+    state = spotlightReducer(state, {
+      type: 'SET_ASYNC_RESULTS',
+      providerId: 'content',
+      results: [],
+    }) as SpotlightOpenState
+    state = spotlightReducer(state, {
+      type: 'SET_LOADING_PROVIDER',
+      providerId: 'media',
+      loading: true,
+    }) as SpotlightOpenState
+
+    state = spotlightReducer(state, { type: 'SET_QUERY', query: 'hello' }) as SpotlightOpenState
+
+    expect(state.query).toBe('hello')
+    expect(state.asyncResults).toEqual({})
+    expect(state.loadingProviders.size).toBe(0)
+  })
 })

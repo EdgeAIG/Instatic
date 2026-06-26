@@ -38,19 +38,21 @@ function selectActiveLeftSidebarPanel(state: ReturnType<typeof useEditorStore.ge
 interface LeftSidebarProps {
   workspace?: 'site' | 'content' | 'media'
   contentPanel?: ReactNode
+  railOnly?: boolean
   /**
    * Whether the caller can perform structural edits (DnD, add/remove nodes,
    * pages, styles). Controls which side-panels are exposed in the rail.
    *
    * Falsy callers (Viewer / Client) still see Layers, Site Explorer and
    * Media — they're navigation surfaces, not editing tools. The structural
-   * Selectors / Colors / Typography / Spacing / Dependencies / Agent panels
-   * stay hidden.
+   * Selectors / Colors / Typography / Spacing / Dependencies panels stay
+   * hidden. The Agent panel is controlled separately by `canUseAiChat`.
    *
    * Each panel is responsible for respecting its own read-only state for
    * the interactions it exposes (TreeNode drag, context menus, etc.).
    */
   editable?: boolean
+  canUseAiChat?: boolean
 }
 
 /**
@@ -60,7 +62,13 @@ interface LeftSidebarProps {
  */
 const READ_ONLY_RAIL_IDS: ReadonlySet<LeftSidebarPanelId> = new Set(['layers', 'site', 'media'])
 
-export function LeftSidebar({ workspace = 'site', contentPanel, editable = true }: LeftSidebarProps) {
+export function LeftSidebar({
+  workspace = 'site',
+  contentPanel,
+  railOnly = false,
+  editable = true,
+  canUseAiChat = true,
+}: LeftSidebarProps) {
   const sidebarRef = useRef<HTMLElement | null>(null)
   const activePanel = useEditorStore(selectActiveLeftSidebarPanel)
   const activePluginPanelId = useEditorStore((s) => s.activePluginPanelId)
@@ -70,19 +78,20 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
   // hidden-for-them panel active (selectors, colors, …). Plugin panels are
   // editing-only by definition.
   const effectiveActivePanel =
-    activePanel && (editable || READ_ONLY_RAIL_IDS.has(activePanel))
+    activePanel && canShowBuiltInPanel(activePanel, editable, canUseAiChat)
       ? activePanel
       : editable
-        ? activePanel
+        ? null
         : 'layers'
   const effectivePluginPanelId = editable ? activePluginPanelId : null
   // Sidebar is "expanded" whenever a built-in OR plugin panel is showing.
   const sidebarOpen = Boolean(effectiveActivePanel) || effectivePluginPanelId !== null
-  const panelWidth = sidebarOpen ? leftSidebarWidth : 0
+  const panelExpanded = sidebarOpen && !railOnly
+  const panelWidth = panelExpanded ? leftSidebarWidth : 0
 
   const style = {
     '--left-sidebar-panel-width': `${panelWidth}px`,
-    '--left-sidebar-panel-layout-width': `${leftSidebarWidth}px`,
+    '--left-sidebar-panel-layout-width': `${panelExpanded ? leftSidebarWidth : 0}px`,
   } as CSSProperties
 
   return (
@@ -90,20 +99,26 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
       ref={sidebarRef}
       className={styles.sidebar}
       data-testid="left-sidebar"
-      data-expanded={sidebarOpen ? 'true' : 'false'}
+      data-expanded={panelExpanded ? 'true' : 'false'}
+      data-rail-only={railOnly ? 'true' : undefined}
       data-active-panel={effectivePluginPanelId !== null
         ? `plugin:${effectivePluginPanelId}`
         : effectiveActivePanel ?? 'none'}
       style={style}
     >
-      <PanelRail workspace={workspace} editable={editable} />
+      <PanelRail
+        workspace={workspace}
+        editable={editable}
+        canUseAiChat={canUseAiChat}
+        railOnly={railOnly}
+      />
 
       <FrameworkChangeConfirmProvider>
       <VCDeletionConfirmProvider>
         <div
           className={styles.panelSlot}
           data-testid="left-sidebar-panel-slot"
-          inert={sidebarOpen ? undefined : true}
+          inert={panelExpanded ? undefined : true}
         >
           {/* Read-only-safe panels — always rendered for any role with
               `site.read`. These are navigation/inspection surfaces, not
@@ -139,22 +154,6 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
               <div className={styles.panelMount} hidden={effectiveActivePanel !== 'dependencies'}>
                 <DependenciesPanel variant="docked" />
               </div>
-              <div className={styles.panelMount} hidden={effectiveActivePanel !== 'agent'}>
-                {/* Inject the site editor's store API so AgentPanel +
-                    ModelPicker + ConversationHistory read agent state
-                    from useEditorStore. The same components are mounted
-                    in ContentPage with a different store.
-
-                    The eslint-disable below covers a known Zustand idiom:
-                    `useEditorStore` is the store API AND a hook — we pass
-                    the store API here, never call it as a hook in this
-                    file. The React-Compiler rule keys on the identifier
-                    prefix and can't see through the dual API. */}
-                {/* eslint-disable-next-line react-compiler/react-compiler */}
-                <AgentStoreProvider store={useEditorStore}>
-                  <AgentPanel variant="docked" />
-                </AgentStoreProvider>
-              </div>
               {effectivePluginPanelId !== null && (
                 <div
                   className={styles.panelMount}
@@ -165,11 +164,29 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
               )}
             </>
           )}
+          {canUseAiChat && (
+            <div className={styles.panelMount} hidden={effectiveActivePanel !== 'agent'}>
+              {/* Inject the site editor's store API so AgentPanel +
+                  ModelPicker + ConversationHistory read agent state
+                  from useEditorStore. The same components are mounted
+                  in ContentPage with a different store.
+
+                  The eslint-disable below covers a known Zustand idiom:
+                  `useEditorStore` is the store API AND a hook — we pass
+                  the store API here, never call it as a hook in this
+                  file. The React-Compiler rule keys on the identifier
+                  prefix and can't see through the dual API. */}
+              {/* eslint-disable-next-line react-compiler/react-compiler */}
+              <AgentStoreProvider store={useEditorStore}>
+                <AgentPanel variant="docked" />
+              </AgentStoreProvider>
+            </div>
+          )}
         </div>
       </VCDeletionConfirmProvider>
       </FrameworkChangeConfirmProvider>
 
-      {sidebarOpen && (
+      {panelExpanded && (
         <SidebarResizeHandle
           side="left"
           width={leftSidebarWidth}
@@ -182,4 +199,13 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
       )}
     </aside>
   )
+}
+
+function canShowBuiltInPanel(
+  panel: LeftSidebarPanelId,
+  editable: boolean,
+  canUseAiChat: boolean,
+): boolean {
+  if (panel === 'agent') return canUseAiChat
+  return editable || READ_ONLY_RAIL_IDS.has(panel)
 }

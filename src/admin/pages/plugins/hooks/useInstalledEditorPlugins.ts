@@ -31,8 +31,13 @@ bindDashboardWidgetIconResolver(resolveDashboardWidgetIcon)
 // installed / upgraded / uninstalled, SSE plugin-state updates).
 let didInitialActivation = false
 
-export function useInstalledEditorPlugins(): void {
+export function useInstalledEditorPlugins(enabled = true): void {
   useEffect(() => {
+    if (!enabled) {
+      setEditorActivationFailures([])
+      return
+    }
+
     let cancelled = false
 
     async function activatePlugins() {
@@ -78,5 +83,5 @@ export function useInstalledEditorPlugins(): void {
       cancelled = true
       window.removeEventListener(CMS_PLUGINS_CHANGED_EVENT, refreshPlugins)
     }
-  }, [])
+  }, [enabled])
 }

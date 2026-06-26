@@ -739,7 +739,7 @@ describe('SiteExplorerPanel', () => {
     }
   })
 
-  it('mounts editor previews as viewport overlays above sidebars', () => {
+  it('keeps docked sidebars above the floating code editor', () => {
     const editorBodySource = readFileSync(
       new URL('../../admin/layouts/AdminCanvasLayout/AdminCanvasEditorBody.tsx', import.meta.url),
       'utf-8',
@@ -767,7 +767,7 @@ describe('SiteExplorerPanel', () => {
       .flatMap((css) => [...css.matchAll(/z-index:\s*(\d+)/g)].map((match) => Number(match[1])))
 
     expect(panelRule).toContain('position: fixed;')
-    expect(panelZIndex).toBeGreaterThan(Math.max(...sidebarZIndexes))
+    expect(Math.min(...sidebarZIndexes)).toBeGreaterThan(panelZIndex)
   })
 
   it('opens pages and components on the canvas from concept rows', () => {

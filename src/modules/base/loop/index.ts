@@ -52,7 +52,7 @@ const LoopPropsSchema = Type.Object({
 
 type LoopProps = Static<typeof LoopPropsSchema>
 
-const LoopModule: ModuleDefinition<LoopProps> = {
+export const LoopModule: ModuleDefinition<LoopProps> = {
   id: 'base.loop',
   name: 'Loop',
   description: 'Iterate a data source and repeat the child template per item.',

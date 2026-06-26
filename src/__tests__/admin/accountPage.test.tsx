@@ -8,7 +8,8 @@
  *   - Switching to Active devices renders the live session list (current pinned)
  *   - Switching to Security renders the four placeholder cards
  *   - Switching to Sign-in history renders the empty state when there's
- *     nothing to show, surfaces the suspicious banner on `locked` events,
+ *     nothing to show, surfaces the suspicious banner on `locked` /
+ *     `rate_limited` events,
  *     and shows the failed-attempt chip when there are recent failures
  *   - The Account workspace is accessible to a viewer-role user (no
  *     capability gating — self-targeted)
@@ -29,6 +30,7 @@ const now = '2026-05-09T10:00:00.000Z'
 const originalFetch = globalThis.fetch
 type EventSourceCtor = (typeof globalThis) extends { EventSource: infer T } ? T : never
 const originalEventSource = (globalThis as { EventSource?: EventSourceCtor }).EventSource
+let eventSourceUrls: string[] = []
 
 function makeUser(overrides: Partial<CmsCurrentUser> = {}): CmsCurrentUser {
   return {
@@ -125,14 +127,15 @@ function setupEditorState() {
 }
 
 /**
- * happy-dom does not implement EventSource, but `usePluginEventBridge` (called
- * unconditionally inside AdminPageLayout) constructs one on mount. Stub it with
- * a no-op so the bridge subscribes silently and the test can render the page.
+ * happy-dom does not implement EventSource, but users with plugin access mount
+ * the plugin event bridge from AdminPageLayout. Stub it with a no-op so the
+ * bridge subscribes silently and the test can render the page.
  */
 class StubEventSource {
   readonly url: string
   constructor(url: string) {
     this.url = url
+    eventSourceUrls.push(url)
   }
   addEventListener(): void {}
   removeEventListener(): void {}
@@ -149,6 +152,7 @@ function makeAccountFetch(
     // Fallbacks that keep AdminPageLayout's ambient calls happy. The Account
     // page itself never calls these, but the surrounding layout does.
     if (url.endsWith('/admin/api/cms/plugins')) return jsonResponse({ plugins: [], adminPages: [] })
+    if (url.endsWith('/admin/api/cms/site')) return jsonResponse({ site: null }, 404)
     if (url.endsWith('/admin/api/cms/site/publish-status')) return jsonResponse({ ok: false }, 404)
     return jsonResponse({ error: `Unhandled ${url}` }, 500)
   }) as typeof fetch
@@ -173,6 +177,7 @@ describe('AccountPage', () => {
   beforeEach(() => {
     localStorage.clear()
     setupEditorState()
+    eventSourceUrls = []
     ;(globalThis as { EventSource?: unknown }).EventSource = StubEventSource as unknown
   })
 
@@ -195,6 +200,22 @@ describe('AccountPage', () => {
 
     // Anonymous (null user) is rejected.
     expect(canAccessWorkspace(null, 'account')).toBe(false)
+  })
+
+  it('does not start plugin background work for users without plugin access', async () => {
+    const pluginRequests: string[] = []
+    globalThis.fetch = makeAccountFetch((url) => {
+      if (url.includes('/admin/api/cms/plugins')) {
+        pluginRequests.push(url)
+      }
+      return undefined
+    })
+
+    renderWithUser(makeUser())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(pluginRequests).toEqual([])
+    expect(eventSourceUrls).toEqual([])
   })
 
   it('renders all four tabs and defaults to Profile', () => {
@@ -411,6 +432,73 @@ describe('AccountPage', () => {
     expect(screen.getByText('dddd-eeee-ffff')).toBeTruthy()
   })
 
+  it('Security tab keeps manual MFA setup usable when QR rendering fails', async () => {
+    const originalEncodeURIComponent = globalThis.encodeURIComponent
+    const originalConsoleError = console.error
+    const qrLogs: unknown[][] = []
+    const captureConsoleError: typeof console.error = (...args) => {
+      qrLogs.push(args)
+    }
+    const globalEncoding = globalThis as typeof globalThis & {
+      encodeURIComponent: typeof encodeURIComponent
+    }
+    globalEncoding.encodeURIComponent = (value) => {
+      if (String(value).startsWith('<svg')) throw new Error('QR data URL encoding failed')
+      return originalEncodeURIComponent(value)
+    }
+    console.error = captureConsoleError
+
+    try {
+      globalThis.fetch = makeAccountFetch((url, init) => {
+        if (url.endsWith('/admin/api/cms/me/mfa/totp/start') && init?.method === 'POST') {
+          return jsonResponse({
+            secret: 'JBSWY3DPEHPK3PXP',
+            otpauthUrl: 'otpauth://totp/Page%20Builder%20CMS:owner%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Page%20Builder%20CMS',
+          })
+        }
+        if (url.endsWith('/admin/api/cms/me/mfa/totp/enable') && init?.method === 'POST') {
+          return jsonResponse({
+            user: makeUser({
+              mfaEnabled: true,
+              mfaEnabledAt: '2026-05-09T11:00:00.000Z',
+              mfaRecoveryCodesRemaining: 10,
+            }),
+            recoveryCodes: ['aaaa-bbbb-cccc', 'dddd-eeee-ffff'],
+          })
+        }
+        return undefined
+      })
+
+      renderWithUser(makeUser())
+      fireEvent.click(screen.getByTestId('account-tab-security'))
+      fireEvent.click(screen.getByTestId('security-mfa-enable'))
+
+      await waitFor(() => {
+        expect(screen.getByText('QR code unavailable')).toBeTruthy()
+      })
+      expect(screen.getByRole('alert').textContent).toBe('Could not render the QR code. Use the setup key instead.')
+      expect(screen.getByTestId('security-mfa-secret').textContent).toContain('JBSWY3DPEHPK3PXP')
+      expect(screen.getByRole('link', { name: 'Open authenticator app' }).getAttribute('href')).toContain(
+        'otpauth://totp/',
+      )
+      expect(qrLogs.some((args) => String(args[0]).includes('[account-security] QR code generation failed:'))).toBe(true)
+
+      fireEvent.change(screen.getByTestId('security-mfa-code'), {
+        target: { value: '123456' },
+      })
+      fireEvent.click(screen.getByTestId('security-mfa-submit'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Save these recovery codes now. They will not be shown again.')).toBeTruthy()
+      })
+      expect(screen.getByText('aaaa-bbbb-cccc')).toBeTruthy()
+      expect(screen.getByText('dddd-eeee-ffff')).toBeTruthy()
+    } finally {
+      globalEncoding.encodeURIComponent = originalEncodeURIComponent
+      console.error = originalConsoleError
+    }
+  })
+
   it('Activity tab shows an empty state when there are no events', async () => {
     globalThis.fetch = makeAccountFetch((url) => {
       if (url.endsWith('/admin/api/cms/auth/activity')) return jsonResponse({ events: [] })
@@ -452,6 +540,39 @@ describe('AccountPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('account-activity-suspicious')).toBeTruthy()
     })
+  })
+
+  it('Activity tab treats recent rate-limited events as suspicious activity', async () => {
+    const recentRateLimitTimestamp = new Date(Date.now() - 5 * 60_000).toISOString()
+    globalThis.fetch = makeAccountFetch((url) => {
+      if (url.endsWith('/admin/api/cms/auth/activity')) {
+        return jsonResponse({
+          events: [
+            {
+              id: 'a1',
+              attemptedAt: recentRateLimitTimestamp,
+              emailNorm: 'owner@example.com',
+              ipAddress: '198.51.100.88',
+              deviceLabel: 'Safari on iOS',
+              userId: 'owner_1',
+              result: 'rate_limited',
+            },
+          ],
+        })
+      }
+      return undefined
+    })
+
+    renderWithUser(makeUser())
+    fireEvent.click(screen.getByTestId('account-tab-activity'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('account-activity-suspicious')).toBeTruthy()
+    })
+    expect(screen.getByTestId('account-activity-failed-count').textContent).toBe('1 failed in last 24h')
+    expect(screen.getByText('Rate-limited')).toBeTruthy()
+    expect(screen.getByText('Safari on iOS')).toBeTruthy()
+    expect(screen.getByText('198.51.100.88')).toBeTruthy()
   })
 
   it('Activity tab shows a failed-attempt count chip and the Device column', async () => {

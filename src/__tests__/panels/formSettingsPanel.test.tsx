@@ -129,6 +129,58 @@ describe('FormSettingsPanelView', () => {
     }])
   })
 
+  it('lists only compatible target-table fields for the selected control type', () => {
+    const choiceTable: DataTable = {
+      ...table,
+      fields: [
+        ...table.fields,
+        { id: 'plan', label: 'Plan', type: 'select', options: [
+          { id: 'basic', label: 'Basic', value: 'basic' },
+          { id: 'pro', label: 'Pro', value: 'pro' },
+        ] },
+        { id: 'consent', label: 'Consent', type: 'boolean', required: true },
+      ],
+    }
+    const selectAnalysis: FormSettingsAnalysis = {
+      ...analysis,
+      node: node('select-plan', 'base.select', { fieldId: '', name: '', multiple: false }),
+      table: choiceTable,
+      compatibleFields: choiceTable.fields.filter((field) => field.type === 'select'),
+      warnings: [],
+    }
+    const patches: Record<string, unknown>[] = []
+
+    render(
+      <FormSettingsPanelView
+        analysis={selectAnalysis}
+        tables={[choiceTable]}
+        tablesLoading={false}
+        tablesError=""
+        previewState="default"
+        loading={false}
+        error=""
+        onPatchProps={(patch) => patches.push(patch)}
+        onTargetTableChange={() => undefined}
+        onCreateTable={() => undefined}
+        onInsertMissingField={() => undefined}
+        onPreviewStateChange={() => undefined}
+      />,
+    )
+
+    const select = document.querySelector('select[name="form-field-binding"]') as HTMLSelectElement
+    const optionLabels = Array.from(select.options).map((option) => option.textContent)
+    expect(optionLabels).toEqual(['Choose field', 'Plan (select)'])
+
+    fireEvent.change(select, { target: { value: 'plan' } })
+    expect(patches).toEqual([{
+      fieldId: 'plan',
+      name: 'plan',
+      id: 'plan-select',
+      required: false,
+      multiple: false,
+    }])
+  })
+
   it('does not render for non-form modules', () => {
     const { container } = render(
       <FormSettingsPanelView

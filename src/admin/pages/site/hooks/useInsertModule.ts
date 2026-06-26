@@ -3,6 +3,10 @@ import { resolveInsertLocation, type InsertLocation } from '@site/store/insertLo
 import { getMissingModuleDependencies } from '@core/module-engine'
 import type { AnyModuleDefinition } from '@core/module-engine'
 
+interface InsertModuleOptions {
+  preservePropertiesPanelCollapse?: boolean
+}
+
 /**
  * Insert a module into the active canvas document (page or Visual Component).
  *
@@ -28,7 +32,11 @@ export function useInsertModule() {
   const packageJson = useEditorStore((s) => s.packageJson)
   const setDependency = useEditorStore((s) => s.setDependency)
 
-  return (mod: AnyModuleDefinition, explicitTarget?: string | InsertLocation) => {
+  return (
+    mod: AnyModuleDefinition,
+    explicitTarget?: string | InsertLocation,
+    options: InsertModuleOptions = {},
+  ) => {
     if (!canvasPage) return null
 
     const location =
@@ -51,7 +59,9 @@ export function useInsertModule() {
       setDependency(dependency.name, dependency.version, dependency.dev)
     }
 
-    selectNode(nodeId)
+    selectNode(nodeId, undefined, {
+      preservePropertiesPanelCollapse: options.preservePropertiesPanelCollapse,
+    })
     return nodeId
   }
 }

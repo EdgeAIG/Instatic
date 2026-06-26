@@ -21,6 +21,7 @@ export interface ParentFolderEntry {
 interface AssetItemProps {
   asset: CmsMediaAsset
   selected: boolean
+  canDrag: boolean
   onSelect: (event: MouseEvent<HTMLButtonElement>) => void
   onDragStart: (asset: CmsMediaAsset, event: DragEvent<HTMLButtonElement>) => void
   onDragEnd: () => void
@@ -37,6 +38,7 @@ const ROW_CSS_WIDTH = 24
 export function AssetTile({
   asset,
   selected,
+  canDrag,
   onSelect,
   onDragStart,
   onDragEnd,
@@ -55,7 +57,7 @@ export function AssetTile({
         variant="ghost"
         size="sm"
         pressed={selected}
-        draggable
+        draggable={canDrag}
         aria-label={`Open ${asset.filename}`}
         className={cn(styles.tile, selected && styles.tileSelected)}
         onClick={(event) => onSelect(event)}
@@ -85,6 +87,7 @@ export function AssetTile({
 export function AssetRow({
   asset,
   selected,
+  canDrag,
   onSelect,
   onDragStart,
   onDragEnd,
@@ -103,7 +106,7 @@ export function AssetRow({
         variant="ghost"
         size="sm"
         pressed={selected}
-        draggable
+        draggable={canDrag}
         aria-label={`Open ${asset.filename}`}
         className={cn(styles.row, selected && styles.rowSelected)}
         onClick={(event) => onSelect(event)}
@@ -132,6 +135,7 @@ interface FolderItemProps {
   folder: CmsMediaFolder
   meta: string
   dropActive: boolean
+  canDrag: boolean
   onOpen: () => void
   onDragStart: (folder: CmsMediaFolder, event: DragEvent<HTMLButtonElement>) => void
   onDragOver: (event: DragEvent<HTMLButtonElement>, targetFolderId: string | null) => void
@@ -143,6 +147,7 @@ export function FolderTile({
   folder,
   meta,
   dropActive,
+  canDrag,
   onOpen,
   onDragStart,
   onDragOver,
@@ -154,7 +159,7 @@ export function FolderTile({
       <Button
         variant="ghost"
         size="sm"
-        draggable
+        draggable={canDrag}
         aria-label={`Open folder ${folder.name}`}
         className={cn(styles.tile, styles.folderTile, dropActive && styles.folderDropActive)}
         onClick={onOpen}
@@ -180,6 +185,7 @@ export function FolderRow({
   folder,
   meta,
   dropActive,
+  canDrag,
   onOpen,
   onDragStart,
   onDragOver,
@@ -191,7 +197,7 @@ export function FolderRow({
       <Button
         variant="ghost"
         size="sm"
-        draggable
+        draggable={canDrag}
         aria-label={`Open folder ${folder.name}`}
         className={cn(styles.row, styles.folderRow, dropActive && styles.folderDropActive)}
         onClick={onOpen}

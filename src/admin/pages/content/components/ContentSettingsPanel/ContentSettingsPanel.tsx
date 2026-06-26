@@ -37,6 +37,7 @@ interface ContentSettingsPanelProps {
   featuredMediaId: string | null
   featuredMediaAsset: CmsMediaAsset | null
   canEditEntry: boolean
+  canMoveEntry: boolean
   canPublishEntry: boolean
   canChangeAuthor: boolean
   onCollectionChange: (tableId: string) => void
@@ -92,6 +93,7 @@ export function ContentSettingsPanel({
   featuredMediaId,
   featuredMediaAsset,
   canEditEntry,
+  canMoveEntry,
   canPublishEntry,
   canChangeAuthor,
   onCollectionChange,
@@ -113,13 +115,15 @@ export function ContentSettingsPanel({
     ? [selectedAuthor, ...authors]
     : authors
   const canEditSelectedEntry = Boolean(selectedEntry && canEditEntry)
+  const canMoveSelectedEntry = Boolean(selectedEntry && canMoveEntry)
   const canChangeStatus = Boolean(selectedEntry && (canEditEntry || canPublishEntry))
   const statusOptions = [
     { value: 'draft', label: 'Draft', enabled: canEditEntry },
+    { value: 'scheduled', label: 'Scheduled', enabled: false },
     { value: 'published', label: 'Published', enabled: canPublishEntry },
     { value: 'unpublished', label: 'Unpublished', enabled: canEditEntry },
   ].filter((option) => option.enabled || option.value === selectedEntry?.status)
-    .map(({ value, label }) => ({ value, label }))
+    .map(({ value, label, enabled }) => ({ value, label, disabled: !enabled }))
 
   return (
     <aside
@@ -151,7 +155,7 @@ export function ContentSettingsPanel({
               <Select
                 aria-label="Collection"
                 value={selectedEntry?.tableId ?? selectedCollection?.id ?? ''}
-                disabled={!canEditSelectedEntry}
+                disabled={!canMoveSelectedEntry}
                 onChange={(event) => onCollectionChange(event.target.value)}
                 options={collections.map((collection) => ({
                   value: collection.id,

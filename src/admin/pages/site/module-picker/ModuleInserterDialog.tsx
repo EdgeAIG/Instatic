@@ -499,6 +499,7 @@ export function ModuleInserterDialog({
                   data-accent={item.accent}
                   tabIndex={-1}
                   aria-current={isActive ? 'page' : undefined}
+                  aria-label={item.name}
                 >
                   <span className={styles.sectionLabel}>
                     <span className={styles.sectionIcon} aria-hidden="true">

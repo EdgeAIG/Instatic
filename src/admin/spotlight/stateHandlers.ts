@@ -29,7 +29,13 @@ type OpenOnlyAction = Exclude<
 // ─── Query / highlight ────────────────────────────────────────────────────────
 
 function setQuery(state: SpotlightOpenState, query: string): SpotlightState {
-  return { ...state, query, highlightedIndex: 0 }
+  return {
+    ...state,
+    query,
+    highlightedIndex: 0,
+    asyncResults: {},
+    loadingProviders: new Set(),
+  }
 }
 
 function setHighlighted(state: SpotlightOpenState, index: number): SpotlightState {

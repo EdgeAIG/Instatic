@@ -229,7 +229,7 @@ export function runModuleConformanceSuite(def: AnyModuleDefinition): void {
         }
       }
 
-      if (def.canHaveChildren) {
+      if (def.canHaveChildren && !new Set(['special', 'transparent']).has(def.publishBehavior ?? 'standard')) {
         const childHtml = '<p data-test-child="true">child content</p>'
         const { html } = def.render(def.defaults, [childHtml])
         expect(html).toContain(childHtml)

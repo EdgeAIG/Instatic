@@ -19,7 +19,7 @@ import {
   mergeDirtyMarks,
   type DirtyMarks,
 } from '@site/store/slices/site/dirtyTracking'
-import { makePage, makeSite, makeVC } from '../fixtures'
+import { makeNode, makePage, makeSite, makeVC } from '../fixtures'
 
 // ---------------------------------------------------------------------------
 // Unit: collectDirtyFromSitePatches
@@ -236,6 +236,37 @@ describe('editor store dirty-save tracking', () => {
     expect(marks.all).toBe(false)
     expect(marks.pageIds.size).toBe(0)
     expect([...marks.componentIds]).toEqual(['vc-card'])
+  })
+
+  it('componentizing a page node marks both the edited page and the new component', () => {
+    const sourceNode = makeNode({ id: 'source-text', moduleId: 'base.text' })
+    useEditorStore.getState().loadSite(
+      makeSite({
+        pages: [
+          makePage({
+            id: 'page-a',
+            slug: 'index',
+            title: 'Home',
+            nodes: {
+              root: makeNode({ id: 'root', moduleId: 'base.body', children: ['source-text'] }),
+              'source-text': sourceNode,
+            },
+          }),
+        ],
+        visualComponents: [],
+      }),
+    )
+
+    useEditorStore.getState().convertNodeToComponent('source-text', 'Saved Card')
+
+    const state = useEditorStore.getState()
+    const createdComponent = state.site!.visualComponents.find((vc) => vc.name === 'Saved Card')
+    expect(createdComponent).toBeDefined()
+
+    const marks = dirty()
+    expect(marks.all).toBe(false)
+    expect([...marks.pageIds]).toEqual(['page-a'])
+    expect([...marks.componentIds]).toEqual([createdComponent!.id])
   })
 
   it('takeDirtySaveSnapshot returns the accumulated marks AND resets the accumulator', () => {

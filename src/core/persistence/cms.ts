@@ -38,8 +38,11 @@ export class CmsAdapter implements IPersistenceAdapter {
    * `dirty.all`) ships everything: the conservative path for imports and any
    * caller without store-level tracking.
    *
-   * Shell is written first; pages, components, and layouts can then be written
-   * in parallel since they do not depend on each other.
+   * Shell is written first; components are written before pages because page
+   * validation resolves `base.visual-component-ref` targets from stored
+   * component rows. A page that references a newly-created component must not
+   * race ahead of the component write or the server will strip the ref as
+   * dangling. Layouts remain independent and can save alongside components.
    */
   async saveSite(site: SiteDocument, opts: SaveSiteOptions = {}): Promise<void> {
     // Extract shell (strip the row-backed collections from the full SiteDocument)
@@ -63,8 +66,29 @@ export class CmsAdapter implements IPersistenceAdapter {
       fallbackMessage: 'CMS shell save failed',
     })
 
-    // Pages, components, and layouts can be written in parallel — none of them
-    // depends on another.
+    const componentsRequest = apiRequest(`${this.basePath}/components`, {
+      method: 'PUT',
+      body: {
+        changedComponents,
+        componentIds: visualComponents.map((vc) => vc.id),
+      },
+      fetchImpl: this.fetchImpl,
+      fallbackMessage: 'CMS components save failed',
+    })
+    const layoutsRequest = apiRequest(`${this.basePath}/layouts`, {
+      method: 'PUT',
+      body: {
+        changedLayouts,
+        layoutIds: layouts.map((layout) => layout.id),
+      },
+      fetchImpl: this.fetchImpl,
+      fallbackMessage: 'CMS layouts save failed',
+    })
+
+    await componentsRequest
+
+    // Pages validate component refs against stored component rows, so the
+    // component roster must already be committed before page writes begin.
     await Promise.all([
       apiRequest(`${this.basePath}/pages`, {
         method: 'PUT',
@@ -76,24 +100,7 @@ export class CmsAdapter implements IPersistenceAdapter {
         fetchImpl: this.fetchImpl,
         fallbackMessage: 'CMS pages save failed',
       }),
-      apiRequest(`${this.basePath}/components`, {
-        method: 'PUT',
-        body: {
-          changedComponents,
-          componentIds: visualComponents.map((vc) => vc.id),
-        },
-        fetchImpl: this.fetchImpl,
-        fallbackMessage: 'CMS components save failed',
-      }),
-      apiRequest(`${this.basePath}/layouts`, {
-        method: 'PUT',
-        body: {
-          changedLayouts,
-          layoutIds: layouts.map((layout) => layout.id),
-        },
-        fetchImpl: this.fetchImpl,
-        fallbackMessage: 'CMS layouts save failed',
-      }),
+      layoutsRequest,
     ])
   }
 

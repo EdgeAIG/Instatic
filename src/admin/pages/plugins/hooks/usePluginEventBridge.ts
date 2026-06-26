@@ -26,8 +26,13 @@ import {
   setPluginsInErrorFromList,
 } from '../utils/pluginIssuesStore'
 
-export function usePluginEventBridge(): void {
+export function usePluginEventBridge(enabled = true): void {
   useEffect(() => {
+    if (!enabled) {
+      setPluginsInErrorFromList([])
+      return
+    }
+
     // Initial fetch — populate the in-error set at admin mount, before any
     // event arrives. This is what gives the nav badge its initial state on
     // a hard page load.
@@ -41,7 +46,7 @@ export function usePluginEventBridge(): void {
       void handlePluginEvent(event)
     })
     return unsubscribe
-  }, [])
+  }, [enabled])
 }
 
 async function handlePluginEvent(event: PluginEvent): Promise<void> {

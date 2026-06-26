@@ -181,8 +181,10 @@ describe('Data table context menu', () => {
         onOpenImport={() => {}}
         onOpenTableSettings={() => {}}
         onDeleteTable={() => {}}
-        canCreate={true}
+        canCreateTable={true}
         canManage={true}
+        canExport={true}
+        canImport={true}
       />,
     )
 
@@ -206,8 +208,10 @@ describe('Data table context menu', () => {
         onOpenImport={() => {}}
         onOpenTableSettings={() => {}}
         onDeleteTable={() => {}}
-        canCreate={true}
+        canCreateTable={true}
         canManage={true}
+        canExport={true}
+        canImport={true}
       />,
     )
 
@@ -246,8 +250,10 @@ describe('Data table context menu', () => {
         onOpenImport={() => {}}
         onOpenTableSettings={onOpenTableSettings}
         onDeleteTable={onDeleteTable}
-        canCreate={true}
+        canCreateTable={true}
         canManage={true}
+        canExport={true}
+        canImport={true}
       />,
     )
 
@@ -280,8 +286,10 @@ describe('Data table context menu', () => {
         onOpenImport={() => {}}
         onOpenTableSettings={() => {}}
         onDeleteTable={() => {}}
-        canCreate={true}
+        canCreateTable={true}
         canManage={true}
+        canExport={true}
+        canImport={true}
       />,
     )
 

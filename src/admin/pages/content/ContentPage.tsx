@@ -53,7 +53,9 @@ import {
   canEditAnyContent,
   canEditContentEntry,
   canManageContentCollections,
+  canMoveDataRow,
   canPublishContentEntry,
+  canUseAiChat,
 } from '@admin/access'
 
 const CONTENT_PANEL_IDS: ReadonlySet<ContentPanelId> = new Set(['content', 'media', 'agent'])
@@ -115,6 +117,10 @@ export function ContentPage() {
   const canReassignAuthor = canEditAnyContent(permissionUser)
   const canCreateEntries = canCreateContent(permissionUser)
   const canManageCollections = canManageContentCollections(permissionUser)
+  const canUseAgent = canUseAiChat(permissionUser)
+  const visibleContentPanel = activeContentPanel === 'agent' && !canUseAgent
+    ? null
+    : activeContentPanel
   const workspace = useContentWorkspace({ loadAuthors: canReassignAuthor })
   // Collection schema mutations (create/update/delete) are step-up gated on
   // the server — they change the public route surface — so they must run
@@ -138,6 +144,8 @@ export function ContentPage() {
     ? publicContentPath(workspace.selectedCollection.routeBase, draft.slug)
     : ''
   const canEditSelectedEntry = canEditContentEntry(permissionUser, workspace.selectedEntry)
+  const canMoveRows = canMoveDataRow(permissionUser)
+  const canMoveSelectedEntry = canEditSelectedEntry && canMoveRows
   const canPublishSelectedEntry = canPublishContentEntry(permissionUser, workspace.selectedEntry)
 
   // Mirror the selected entry's public URL into adminUi so the global
@@ -194,7 +202,7 @@ export function ContentPage() {
 
   function handleMoveEntryCollection(tableId: string) {
     return withEntryOp(() => workspace.moveSelectedEntryToCollection(tableId), {
-      permitted: canEditSelectedEntry,
+      permitted: canMoveSelectedEntry,
       permMsg: 'Your role cannot move this entry',
       fallback: 'Could not move entry',
       phase: SAVE_PHASE,
@@ -327,7 +335,7 @@ export function ContentPage() {
   function handleMoveEntryToCollection(entry: DataRow, tableId: string) {
     if (entry.tableId === tableId) return Promise.resolve()
     return withEntryOp(() => workspace.moveEntryToCollection(entry, tableId), {
-      permitted: canEditContentEntry(permissionUser, entry),
+      permitted: canMoveRows && canEditContentEntry(permissionUser, entry),
       permMsg: 'Your role cannot move this entry',
       fallback: 'Could not move entry',
       rethrow: true,
@@ -379,6 +387,11 @@ export function ContentPage() {
     }
 
     await draft.handleStatusChange(status)
+  }
+
+  function handleScheduleEntry(entry: DataRow) {
+    workspace.updateSelectedEntry(entry)
+    draft.applySelectedEntry(entry)
   }
 
   async function handleConvertEntryToDraft(entry: DataRow) {
@@ -447,12 +460,16 @@ export function ContentPage() {
             onPublish={() => {
               if (workspace.selectedEntry) void handlePublishEntry(workspace.selectedEntry)
             }}
+            onSchedule={handleScheduleEntry}
           />
         )}
         contentSidebar={(
           <ContentSidebar
-            activePanel={activeContentPanel}
-            onActivePanelChange={setActiveContentPanel}
+            activePanel={visibleContentPanel}
+            onActivePanelChange={(panel) => {
+              if (panel === 'agent' && !canUseAgent) return
+              setActiveContentPanel(panel)
+            }}
             contentPanel={(
               <ContentExplorerPanel
                 loading={workspace.contentLoading}
@@ -466,6 +483,7 @@ export function ContentPage() {
                 canCreateEntry={canCreateEntries}
                 canManageCollections={canManageCollections}
                 canEditEntry={(entry) => canEditContentEntry(permissionUser, entry)}
+                canMoveEntry={(entry) => canMoveRows && canEditContentEntry(permissionUser, entry)}
                 canPublishEntry={(entry) => canPublishContentEntry(permissionUser, entry)}
                 getFeaturedMediaAssetForEntry={mediaPicker.getFeaturedMediaAssetForEntry}
                 onSelectCollection={workspace.selectCollection}
@@ -501,9 +519,10 @@ export function ContentPage() {
                   displayName: permissionUser.displayName ?? permissionUser.email,
                   email: permissionUser.email,
                 }}
-                isVisible={activeContentPanel === 'agent'}
+                isVisible={visibleContentPanel === 'agent'}
               />
             )}
+            canUseAiChat={canUseAgent}
           />
         )}
         contentCanvas={(
@@ -561,6 +580,7 @@ export function ContentPage() {
               }
             }}
             canEditEntry={canEditSelectedEntry}
+            canMoveEntry={canMoveSelectedEntry}
             canPublishEntry={canPublishSelectedEntry}
             canChangeAuthor={canReassignAuthor}
           />

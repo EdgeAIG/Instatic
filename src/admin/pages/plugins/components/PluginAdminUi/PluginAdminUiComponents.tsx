@@ -20,7 +20,7 @@
  * plugin needs something the host doesn't already ship, plugin authors
  * compose host primitives or supply their own.
  */
-import { type FormEvent } from 'react'
+import { type FormEvent, useId } from 'react'
 import { Alert } from '@ui/components/Alert'
 import { Button } from '@ui/components/Button'
 import { Card } from '@ui/components/Card'
@@ -79,9 +79,11 @@ export function PluginButton(props: PluginUiButtonProps) {
 // ---------------------------------------------------------------------------
 
 export function PluginInput(props: PluginUiInputProps) {
+  const inputId = useId()
   return (
-    <FormField label={props.label} description={props.description}>
+    <FormField label={props.label} description={props.description} htmlFor={inputId}>
       <Input
+        id={inputId}
         type={props.type ?? 'text'}
         value={props.value}
         defaultValue={props.defaultValue}
@@ -101,9 +103,11 @@ export function PluginInput(props: PluginUiInputProps) {
 }
 
 export function PluginTextarea(props: PluginUiTextareaProps) {
+  const textareaId = useId()
   return (
-    <FormField label={props.label} description={props.description}>
+    <FormField label={props.label} description={props.description} htmlFor={textareaId}>
       <Textarea
+        id={textareaId}
         value={props.value}
         defaultValue={props.defaultValue}
         placeholder={props.placeholder}
@@ -118,9 +122,11 @@ export function PluginTextarea(props: PluginUiTextareaProps) {
 }
 
 export function PluginSelect<T extends string>(props: PluginUiSelectProps<T>) {
+  const selectId = useId()
   return (
-    <FormField label={props.label} description={props.description}>
+    <FormField label={props.label} description={props.description} htmlFor={selectId}>
       <Select
+        id={selectId}
         value={props.value}
         disabled={props.disabled}
         onChange={(event) => {

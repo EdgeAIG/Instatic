@@ -1,9 +1,9 @@
 .window {
   position: fixed;
-  /* Sits above the sidebars (z-index 55, see LeftSidebar.module.css) so a
+  /* Sits above the sidebars (z-index 85, see LeftSidebar.module.css) so a
      floating window dragged over a sidebar wins z-order. Editor modals at
      200+ are still intentionally above us. */
-  z-index: 70;
+  z-index: 90;
   --floating-window-w: 320px;
   --floating-window-max-h: 480px;
   left: var(--panel-x);

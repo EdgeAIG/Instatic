@@ -54,18 +54,21 @@ const FALLBACK_MODELS: AiProviderModel[] = [
     id: 'llama4',
     label: 'Llama 4',
     tier: 'smart',
+    catalogueSource: 'fallback',
     capabilities: { toolCalling: true, visionInput: true, promptCache: false, streaming: true },
   },
   {
     id: 'llama3.3',
     label: 'Llama 3.3',
     tier: 'balanced',
+    catalogueSource: 'fallback',
     capabilities: { toolCalling: true, visionInput: false, promptCache: false, streaming: true },
   },
   {
     id: 'qwen3',
     label: 'Qwen 3',
     tier: 'balanced',
+    catalogueSource: 'fallback',
     capabilities: { toolCalling: true, visionInput: false, promptCache: false, streaming: true },
   },
 ]
@@ -128,6 +131,7 @@ async function fetchOllamaModels(baseUrl: string): Promise<AiProviderModel[]> {
       .map((id) => ({
         id,
         label: id,
+        catalogueSource: 'live' as const,
         capabilities: { toolCalling: true, visionInput: false, promptCache: false, streaming: true },
       }))
     return models.length > 0 ? models : FALLBACK_MODELS
@@ -465,4 +469,3 @@ export class ChatCompletionsTurnTranslator implements TurnTranslator<ChatTurn> {
 function trimSlash(url: string): string {
   return url.replace(/\/+$/, '')
 }
-

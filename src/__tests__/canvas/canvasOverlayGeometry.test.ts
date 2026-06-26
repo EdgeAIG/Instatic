@@ -42,4 +42,42 @@ describe('measureCanvasElementRect', () => {
     const fakeIframe = {} as unknown as HTMLIFrameElement
     expect(measureCanvasElementRect(null, fakeIframe, null)).toBeNull()
   })
+
+  it('adds canvas root scroll offsets for absolute overlay positioning', () => {
+    const fakeIframe = {
+      offsetWidth: 200,
+      getBoundingClientRect: () => testRect({ left: 50, top: 20, width: 100, height: 100 }),
+    } as unknown as HTMLIFrameElement
+    const fakeCanvasRoot = {
+      scrollLeft: 30,
+      scrollTop: 5,
+      getBoundingClientRect: () => testRect({ left: 10, top: 10, width: 500, height: 400 }),
+    } as unknown as HTMLElement
+    const fakeTarget = {
+      getBoundingClientRect: () => testRect({ left: 20, top: 40, width: 60, height: 80 }),
+    } as unknown as HTMLElement
+
+    expect(measureCanvasElementRect(fakeTarget, fakeIframe, fakeCanvasRoot)).toEqual({
+      x: 80,
+      y: 35,
+      width: 30,
+      height: 40,
+    })
+  })
 })
+
+function testRect(rect: {
+  left: number
+  top: number
+  width: number
+  height: number
+}): DOMRect {
+  return {
+    ...rect,
+    x: rect.left,
+    y: rect.top,
+    right: rect.left + rect.width,
+    bottom: rect.top + rect.height,
+    toJSON: () => ({}),
+  } as DOMRect
+}

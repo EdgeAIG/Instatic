@@ -20,6 +20,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { PropertyControlRenderer } from '@site/property-controls/PropertyControlRenderer'
+import { EditorPermissionsContext } from '@site/editorPermissionsContext'
 import type { PropertyControl } from '@core/module-engine'
 import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
 import { useEditorStore } from '@site/store/store'
@@ -697,6 +698,42 @@ describe('PropertyControlRenderer — disabled prop', () => {
       />
     )
     expect(html).toContain('disabled')
+  })
+
+  it('disables content controls for structure-only editors', () => {
+    const html = renderToStaticMarkup(
+      <EditorPermissionsContext.Provider
+        value={{ canEditStructure: true, canEditContent: false, canEditStyle: false }}
+      >
+        <PropertyControlRenderer
+          propKey="text"
+          control={{ type: 'text', label: 'Text' }}
+          value="Existing copy"
+          onChange={() => {}}
+        />
+      </EditorPermissionsContext.Provider>,
+    )
+
+    expect(html).toContain('data-disabled="true"')
+    expect(html).toContain('disabled')
+  })
+
+  it('keeps layout controls editable for structure-only editors', () => {
+    const html = renderToStaticMarkup(
+      <EditorPermissionsContext.Provider
+        value={{ canEditStructure: true, canEditContent: false, canEditStyle: false }}
+      >
+        <PropertyControlRenderer
+          propKey="columns"
+          control={{ type: 'number', label: 'Columns' }}
+          value={3}
+          onChange={() => {}}
+        />
+      </EditorPermissionsContext.Provider>,
+    )
+
+    expect(html).toContain('data-category="layout"')
+    expect(html).not.toContain('data-disabled="true"')
   })
 })
 

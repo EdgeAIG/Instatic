@@ -40,6 +40,26 @@ function PointContextMenuHarness({
 }
 
 describe('ContextMenu', () => {
+  it('renders viewport-fixed point menus in document.body instead of the caller subtree', () => {
+    const { getByTestId } = render(
+      <div data-testid="host">
+        <ContextMenu
+          x={24}
+          y={32}
+          ariaLabel="Portaled options"
+          onClose={() => {}}
+        >
+          <ContextMenuItem onClick={() => {}}>Rename</ContextMenuItem>
+        </ContextMenu>
+      </div>,
+    )
+
+    const host = getByTestId('host')
+    const menu = screen.getByRole('menu', { name: /portaled options/i })
+    expect(host.contains(menu)).toBe(false)
+    expect(document.body.contains(menu)).toBe(true)
+  })
+
   it('lets the first outside click close a point menu and activate the clicked target', () => {
     const onClose = mock(() => {})
     const onTargetClick = mock(() => {})

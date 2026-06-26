@@ -171,6 +171,48 @@ function loadVisualComponentSite() {
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
+function loadLockedSlotInstanceSite() {
+  const rootId = 'root-1'
+  const refId = 'component-ref-1'
+  const slotId = 'slot-1'
+  const vcRootId = 'vc-root-1'
+
+  const page = makePage({
+    id: 'page-1',
+    rootNodeId: rootId,
+    nodes: {
+      [rootId]: makeNode({ id: rootId, moduleId: 'base.body', children: [refId] }),
+      [refId]: makeNode({
+        id: refId,
+        moduleId: 'base.visual-component-ref',
+        props: { componentId: 'vc-1', propOverrides: {} },
+        children: [slotId],
+      }),
+      [slotId]: makeNode({
+        id: slotId,
+        moduleId: 'base.slot-instance',
+        props: { slotName: 'children' },
+        locked: true,
+        children: [],
+      }),
+    },
+  })
+  const vc = makeVC({
+    id: 'vc-1',
+    name: 'Card',
+    tree: makeVCTree(vcRootId, [
+      makeVCNode({ id: vcRootId, moduleId: 'base.body', children: [] }),
+    ]),
+  })
+
+  const site = makeSite({ pages: [page], visualComponents: [vc] })
+
+  useEditorStore.setState({
+    site,
+    activePageId: 'page-1',
+  } as Parameters<typeof useEditorStore.setState>[0])
+}
+
 beforeEach(resetStore)
 
 // ---------------------------------------------------------------------------
@@ -436,6 +478,31 @@ describe('DomPanel — tree accessibility', () => {
     for (const item of items) {
       expect(item.getAttribute('aria-selected')).toBe('false')
     }
+  })
+
+  it('inline rename input remains enabled for editing', async () => {
+    loadContainerSite()
+    render(<DomPanel />)
+
+    fireEvent.click(screen.getByRole('treeitem', { name: /body/i }))
+    fireEvent.doubleClick(screen.getByRole('treeitem', { name: /container/i }))
+
+    const input = await waitFor(() => screen.getByRole('textbox', {
+      name: /rename (base\.container|container)/i,
+    }))
+    expect((input as HTMLInputElement).disabled).toBe(false)
+    expect(input.closest('[role="treeitem"]')?.getAttribute('aria-disabled')).not.toBe('true')
+  })
+
+  it('locked slot-instance rows remain enabled for selection and context menus', () => {
+    loadLockedSlotInstanceSite()
+    render(<DomPanel />)
+
+    fireEvent.click(screen.getByRole('treeitem', { name: 'Card' }))
+
+    const slot = screen.getByRole('treeitem', { name: 'Slot: children, locked' })
+    expect(slot.getAttribute('aria-disabled')).toBeNull()
+    expect(slot.getAttribute('tabindex')).toBe('0')
   })
 })
 

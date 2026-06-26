@@ -17,6 +17,8 @@ import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { EmptyState } from '@ui/components/EmptyState'
 import { cn } from '@ui/cn'
+import { canDeleteMedia, canWriteMedia } from '@admin/access'
+import { useCurrentAdminUser } from '@admin/sessionContext'
 import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
 import { CircleAlertSolidIcon } from 'pixel-art-icons/icons/circle-alert-solid'
 import { EraserSolidIcon } from 'pixel-art-icons/icons/eraser-solid'
@@ -117,13 +119,17 @@ interface RenameState {
 }
 
 export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
+  const currentUser = useCurrentAdminUser()
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renameState, setRenameState] = useState<RenameState | null>(null)
   const [createUnder, setCreateUnder] = useState<string | null | undefined>(undefined)
   const [createName, setCreateName] = useState('')
   const [draggingFolderId, setDraggingFolderId] = useState<string | null>(null)
-  const dnd = useMediaDnd(workspace)
+  const canWrite = canWriteMedia(currentUser)
+  const canDelete = canDeleteMedia(currentUser)
+  const canManageFolders = canWrite || canDelete
+  const dnd = useMediaDnd(workspace, canWrite)
 
   function toggleExpanded(folderId: string) {
     setExpanded((prev) => {
@@ -139,6 +145,7 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
   }
 
   function startCreate(parentId: string | null) {
+    if (!canWrite) return
     setCreateUnder(parentId)
     setCreateName('')
     if (parentId !== null) {
@@ -152,6 +159,7 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
 
   async function commitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!canWrite) return
     const name = createName.trim()
     if (!name || createUnder === undefined) return
     const folder = await workspace.createFolder(name, createUnder)
@@ -166,12 +174,14 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
   }
 
   function openContextMenu(folderId: string, event: MouseEvent<HTMLDivElement>) {
+    if (!canManageFolders) return
     event.preventDefault()
     event.stopPropagation()
     setContextMenu({ x: event.clientX, y: event.clientY, folderId })
   }
 
   function handleKeyboardMenu(folderId: string, event: KeyboardEvent<HTMLDivElement>) {
+    if (!canManageFolders) return
     if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return
     event.preventDefault()
     event.stopPropagation()
@@ -184,6 +194,10 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
   }
 
   function handleFolderDragStart(folderId: string, event: DragEvent<HTMLDivElement>) {
+    if (!canWrite) {
+      event.preventDefault()
+      return
+    }
     writeMediaFolderDragData(event.dataTransfer, folderId)
     setDraggingFolderId(folderId)
   }
@@ -232,16 +246,18 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
 
       <div className={styles.sectionHeader}>
         <span className={styles.sectionLabel}>Folders</span>
-        <Button
-          variant="ghost"
-          size="xs"
-          iconOnly
-          tooltip="New folder"
-          aria-label="New root folder"
-          onClick={() => startCreate(null)}
-        >
-          <PlusIcon size={13} />
-        </Button>
+        {canWrite && (
+          <Button
+            variant="ghost"
+            size="xs"
+            iconOnly
+            tooltip="New folder"
+            aria-label="New root folder"
+            onClick={() => startCreate(null)}
+          >
+            <PlusIcon size={13} />
+          </Button>
+        )}
       </div>
 
       {createUnder === null && (
@@ -259,7 +275,7 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
           compact
           plain
           title="No folders yet"
-          description="Click + to create your first folder."
+          description={canWrite ? 'Click + to create your first folder.' : 'No folders have been created yet.'}
         />
       ) : (
         <TreeContainer ariaLabel="Folder tree" className={styles.tree}>
@@ -286,6 +302,7 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
               onCreateValueChange={setCreateName}
               onCommitCreate={commitCreate}
               onCancelCreate={cancelCreate}
+              canDrag={canWrite}
             />
           ))}
         </TreeContainer>
@@ -310,16 +327,20 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
           ariaLabel="Folder options"
           onClose={() => setContextMenu(null)}
           onRename={() => {
+            if (!canWrite) return
             const folder = workspace.folderById.get(contextMenu.folderId)
             if (folder) setRenameState({ folderId: folder.id, initialValue: folder.name })
             setContextMenu(null)
           }}
           onDelete={() => {
+            if (!canDelete) return
             const folderId = contextMenu.folderId
             setContextMenu(null)
             void workspace.deleteFolder(folderId)
           }}
-          extraItems={[
+          showRename={canWrite}
+          showDelete={canDelete}
+          extraItems={canWrite ? [
             {
               label: 'New subfolder',
               icon: <PlusIcon size={13} />,
@@ -329,7 +350,7 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
                 startCreate(folderId)
               },
             },
-          ]}
+          ] : []}
         />
       )}
 
@@ -340,6 +361,7 @@ export function MediaFolderPanel({ workspace }: MediaFolderPanelProps) {
           initialValue={renameState.initialValue}
           onCancel={() => setRenameState(null)}
           onRename={async (payload) => {
+            if (!canWrite) return
             await workspace.renameFolder(renameFolder.id, payload.value)
             setRenameState(null)
           }}
@@ -432,6 +454,7 @@ interface FolderRowItemProps {
   onCreateValueChange: (value: string) => void
   onCommitCreate: (event: FormEvent<HTMLFormElement>) => Promise<void> | void
   onCancelCreate: () => void
+  canDrag: boolean
 }
 
 function FolderRowItem({
@@ -455,6 +478,7 @@ function FolderRowItem({
   onCreateValueChange,
   onCommitCreate,
   onCancelCreate,
+  canDrag,
 }: FolderRowItemProps) {
   return (
     <>
@@ -468,7 +492,7 @@ function FolderRowItem({
         aria-expanded={hasChildren ? expanded : undefined}
         aria-label={node.folder.name}
         tabIndex={0}
-        draggable
+        draggable={canDrag}
         onDragStart={(event) => onDragStart(node.folder.id, event)}
         onDragEnd={onDragEnd}
         onDragOver={(event) => onDragOver(event, node.folder.id)}

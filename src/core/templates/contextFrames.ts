@@ -47,11 +47,13 @@ export interface SiteFrame {
  * - `slug` is the trailing segment, useful for template pages where the
  *   row's slug is the only meaningful URL bit.
  * - `segments` is the full path split — `["posts", "hello"]`.
+ * - `query` is a flat map of URL query params for `route.query.*` bindings.
  */
 export interface RouteFrame {
   path: string
   slug: string | null
   segments: string[]
+  query: Record<string, string>
 }
 
 // ---------------------------------------------------------------------------
@@ -99,11 +101,15 @@ export function buildSiteFrame(site: SiteDocument): SiteFrame {
  */
 export function buildRouteFrame(urlOrPath: string): RouteFrame {
   let path: string
+  let query: Record<string, string>
   try {
     const u = new URL(urlOrPath, 'http://_invalid')
     path = u.pathname
+    query = Object.fromEntries(u.searchParams.entries())
   } catch {
-    path = urlOrPath
+    const [rawPath, rawQuery = ''] = urlOrPath.split('?', 2)
+    path = rawPath ?? urlOrPath
+    query = Object.fromEntries(new URLSearchParams(rawQuery).entries())
   }
   if (!path.startsWith('/')) path = `/${path}`
   const segments = path.split('/').filter((s) => s.length > 0)
@@ -112,6 +118,6 @@ export function buildRouteFrame(urlOrPath: string): RouteFrame {
     path,
     slug,
     segments,
+    query,
   }
 }
-

@@ -75,6 +75,12 @@ function installAmbientFetch() {
         headers: { 'content-type': 'application/json' },
       })
     }
+    if (url.endsWith('/admin/api/ai/defaults')) {
+      return new Response(JSON.stringify({ defaults: {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
     return new Response(JSON.stringify({ error: `Unhandled ${url}` }), { status: 500 })
   }) as typeof fetch
 }
@@ -183,6 +189,7 @@ function renderEditorLayout({
     'plugins.configure',
     'plugins.install',
     'plugins.lifecycle',
+    'ai.chat',
   ])
   render(
     <MemoryRouter>
@@ -361,15 +368,15 @@ describe('AdminCanvasLayout — persisted panel layout', () => {
 })
 
 describe('AdminCanvasLayout — permanent panel rail', () => {
-  it('renders site-read users in a read-only editor shell', () => {
+  it('renders site-read users in a read-only editor shell', async () => {
     renderEditorLayout({ user: currentUser(['site.read']) })
 
-    const canvas = screen.getByTestId('canvas-root')
+    const canvas = await screen.findByTestId('canvas-root')
     expect(within(canvas).queryByRole('button', { name: /add text/i })).toBeNull()
     expect(within(canvas).queryByRole('button', { name: /add container/i })).toBeNull()
     expect(screen.queryByTestId('right-sidebar-panel-slot')).toBeNull()
 
-    const sidebar = screen.getByTestId('left-sidebar')
+    const sidebar = await screen.findByTestId('left-sidebar')
     const rail = within(sidebar).getByRole('navigation', { name: /panel dock/i })
     // Read-only callers see the navigation-style panels — Layers, Site
     // Explorer and Media — but none of the structural / style / agent
@@ -404,23 +411,23 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
     expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(true)
   })
 
-  it('does not render the deferred timeline shell or rail button', () => {
+  it('does not render the deferred timeline shell or rail button', async () => {
     renderEditorLayout()
 
+    await screen.findByTestId('left-sidebar')
     expect(screen.queryByTestId('timeline-panel')).toBeNull()
     expect(screen.queryByTestId('panel-rail-timeline')).toBeNull()
   })
 
-  it('renders a left panel rail that can toggle the Site panel', () => {
+  it('renders a left panel rail that can toggle the Site panel', async () => {
     renderEditorLayout()
 
-    const rail = screen.queryByRole('navigation', { name: /panel dock/i })
-    expect(rail).not.toBeNull()
+    const rail = await screen.findByRole('navigation', { name: /panel dock/i })
 
-    const siteButton = within(rail!).getByRole('button', { name: /open site panel/i })
+    const siteButton = within(rail).getByRole('button', { name: /open site panel/i })
     expect(siteButton.getAttribute('aria-pressed')).toBe('false')
-    expect(within(rail!).queryByRole('button', { name: /properties panel/i })).toBeNull()
-    expect(within(rail!).queryByRole('button', { name: /code editor/i })).toBeNull()
+    expect(within(rail).queryByRole('button', { name: /properties panel/i })).toBeNull()
+    expect(within(rail).queryByRole('button', { name: /code editor/i })).toBeNull()
 
     fireEvent.click(siteButton)
 
@@ -428,10 +435,10 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
     expect(siteButton.getAttribute('aria-pressed')).toBe('true')
   })
 
-  it('keeps global AI access separated from the primary rail panels', () => {
+  it('keeps global AI access separated from the primary rail panels', async () => {
     renderEditorLayout()
 
-    const rail = screen.getByRole('navigation', { name: /panel dock/i })
+    const rail = await screen.findByRole('navigation', { name: /panel dock/i })
     const primaryButtons = within(screen.getByTestId('panel-rail-primary')).getAllByRole('button').slice(0, 5)
     const globalButtons = within(screen.getByTestId('panel-rail-global')).getAllByRole('button')
 
@@ -465,10 +472,10 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
     expect(globalGroupRule).not.toContain('border-top')
   })
 
-  it('docks left rail panels into an expanding sidebar and switches between them', () => {
+  it('docks left rail panels into an expanding sidebar and switches between them', async () => {
     renderEditorLayout()
 
-    const sidebar = screen.getByTestId('left-sidebar')
+    const sidebar = await screen.findByTestId('left-sidebar')
     const rail = within(sidebar).getByRole('navigation', { name: /panel dock/i })
 
     expect(sidebar.getAttribute('data-expanded')).toBe('true')
@@ -493,7 +500,7 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
     expect(sidebar.getAttribute('data-expanded')).toBe('false')
     expect(sidebar.getAttribute('data-active-panel')).toBe('none')
     expect(sidebar.style.getPropertyValue('--left-sidebar-panel-width')).toBe('0px')
-    expect(sidebar.style.getPropertyValue('--left-sidebar-panel-layout-width')).toBe('320px')
+    expect(sidebar.style.getPropertyValue('--left-sidebar-panel-layout-width')).toBe('0px')
     expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
 
     fireEvent.click(within(rail).getByRole('button', { name: /open colors panel/i }))
@@ -583,7 +590,7 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
     loadSiteWithSelectedHeading()
     renderEditorLayout()
 
-    const canvasStage = screen.getByTestId('canvas-root').closest('[data-right-sidebar-expanded]')
+    const canvasStage = (await screen.findByTestId('canvas-root')).closest('[data-right-sidebar-expanded]')
     expect(canvasStage).not.toBeNull()
 
     await waitFor(() => {
@@ -618,7 +625,7 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
 
     renderEditorLayout()
 
-    const leftSidebar = screen.getByTestId('left-sidebar')
+    const leftSidebar = await screen.findByTestId('left-sidebar')
     const rightSidebar = await screen.findByTestId('right-sidebar')
 
     await waitFor(() => {
@@ -643,10 +650,10 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
     }, { timeout: 150 })
   })
 
-  it('keeps the Properties panel disconnected from the left rail', () => {
+  it('keeps the Properties panel disconnected from the left rail', async () => {
     renderEditorLayout()
 
-    const sidebar = screen.getByTestId('left-sidebar')
+    const sidebar = await screen.findByTestId('left-sidebar')
     const rail = within(sidebar).getByRole('navigation', { name: /panel dock/i })
 
     // Properties lives in the right sidebar, never as a left-rail panel button.

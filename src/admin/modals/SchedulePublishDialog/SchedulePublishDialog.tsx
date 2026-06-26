@@ -19,10 +19,12 @@ import {
   scheduleCmsDataRowPublish,
   cancelCmsDataRowSchedule,
 } from '@core/persistence'
+import type { DataRow } from '@core/data/schemas'
 import { Dialog } from '@ui/components/Dialog'
 import { Button } from '@ui/components/Button'
 import { DateTimePicker } from '@ui/components/DateTimePicker'
 import { getErrorMessage } from '@core/utils/errorMessage'
+import styles from './SchedulePublishDialog.module.css'
 
 interface SchedulePublishDialogProps {
   open: boolean
@@ -38,7 +40,7 @@ interface SchedulePublishDialogProps {
   entityLabel: string
   /** Fires after a successful schedule OR cancel so the caller can
    *  refresh its publish-status derived UI. */
-  onScheduled: () => void
+  onScheduled: (row: DataRow) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -51,14 +53,14 @@ async function schedulePublish(
   next: Date,
   setBusy: (v: boolean) => void,
   setError: (msg: string | null) => void,
-  onScheduled: () => void,
+  onScheduled: (row: DataRow) => void,
   onClose: () => void,
 ): Promise<void> {
   setBusy(true)
   setError(null)
   try {
-    await scheduleCmsDataRowPublish(rowId, next.toISOString())
-    onScheduled()
+    const row = await scheduleCmsDataRowPublish(rowId, next.toISOString())
+    onScheduled(row)
     onClose()
   } catch (err) {
     console.error('[schedule-dialog] Schedule failed:', err)
@@ -73,14 +75,14 @@ async function cancelSchedule(
   rowId: string,
   setBusy: (v: boolean) => void,
   setError: (msg: string | null) => void,
-  onScheduled: () => void,
+  onScheduled: (row: DataRow) => void,
   onClose: () => void,
 ): Promise<void> {
   setBusy(true)
   setError(null)
   try {
-    await cancelCmsDataRowSchedule(rowId)
-    onScheduled()
+    const row = await cancelCmsDataRowSchedule(rowId)
+    onScheduled(row)
     onClose()
   } catch (err) {
     console.error('[schedule-dialog] Cancel schedule failed:', err)
@@ -138,7 +140,7 @@ export function SchedulePublishDialog({
         ariaLabel={`Schedule when to publish this ${entityLabel}`}
       />
       {isAlreadyScheduled && (
-        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+        <div className={styles.cancelRow}>
           <Button
             variant="ghost"
             size="sm"
@@ -152,11 +154,7 @@ export function SchedulePublishDialog({
       {error && (
         <p
           role="alert"
-          style={{
-            marginTop: 8,
-            color: 'var(--danger)',
-            fontSize: 12,
-          }}
+          className={styles.error}
         >
           {error}
         </p>

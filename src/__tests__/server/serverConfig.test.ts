@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { normalizeOrigin, resolvePublicOrigins } from '../../../server/config'
+import { normalizeOrigin, readServerConfig, resolvePublicOrigins } from '../../../server/config'
 
 describe('normalizeOrigin', () => {
   it('lowercases scheme and host and strips the trailing slash', () => {
@@ -87,5 +87,40 @@ describe('resolvePublicOrigins', () => {
 
   it('returns [] when nothing is configured', () => {
     expect(resolvePublicOrigins({})).toEqual([])
+  })
+})
+
+describe('readServerConfig', () => {
+  it('uses self-hosted local defaults when no environment values are set', () => {
+    expect(readServerConfig({})).toEqual({
+      port: 3001,
+      databaseUrl: 'sqlite:./.tmp/dev.db',
+      uploadsDir: './uploads',
+      staticDir: './dist',
+      trustedProxyCidrs: [],
+      publicOrigins: [],
+    })
+  })
+
+  it('reads runtime paths, port, trusted proxies, and public origins from env', () => {
+    expect(
+      readServerConfig({
+        PORT: '4321',
+        DATABASE_URL: 'postgres://instatic:secret@postgres:5432/instatic',
+        UPLOADS_DIR: '/srv/instatic/uploads',
+        STATIC_DIR: '/srv/instatic/dist',
+        TRUSTED_PROXY_CIDRS: '10.0.0.0/8, 192.168.0.0/16, ',
+        PUBLIC_ORIGIN: 'https://CMS.example.com/, http://localhost:5173',
+        RENDER_EXTERNAL_URL: 'https://ignored.onrender.com',
+        RAILWAY_PUBLIC_DOMAIN: 'ignored.up.railway.app',
+      }),
+    ).toEqual({
+      port: 4321,
+      databaseUrl: 'postgres://instatic:secret@postgres:5432/instatic',
+      uploadsDir: '/srv/instatic/uploads',
+      staticDir: '/srv/instatic/dist',
+      trustedProxyCidrs: ['10.0.0.0/8', '192.168.0.0/16'],
+      publicOrigins: ['https://cms.example.com', 'http://localhost:5173'],
+    })
   })
 })

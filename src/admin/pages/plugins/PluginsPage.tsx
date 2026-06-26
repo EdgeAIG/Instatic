@@ -8,6 +8,12 @@ import { PluginSettingsDialog } from './components/PluginSettingsDialog/PluginSe
 import { PluginSchedulesDialog } from './components/PluginSchedulesDialog/PluginSchedulesDialog'
 import { isSandboxRelatedError, usePluginsWorkspace } from './hooks/usePluginsWorkspace'
 import { notifyCmsPluginsChanged } from './utils/pluginEvents'
+import { useAuthenticatedAdminUser } from '@admin/sessionContext'
+import {
+  canConfigurePlugins,
+  canInstallPlugins,
+  canManagePluginLifecycle,
+} from '@admin/access'
 import styles from './PluginsPage.module.css'
 
 // Number of skeleton plugin cards rendered while the installed-plugin
@@ -17,6 +23,10 @@ import styles from './PluginsPage.module.css'
 const SKELETON_CARD_COUNT = 3
 
 export function PluginsPage() {
+  const currentUser = useAuthenticatedAdminUser()
+  const canConfigure = canConfigurePlugins(currentUser)
+  const canInstall = canInstallPlugins(currentUser)
+  const canManageLifecycle = canManagePluginLifecycle(currentUser)
   const vm = usePluginsWorkspace()
   const {
     fileInputRef,
@@ -39,7 +49,7 @@ export function PluginsPage() {
       title="Plugins"
       titleId="plugins-title"
       description="Install admin extensions and control what they add to the CMS."
-      actions={(
+      actions={canInstall ? (
         <>
           <Button
             variant="primary"
@@ -59,7 +69,7 @@ export function PluginsPage() {
             onChange={(event) => void vm.handleUpload(event)}
           />
         </>
-      )}
+      ) : null}
     >
       <div className={styles.pluginsBody} data-testid="plugins-admin-canvas">
         {error && (
@@ -111,7 +121,7 @@ export function PluginsPage() {
           </div>
         )}
 
-        {pendingInstall && (
+        {pendingInstall && canInstall && (
           <PermissionReviewSection
             pending={pendingInstall}
             uploading={uploading}
@@ -142,6 +152,9 @@ export function PluginsPage() {
                 plugin={plugin}
                 busy={busyPluginId === plugin.id}
                 editorActivationError={editorActivationErrors[plugin.id]}
+                canConfigure={canConfigure}
+                canInstall={canInstall}
+                canManageLifecycle={canManageLifecycle}
                 onOpenSettings={(p) => vm.setSettingsPluginId(p.id)}
                 onOpenSchedules={(p) => vm.setSchedulesPluginId(p.id)}
                 onInstallPack={(p) => void vm.installPluginPack(p)}
@@ -176,6 +189,7 @@ export function PluginsPage() {
               payload.plugins.find((p) => p.id === schedulesPluginId)?.name ??
               schedulesPluginId
             }
+            canManageLifecycle={canManageLifecycle}
             onClose={() => vm.setSchedulesPluginId(null)}
           />
         )}

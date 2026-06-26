@@ -50,6 +50,7 @@ interface ContentExplorerPanelProps {
   canCreateEntry: boolean
   canManageCollections: boolean
   canEditEntry: (entry: DataRow) => boolean
+  canMoveEntry: (entry: DataRow) => boolean
   canPublishEntry: (entry: DataRow) => boolean
   /**
    * Resolves the entry's `featuredMedia` cell to a loaded media asset, when
@@ -109,6 +110,7 @@ export function ContentExplorerPanel({
   canCreateEntry,
   canManageCollections,
   canEditEntry,
+  canMoveEntry,
   canPublishEntry,
   getFeaturedMediaAssetForEntry,
   onSelectCollection,
@@ -165,7 +167,7 @@ export function ContentExplorerPanel({
 
   function moveSubmenuItem(target: ContentExplorerContextTarget): ExplorerContextMenuItem | null {
     if (target.kind !== 'entry') return null
-    if (!canEditEntry(target.entry)) return null
+    if (!canMoveEntry(target.entry)) return null
     const others = collections.filter((collection) => collection.id !== target.entry.tableId)
     if (others.length === 0) return null
     return {

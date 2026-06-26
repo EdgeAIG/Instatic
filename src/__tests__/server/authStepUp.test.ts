@@ -23,7 +23,7 @@ import { STEP_UP_DEFAULT_WINDOW_MS } from '../../../server/auth/stepUpPolicy'
 import { createTestDb } from '../helpers/createTestDb'
 import { createHmac } from 'node:crypto'
 
-const PASSWORD = 'long-enough-password'
+const VALID_LOGIN_PHRASE = 'long-enough-phrase'
 const EMAIL = 'owner@example.com'
 const IP = '203.0.113.10'
 const TOTP_SECRET = 'JBSWY3DPEHPK3PXP'
@@ -63,7 +63,7 @@ async function setup(db: DbClient): Promise<void> {
     new Request('http://localhost/admin/api/cms/setup', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ siteName: 'StepUp Test', email: EMAIL, password: PASSWORD }),
+      body: JSON.stringify({ siteName: 'StepUp Test', email: EMAIL, password: VALID_LOGIN_PHRASE }),
     }),
     db,
   )
@@ -74,7 +74,7 @@ async function login(db: DbClient): Promise<string> {
   const req = new Request('http://localhost/admin/api/cms/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
+    body: JSON.stringify({ email: EMAIL, password: VALID_LOGIN_PHRASE }),
   })
   stampSocketIp(req, IP)
   const res = await handleCmsRequest(req, db)
@@ -94,6 +94,7 @@ async function stepUp(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ password, ...(mfaCode ? { mfaCode } : {}) }),
   })
+  stampSocketIp(req, IP)
   req.headers.set('cookie', cookie)
   return handleCmsRequest(req, db)
 }
@@ -105,7 +106,7 @@ function cookieFromSetCookie(res: Response): string {
   return cookie
 }
 
-async function stepUpCookie(
+async function completeStepUp(
   db: DbClient,
   cookie: string,
   password: string,
@@ -117,7 +118,7 @@ async function stepUpCookie(
 }
 
 async function enableMfa(db: DbClient, cookie: string): Promise<{ cookie: string; recoveryCodes: string[] }> {
-  const stepUpRes = await stepUp(db, cookie, PASSWORD)
+  const stepUpRes = await stepUp(db, cookie, VALID_LOGIN_PHRASE)
   expect(stepUpRes.status).toBe(200)
   const steppedCookie = cookieFromSetCookie(stepUpRes)
 
@@ -172,7 +173,7 @@ describe('Step-up auth', () => {
     const cookie = await login(db)
     const before = Date.now()
 
-    const res = await stepUp(db, cookie, PASSWORD)
+    const res = await stepUp(db, cookie, VALID_LOGIN_PHRASE)
     expect(res.status).toBe(200)
     const body = await res.json() as { ok: boolean; stepUpExpiresAt: string }
     expect(body.ok).toBe(true)
@@ -189,7 +190,7 @@ describe('Step-up auth', () => {
     const oldToken = cookie.split('=')[1]!
     const oldHash = await hashSessionToken(oldToken)
 
-    const res = await stepUp(db, cookie, PASSWORD)
+    const res = await stepUp(db, cookie, VALID_LOGIN_PHRASE)
     expect(res.status).toBe(200)
     const rotatedCookie = cookieFromSetCookie(res)
     const newToken = rotatedCookie.split('=')[1]!
@@ -209,12 +210,21 @@ describe('Step-up auth', () => {
     expect(newSession.rows[0]?.step_up_expires_at).not.toBeNull()
   })
 
+  it('successful step-up clears the per-IP limiter for repeated protected actions', async () => {
+    const { db } = testDb
+    let cookie = await login(db)
+
+    for (let i = 0; i < 35; i += 1) {
+      cookie = await completeStepUp(db, cookie, VALID_LOGIN_PHRASE)
+    }
+  })
+
   it('POST /step-up for an MFA-enabled account requires a second-factor code', async () => {
     const { db } = testDb
     const cookie = await login(db)
     const { cookie: mfaCookie } = await enableMfa(db, cookie)
 
-    const res = await stepUp(db, mfaCookie, PASSWORD)
+    const res = await stepUp(db, mfaCookie, VALID_LOGIN_PHRASE)
     expect(res.status).toBe(401)
     expect(await res.json()).toEqual({ error: 'Authentication code required' })
   })
@@ -225,7 +235,7 @@ describe('Step-up auth', () => {
     const { cookie: mfaCookie } = await enableMfa(db, cookie)
 
     const before = Date.now()
-    const res = await stepUp(db, mfaCookie, PASSWORD, totpCode(TOTP_SECRET))
+    const res = await stepUp(db, mfaCookie, VALID_LOGIN_PHRASE, totpCode(TOTP_SECRET))
     expect(res.status).toBe(200)
     expect(cookieFromSetCookie(res)).not.toBe(mfaCookie)
     const body = await res.json() as {
@@ -244,7 +254,7 @@ describe('Step-up auth', () => {
     const { cookie: mfaCookie, recoveryCodes } = await enableMfa(db, cookie)
     const recoveryCode = recoveryCodes[0]!
 
-    const res = await stepUp(db, mfaCookie, PASSWORD, recoveryCode)
+    const res = await stepUp(db, mfaCookie, VALID_LOGIN_PHRASE, recoveryCode)
     expect(res.status).toBe(200)
     const rotatedCookie = cookieFromSetCookie(res)
     const body = await res.json() as {
@@ -259,7 +269,7 @@ describe('Step-up auth', () => {
       set step_up_expires_at = ${new Date(Date.now() - 1000)}
     `
 
-    const reuseRes = await stepUp(db, rotatedCookie, PASSWORD, recoveryCode)
+    const reuseRes = await stepUp(db, rotatedCookie, VALID_LOGIN_PHRASE, recoveryCode)
     expect(reuseRes.status).toBe(401)
     expect(await reuseRes.json()).toEqual({ error: 'Invalid authentication code' })
   })
@@ -269,7 +279,7 @@ describe('Step-up auth', () => {
     const cookie = await login(db)
     const { cookie: mfaCookie } = await enableMfa(db, cookie)
 
-    const res = await stepUp(db, mfaCookie, PASSWORD, '000000')
+    const res = await stepUp(db, mfaCookie, VALID_LOGIN_PHRASE, '000000')
     expect(res.status).toBe(401)
     expect(await res.json()).toEqual({ error: 'Invalid authentication code' })
   })
@@ -316,7 +326,7 @@ describe('Step-up auth', () => {
     const lockedUntil = new Date(Date.now() + 60_000).toISOString()
     await db`update users set locked_until = ${lockedUntil} where id = ${user!.id}`
 
-    const res = await stepUp(db, cookie, PASSWORD)
+    const res = await stepUp(db, cookie, VALID_LOGIN_PHRASE)
     expect(res.status).toBe(423)
     expect(res.headers.get('retry-after')).not.toBeNull()
   })
@@ -334,7 +344,7 @@ describe('Step-up auth', () => {
   it('logout-all succeeds after a successful step-up', async () => {
     const { db } = testDb
     const cookie = await login(db)
-    const steppedCookie = await stepUpCookie(db, cookie, PASSWORD)
+    const steppedCookie = await completeStepUp(db, cookie, VALID_LOGIN_PHRASE)
 
     const res = await logoutAll(db, steppedCookie)
     expect(res.status).toBe(200)
@@ -373,14 +383,14 @@ describe('Step-up auth', () => {
     const { db } = testDb
     const ownerCookie = await login(db)
     // Create a target admin user via the API.
-    const steppedOwnerCookie = await stepUpCookie(db, ownerCookie, PASSWORD)
+    const steppedOwnerCookie = await completeStepUp(db, ownerCookie, VALID_LOGIN_PHRASE)
     const createReq = new Request('http://localhost/admin/api/cms/users', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         email: 'target@example.com',
         displayName: 'Target',
-        password: PASSWORD,
+        password: VALID_LOGIN_PHRASE,
         roleId: 'admin',
       }),
     })
@@ -415,7 +425,7 @@ describe('Step-up auth', () => {
       body: JSON.stringify({
         email: 'target@example.com',
         displayName: 'Target',
-        password: PASSWORD,
+        password: VALID_LOGIN_PHRASE,
         roleId: 'admin',
       }),
     })
@@ -442,7 +452,7 @@ describe('Step-up auth', () => {
   it('user and role update/delete mutations reject after the step-up window expires', async () => {
     const { db } = testDb
     const cookie = await login(db)
-    const steppedCookie = await stepUpCookie(db, cookie, PASSWORD)
+    const steppedCookie = await completeStepUp(db, cookie, VALID_LOGIN_PHRASE)
 
     const createUserReq = new Request('http://localhost/admin/api/cms/users', {
       method: 'POST',
@@ -450,7 +460,7 @@ describe('Step-up auth', () => {
       body: JSON.stringify({
         email: 'patch-target@example.com',
         displayName: 'Patch Target',
-        password: PASSWORD,
+        password: VALID_LOGIN_PHRASE,
         roleId: 'member',
       }),
     })
@@ -510,7 +520,7 @@ describe('Step-up auth', () => {
   it('admin password reset stamps passwordUpdatedAt and revokes the target user sessions', async () => {
     const { db } = testDb
     const ownerCookie = await login(db)
-    const steppedOwnerCookie = await stepUpCookie(db, ownerCookie, PASSWORD)
+    const steppedOwnerCookie = await completeStepUp(db, ownerCookie, VALID_LOGIN_PHRASE)
 
     const createUserReq = new Request('http://localhost/admin/api/cms/users', {
       method: 'POST',
@@ -518,7 +528,7 @@ describe('Step-up auth', () => {
       body: JSON.stringify({
         email: 'reset-target@example.com',
         displayName: 'Reset Target',
-        password: PASSWORD,
+        password: VALID_LOGIN_PHRASE,
         roleId: 'member',
       }),
     })
@@ -530,7 +540,7 @@ describe('Step-up auth', () => {
     const targetLoginReq = new Request('http://localhost/admin/api/cms/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: 'reset-target@example.com', password: PASSWORD }),
+      body: JSON.stringify({ email: 'reset-target@example.com', password: VALID_LOGIN_PHRASE }),
     })
     stampSocketIp(targetLoginReq, IP)
     const targetLogin = await handleCmsRequest(targetLoginReq, db)

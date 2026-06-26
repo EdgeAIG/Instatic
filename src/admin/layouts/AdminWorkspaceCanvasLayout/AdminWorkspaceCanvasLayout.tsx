@@ -24,6 +24,7 @@ import { useWorkspaceLayoutPersistence } from '@admin/state/useWorkspaceLayoutPe
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
 import { Settings2SolidIcon } from 'pixel-art-icons/icons/settings-2-solid'
+import { canRunPluginBackgroundWork } from '@admin/access'
 import type { AdminWorkspace } from '@admin/workspace'
 import styles from '../AdminCanvasLayout/AdminCanvasLayout.module.css'
 import workspaceStyles from './AdminWorkspaceCanvasLayout.module.css'
@@ -50,12 +51,14 @@ export function AdminWorkspaceCanvasLayout({
   contentRightPanel,
   toolbarRightSlot,
 }: AdminWorkspaceCanvasLayoutProps) {
+  const currentUser = useCurrentAdminUser()
+  const pluginBackgroundWorkEnabled = canRunPluginBackgroundWork(currentUser)
+
   useSiteSummary()
   useWorkspaceLayoutPersistence(workspace)
-  useInstalledEditorPlugins()
-  usePluginEventBridge()
+  useInstalledEditorPlugins(pluginBackgroundWorkEnabled)
+  usePluginEventBridge(pluginBackgroundWorkEnabled)
 
-  const currentUser = useCurrentAdminUser()
   const density = useEditorSelectPreference('density')
   const adminUiSiteName = useAdminUi((s) => s.siteName)
   const adminUiFaviconUrl = useAdminUi((s) => s.siteFaviconUrl)

@@ -69,7 +69,11 @@ interface DataWorkspace {
   setRowStatus: (rowId: string, status: 'draft' | 'unpublished') => Promise<DataRow>
 }
 
-export function useDataWorkspace(): DataWorkspace {
+interface DataWorkspaceOptions {
+  shouldLoadRows: boolean
+}
+
+export function useDataWorkspace({ shouldLoadRows }: DataWorkspaceOptions): DataWorkspace {
   // The Data workspace is directly linkable via `?table=<slug>&row=<id>`. We
   // capture the params at mount once (so the URL sync below can't clobber the
   // one-shot read) and mirror the live selection back into the URL.
@@ -94,12 +98,14 @@ export function useDataWorkspace(): DataWorkspace {
   const [loadingRows, setLoadingRows] = useState(false)
   const [rowsError, setRowsError] = useState<string | null>(null)
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null)
+  const [trackedLoadRows, setTrackedLoadRows] = useState(shouldLoadRows)
 
-  if (trackedTableId !== selectedTableId) {
+  if (trackedTableId !== selectedTableId || trackedLoadRows !== shouldLoadRows) {
     setTrackedTableId(selectedTableId)
+    setTrackedLoadRows(shouldLoadRows)
     setRows([])
     setRowsError(null)
-    setLoadingRows(selectedTableId !== null)
+    setLoadingRows(selectedTableId !== null && shouldLoadRows)
   }
 
   const selectedTable = tables.find((t) => t.id === selectedTableId) ?? null
@@ -146,7 +152,7 @@ export function useDataWorkspace(): DataWorkspace {
   // Same rationale as the tables effect — inline IIFE keeps all setState after
   // the first await and out of the interprocedural analysis path.
   useEffect(() => {
-    if (!selectedTableId) return
+    if (!selectedTableId || !shouldLoadRows) return
     let cancelled = false
     void (async () => {
       try {
@@ -164,7 +170,7 @@ export function useDataWorkspace(): DataWorkspace {
       }
     })()
     return () => { cancelled = true }
-  }, [selectedTableId])
+  }, [selectedTableId, shouldLoadRows])
 
   // Deep-link: once the (initially selected) table's rows have loaded, select
   // the `?row=<id>` from the URL. One-shot — cleared after the first apply so
@@ -172,6 +178,7 @@ export function useDataWorkspace(): DataWorkspace {
   useEffect(() => {
     const rowId = initialRowIdRef.current
     if (!rowId) return
+    if (!shouldLoadRows) return
     if (selectedTableId === null || loadingRows || trackedTableId !== selectedTableId) return
 
     initialRowIdRef.current = null
@@ -180,7 +187,7 @@ export function useDataWorkspace(): DataWorkspace {
     } else {
       console.warn('[data-workspace] unknown ?row= id:', rowId)
     }
-  }, [rows, loadingRows, selectedTableId, trackedTableId])
+  }, [rows, loadingRows, selectedTableId, trackedTableId, shouldLoadRows])
 
   // Mirror the active table + row into the URL so the view is directly
   // linkable. Contract matches the inbound deep link: `?table=<slug>&row=<id>`.
@@ -294,7 +301,7 @@ export function useDataWorkspace(): DataWorkspace {
 
   // Called from event handlers — synchronous setState before await is fine.
   const refreshRows = async (): Promise<void> => {
-    if (!selectedTableId) return
+    if (!selectedTableId || !shouldLoadRows) return
     setLoadingRows(true)
     setRowsError(null)
     await loadRows(selectedTableId)

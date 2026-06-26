@@ -485,10 +485,9 @@ function LibraryItem({ widget, onAdd }: LibraryItemProps) {
         {...attributes}
       >
         <div className={styles.itemPreview} aria-hidden="true">
-          {/* Render the widget exactly as it would appear on the
-              dashboard. `editing=false` so the preview reads as the
-              final tile (no drag-handle, no dashed outline). */}
-          <Render span={widget.defaultSize} editing={false} />
+          {/* Render with edit-mode chrome so Widget previews do not
+              introduce nested buttons inside the add/drag surface. */}
+          <Render span={widget.defaultSize} editing />
         </div>
       </button>
       <footer className={styles.itemFoot}>

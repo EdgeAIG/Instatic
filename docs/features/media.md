@@ -102,7 +102,7 @@ Drag/drop logic is split across two layers:
 
 - **`utils/mediaDragDrop.ts`** — TypeBox-validated `DataTransfer` payload read/write helpers. Declares the `MediaDropPayload` union (`{ kind: 'assets', assetIds }` | `{ kind: 'folder', folderId }`).
 - **`utils/mediaDnd.ts`** — the single source of truth for drop-legality rules. Exports `canMoveFolderTo`, `canAcceptDrop`, and `commitDropPayload` as pure functions operating on a `MediaDndTarget` interface (folders, folderById, moveAssetsToFolder, moveFolder). Also exports `folderDropKey` and `ROOT_FOLDER_DROP_KEY` for the root sentinel.
-- **`hooks/useMediaDnd.ts`** — wraps the rules with React state (active drop-target highlight) and returns `handleDragOver`, `handleDragLeave`, `handleDrop`, `isDropTarget`, and `clearDropTarget`. Both `MediaCanvas` and `MediaFolderPanel` consume this hook — no DnD logic is duplicated between the two surfaces.
+- **`hooks/useMediaDnd.ts`** — wraps the rules with React state (active drop-target highlight) and returns `handleDragOver`, `handleDragLeave`, `handleDrop`, `isDropTarget`, and `clearDropTarget`. Both `MediaCanvas` and `MediaFolderPanel` consume this hook — no DnD logic is duplicated between the two surfaces. The hook accepts an `enabled` flag so read-only media users can browse without seeing internal move drop targets.
 
 Drop rules enforced by `canMoveFolderTo`:
 
@@ -113,7 +113,14 @@ Drop rules enforced by `canMoveFolderTo`:
 | Folder into one of its own descendants | No — cycle |
 | Any other folder target | Yes |
 
-Asset drops are always accepted; `commitDropPayload` calls `moveAssetsToFolder(assetIds, targetFolderId)`. Dropping on **All files** moves assets/folders back to the root (`targetFolderId: null`).
+Asset drops are accepted when the caller has `media.write`; `commitDropPayload` calls `moveAssetsToFolder(assetIds, targetFolderId)`. Dropping on **All files** moves assets/folders back to the root (`targetFolderId: null`).
+
+The admin UI mirrors the server capability split:
+
+- `media.read` can open the workspace, browse assets/folders, open the viewer, and copy public URLs.
+- `media.write` exposes upload, metadata editing, rename, folder management, restore, bulk metadata edits, and internal folder/asset moves.
+- `media.replace` exposes the Replace file action.
+- `media.delete` exposes soft-delete and purge actions.
 
 Storage remains `media_asset_folders` (many-to-many), but the canvas move interaction is intentionally file-manager-like: moving an asset to a folder removes its previous folder assignments and adds only the target folder. The user-facing model is one current folder per asset move.
 

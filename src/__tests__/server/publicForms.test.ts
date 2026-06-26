@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'bun:test'
-import type { DbResult } from '../../../server/db'
+import type { DbClient, DbResult } from '../../../server/db'
 import { handlePublicFormRequest } from '../../../server/forms/handler'
+import { handleServerRequest } from '../../../server/router'
 import {
   issuePublicFormChallenge,
   issuePublicFormPageToken,
@@ -194,6 +195,20 @@ function makeDb(options: {
   return { db, createdRows }
 }
 
+function makeThrowingDb(): { db: DbClient; wasQueried: () => boolean } {
+  let queried = false
+  const handle = async <Row = Record<string, unknown>>(
+    _strings: TemplateStringsArray,
+    ..._values: unknown[]
+  ): Promise<DbResult<Row>> => {
+    queried = true
+    throw new Error('unexpected database query while routing public form request')
+  }
+  handle.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> =>
+    cb(handle as unknown as DbClient)
+  return { db: handle as DbClient, wasQueried: () => queried }
+}
+
 async function readJson(response: Response): Promise<Record<string, unknown>> {
   return await response.json() as Record<string, unknown>
 }
@@ -205,6 +220,56 @@ function pageToken(): string {
 describe('public CMS-native form endpoint', () => {
   afterEach(() => {
     resetPublicOrigins()
+  })
+
+  it('router owns public form challenge URLs before public-route/setup fallthrough', async () => {
+    resetPublicFormChallenges()
+    const { db } = makeDb()
+
+    const response = await handleServerRequest(
+      makeRequest(
+        '/_instatic/form/challenge',
+        { formId: 'newsletter', pageId: 'page-home', pageToken: pageToken() },
+        'http://cms.test',
+        '203.0.113.40',
+      ),
+      { db },
+    )
+
+    expect(response.status).toBe(200)
+    const body = await readJson(response)
+    expect(typeof body.token).toBe('string')
+    expect(typeof body.challenge).toBe('string')
+  })
+
+  it('router keeps public form namespace requests from falling through when rejected early', async () => {
+    const { db, wasQueried } = makeThrowingDb()
+
+    const response = await handleServerRequest(
+      new Request('http://cms.test/_instatic/form/challenge', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ formId: 'newsletter', pageId: 'page-home', pageToken: 'unused' }),
+      }),
+      { db },
+    )
+
+    expect(response.status).toBe(403)
+    expect(await readJson(response)).toMatchObject({ error: 'Form submissions must come from this site.' })
+    expect(wasQueried()).toBe(false)
+  })
+
+  it('router treats unknown public form subpaths as submission attempts inside the namespace', async () => {
+    const { db, wasQueried } = makeThrowingDb()
+
+    const response = await handleServerRequest(
+      makeRequest('/_instatic/form/unknown', { not: 'a submit payload' }, 'http://cms.test', '203.0.113.41'),
+      { db },
+    )
+
+    expect(response.status).toBe(400)
+    expect(await readJson(response)).toMatchObject({ error: 'Invalid form submission payload' })
+    expect(wasQueried()).toBe(false)
   })
 
   it('rejects challenge requests from foreign origins', async () => {

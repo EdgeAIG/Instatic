@@ -83,6 +83,15 @@ describe('resolveDynamicProps — system sources', () => {
     expect(props.text).toBe('/about')
   })
 
+  it('resolves route.query tokens against the route frame', () => {
+    const props = resolveDynamicProps(
+      { text: 'Search: {route.query.q}' },
+      undefined,
+      ctx({ route: buildRouteFrame('/search?q=dynamic') }),
+    )
+    expect(props.text).toBe('Search: dynamic')
+  })
+
   it('keeps the static fallback when currentEntry frame is missing and fallback is not set', () => {
     // Outside a loop, the entryStack is empty so `currentEntry.*` has no frame.
     const props = resolveDynamicProps(
@@ -360,6 +369,11 @@ describe('frame builders', () => {
     expect(route.slug).toBe('hello-world')
     expect(route.segments).toEqual(['posts', 'hello-world'])
     expect(route.path).toBe('/posts/hello-world')
+  })
+
+  it('buildRouteFrame preserves query params for route.query bindings', () => {
+    const route = buildRouteFrame('/search?q=dynamic&page=2')
+    expect(route.query).toEqual({ q: 'dynamic', page: '2' })
   })
 
   it('buildRouteFrame handles a root URL', () => {

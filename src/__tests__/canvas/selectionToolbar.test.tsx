@@ -287,8 +287,8 @@ describe('canvas selection toolbar', () => {
       // positioning. If the iframe portal hasn't mounted yet, raise a clear
       // error instead of a confusing empty-CSS-var assertion.
       expect(hasNode).toBe(true)
-      expect(toolbar.style.getPropertyValue('--canvas-toolbar-x')).toBe('20px')
-      expect(toolbar.style.getPropertyValue('--canvas-toolbar-y')).toBe('-20px')
+      expect(toolbar.style.left).toBe('20px')
+      expect(toolbar.style.top).toBe('-20px')
       expect(screen.getByRole('button', { name: 'Drag selected layers' })).toBeTruthy()
       expect(screen.getByRole('button', { name: 'Duplicate selected layers' })).toBeTruthy()
       expect(screen.getByRole('button', { name: 'Delete selected layers' })).toBeTruthy()

@@ -101,6 +101,8 @@ const GLOBAL_RAIL_ITEMS: PrimaryRailItem[] = [
 interface PanelRailProps {
   workspace?: 'site' | 'content' | 'media'
   editable?: boolean
+  canUseAiChat?: boolean
+  railOnly?: boolean
 }
 
 const subscribePluginRuntime = (cb: () => void) => pluginRuntime.subscribe(cb)
@@ -109,7 +111,12 @@ const getPluginPanelsSnapshot = () => pluginRuntime.getPanels()
 // detect a snapshot mismatch.
 const SERVER_PLUGIN_PANELS_SNAPSHOT: ReturnType<typeof getPluginPanelsSnapshot> = []
 
-export function PanelRail({ workspace = 'site', editable = true }: PanelRailProps) {
+export function PanelRail({
+  workspace = 'site',
+  editable = true,
+  canUseAiChat = true,
+  railOnly = false,
+}: PanelRailProps) {
   const domOpen = useEditorStore((s) => !s.domTreePanel.collapsed)
   const siteOpen = useEditorStore((s) => s.siteExplorerPanelOpen)
   const selectorsOpen = useEditorStore((s) => s.selectorsPanelOpen)
@@ -122,7 +129,10 @@ export function PanelRail({ workspace = 'site', editable = true }: PanelRailProp
   const activePluginPanelId = useEditorStore((s) => s.activePluginPanelId)
 
   const toggleLeftSidebarPanel = useEditorStore((s) => s.toggleLeftSidebarPanel)
+  const setLeftSidebarPanel = useEditorStore((s) => s.setLeftSidebarPanel)
   const toggleActivePluginPanel = useEditorStore((s) => s.toggleActivePluginPanel)
+  const setActivePluginPanel = useEditorStore((s) => s.setActivePluginPanel)
+  const setPropertiesPanel = useEditorStore((s) => s.setPropertiesPanel)
 
   // Subscribe to the plugin runtime so newly-registered panels appear in the
   // rail without a manual refresh. The runtime emits on every register/reset
@@ -146,13 +156,14 @@ export function PanelRail({ workspace = 'site', editable = true }: PanelRailProp
   } satisfies Record<LeftSidebarPanelId, boolean>
 
   // Read-only callers (Viewer / Client) see only the navigation/inspection
-  // panels — Layers, Site Explorer, Media. Style/runtime editing panels and
-  // the AI assistant only appear when the user can edit structure.
+  // panels — Layers, Site Explorer, Media. Style/runtime editing panels only
+  // appear when the user can edit structure. The AI assistant follows
+  // `ai.chat`, independent of editability.
   const READ_ONLY_RAIL_IDS = new Set<LeftSidebarPanelId>(['layers', 'site', 'media'])
   const visiblePrimaryItems = editable
     ? PRIMARY_RAIL_ITEMS
     : PRIMARY_RAIL_ITEMS.filter((item) => READ_ONLY_RAIL_IDS.has(item.id))
-  const visibleGlobalItems = editable ? GLOBAL_RAIL_ITEMS : []
+  const visibleGlobalItems = canUseAiChat ? GLOBAL_RAIL_ITEMS : []
 
   function railLabel(item: PrimaryRailItem) {
     return workspace === 'content' && item.id === 'site' ? 'Content' : item.label
@@ -162,12 +173,28 @@ export function PanelRail({ workspace = 'site', editable = true }: PanelRailProp
     return `${workspace}:${item.id}:${railLabel(item)}`
   }
 
+  function revealBuiltInPanel(panelId: LeftSidebarPanelId) {
+    setPropertiesPanel({ collapsed: true })
+    setLeftSidebarPanel(panelId)
+  }
+
+  function revealPluginPanel(panelId: string) {
+    setPropertiesPanel({ collapsed: true })
+    setActivePluginPanel(panelId)
+  }
+
   function toRailItem(item: PrimaryRailItem, accent: RailAccent): RailItem {
     return {
       ...item,
       label: railLabel(item),
-      open: panelOpenById[item.id],
-      onToggle: () => toggleLeftSidebarPanel(item.id),
+      open: panelOpenById[item.id] && !railOnly,
+      onToggle: () => {
+        if (railOnly) {
+          revealBuiltInPanel(item.id)
+          return
+        }
+        toggleLeftSidebarPanel(item.id)
+      },
       accent,
     }
   }
@@ -199,8 +226,14 @@ export function PanelRail({ workspace = 'site', editable = true }: PanelRailProp
         icon: resolvePluginPanelIcon(panel.iconName),
         iconName: panel.iconName,
         accent: pluginAccents[index] ?? 'mint',
-        open: activePluginPanelId === panel.id,
-        onToggle: () => toggleActivePluginPanel(panel.id),
+        open: activePluginPanelId === panel.id && !railOnly,
+        onToggle: () => {
+          if (railOnly) {
+            revealPluginPanel(panel.id)
+            return
+          }
+          toggleActivePluginPanel(panel.id)
+        },
         shortcutLabel: panel.shortcutLabel,
       }))
     : []

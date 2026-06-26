@@ -372,7 +372,7 @@ export function usePluginsWorkspace(): PluginsWorkspaceVM {
       pushToast({
         kind: 'success',
         title: `Installed pack from ${plugin.name}`,
-        body: `${installedCount} item(s) added, ${replacedCount} replaced.`,
+        body: `${installedCount} item(s) installed, ${replacedCount} replaced.`,
         location: 'plugins:install-pack',
       })
       notifyCmsPluginsChanged()

@@ -5,6 +5,9 @@
  * login, and one-time recovery-code login against a real migrated SQLite DB.
  */
 import { createHmac } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import type { DbClient } from '../../../server/db'
 import { handleCmsRequest } from '../../../server/handlers/cms'
@@ -12,19 +15,26 @@ import { createSession } from '../../../server/auth/sessions'
 import {
   SESSION_COOKIE_NAME,
   createSessionToken,
+  hashPassword,
   hashSessionToken,
   sessionExpiry,
   verifyPassword,
 } from '../../../server/auth/tokens'
 import { loginPerIpRateLimit, loginRateLimit, mfaRateLimit } from '../../../server/auth/rateLimit'
 import { stampSocketIp } from '../../../server/auth/security'
-import { findUserByEmail } from '../../../server/repositories/users'
+import { electAdapter } from '../../../server/repositories/mediaStorageAdapters'
+import { createUser, findUserByEmail } from '../../../server/repositories/users'
+import { mediaStorageRegistry } from '../../../src/core/plugins/mediaStorageRegistry'
 import { createTestDb } from '../helpers/createTestDb'
 
 const PASSWORD = 'long-enough-password'
 const NEW_PASSWORD = 'new-long-enough-password'
 const EMAIL = 'owner@example.com'
 const IP = '203.0.113.10'
+const PNG_1X1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+)
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
 
@@ -204,6 +214,184 @@ describe('Account security endpoints', () => {
     expect(updated?.displayName).toBe('Owner Renamed')
   })
 
+  it('PATCH /me accepts the display-name length boundary and trims email before saving', async () => {
+    const { db } = testDb
+    const { cookie } = await login(db)
+    const steppedCookie = await stepUp(db, cookie)
+    const displayName = 'A'.repeat(160)
+
+    const updateReq = new Request('http://localhost/admin/api/cms/me', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName,
+        email: '  owner-max@example.com  ',
+      }),
+    })
+    updateReq.headers.set('cookie', steppedCookie)
+    const updateRes = await handleCmsRequest(updateReq, db)
+    expect(updateRes.status).toBe(200)
+    const body = await updateRes.json() as {
+      user: { displayName: string; email: string; gravatarHash: string }
+    }
+    expect(body.user.displayName).toBe(displayName)
+    expect(body.user.email).toBe('owner-max@example.com')
+    expect(body.user.gravatarHash).toHaveLength(64)
+
+    const updated = await findUserByEmail(db, 'OWNER-MAX@example.com')
+    expect(updated?.displayName).toBe(displayName)
+    expect(updated?.email).toBe('owner-max@example.com')
+  })
+
+  it('PATCH /me rejects duplicate email without changing profile basics', async () => {
+    const { db } = testDb
+    const { cookie } = await login(db)
+    const before = await findUserByEmail(db, EMAIL)
+    if (!before) throw new Error('Expected setup user')
+    await createUser(db, {
+      email: 'second@example.com',
+      displayName: 'Second User',
+      passwordHash: await hashPassword('second-long-enough-password'),
+      roleId: 'admin',
+    })
+    const steppedCookie = await stepUp(db, cookie)
+
+    const duplicateReq = new Request('http://localhost/admin/api/cms/me', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        displayName: 'Owner Duplicate',
+        email: '  SECOND@example.com  ',
+      }),
+    })
+    duplicateReq.headers.set('cookie', steppedCookie)
+    const duplicateRes = await handleCmsRequest(duplicateReq, db)
+    expect(duplicateRes.status).toBe(400)
+    expect(await duplicateRes.json()).toEqual({ error: 'Email is already in use' })
+
+    const after = await findUserByEmail(db, EMAIL)
+    expect(after?.displayName).toBe(before.displayName)
+    expect(after?.email).toBe(before.email)
+    expect(await findUserByEmail(db, 'second@example.com')).not.toBeNull()
+  })
+
+  it('PATCH /me rejects invalid profile payloads without changing profile basics', async () => {
+    const { db } = testDb
+    const { cookie } = await login(db)
+    const before = await findUserByEmail(db, EMAIL)
+    if (!before) throw new Error('Expected setup user')
+    const steppedCookie = await stepUp(db, cookie)
+    const invalidCases: Array<{ body: Record<string, unknown>; error: string }> = [
+      {
+        body: { displayName: 'Owner Invalid', email: 'not-an-email' },
+        error: 'Invalid email',
+      },
+      {
+        body: { displayName: 'A'.repeat(161), email: 'owner-too-long@example.com' },
+        error: 'Invalid profile payload',
+      },
+      {
+        body: { displayName: 'Owner Missing Email' },
+        error: 'Invalid profile payload',
+      },
+    ]
+
+    for (const invalidCase of invalidCases) {
+      const invalidReq = new Request('http://localhost/admin/api/cms/me', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(invalidCase.body),
+      })
+      invalidReq.headers.set('cookie', steppedCookie)
+      const invalidRes = await handleCmsRequest(invalidReq, db)
+      expect(invalidRes.status).toBe(400)
+      expect(await invalidRes.json()).toEqual({ error: invalidCase.error })
+
+      const after = await findUserByEmail(db, EMAIL)
+      expect(after?.displayName).toBe(before.displayName)
+      expect(after?.email).toBe(before.email)
+    }
+  })
+
+  it('POST /me/avatar rejects an empty multipart body without changing the user avatar', async () => {
+    const { db } = testDb
+    const { cookie } = await login(db)
+    const before = await findUserByEmail(db, EMAIL)
+    expect(before?.avatarMediaId).toBeNull()
+
+    const emptyForm = new FormData()
+    const uploadReq = new Request('http://localhost/admin/api/cms/me/avatar', {
+      method: 'POST',
+      body: emptyForm,
+    })
+    uploadReq.headers.set('cookie', cookie)
+    const uploadRes = await handleCmsRequest(uploadReq, db)
+    expect(uploadRes.status).toBe(400)
+    expect(await uploadRes.json()).toEqual({ error: 'Missing file' })
+
+    const after = await findUserByEmail(db, EMAIL)
+    expect(after?.avatarMediaId).toBeNull()
+  })
+
+  it('DELETE /me/avatar is idempotent when the user has no uploaded avatar', async () => {
+    const { db } = testDb
+    const { cookie } = await login(db)
+    const before = await findUserByEmail(db, EMAIL)
+    expect(before?.avatarMediaId).toBeNull()
+
+    const removeReq = new Request('http://localhost/admin/api/cms/me/avatar', {
+      method: 'DELETE',
+    })
+    removeReq.headers.set('cookie', cookie)
+    const removeRes = await handleCmsRequest(removeReq, db)
+    expect(removeRes.status).toBe(200)
+    const removeBody = await removeRes.json() as {
+      user: { avatarMediaId: string | null; avatarUrl: string | null; gravatarHash: string }
+    }
+    expect(removeBody.user.avatarMediaId).toBeNull()
+    expect(removeBody.user.avatarUrl).toBeNull()
+    expect(removeBody.user.gravatarHash).toHaveLength(64)
+
+    const after = await findUserByEmail(db, EMAIL)
+    expect(after?.avatarMediaId).toBeNull()
+  })
+
+  it('POST /me/avatar surfaces elected storage adapter failures without changing the user avatar', async () => {
+    const { db } = testDb
+    const { cookie } = await login(db)
+    const user = await findUserByEmail(db, EMAIL)
+    if (!user) throw new Error('Expected setup user')
+    expect(user.avatarMediaId).toBeNull()
+
+    const uploadsDir = mkdtempSync(join(tmpdir(), 'instatic-avatar-uploads-'))
+    mediaStorageRegistry.configureLocalDisk({ uploadsDir })
+
+    try {
+      await electAdapter(db, 'avatar', 'missing.avatar', user.id)
+
+      const form = new FormData()
+      form.set('file', new File([PNG_1X1], 'avatar.png', { type: 'image/png' }))
+      const uploadReq = new Request('http://localhost/admin/api/cms/me/avatar', {
+        method: 'POST',
+        body: form,
+      })
+      uploadReq.headers.set('cookie', cookie)
+      const uploadRes = await handleCmsRequest(uploadReq, db)
+      expect(uploadRes.status).toBe(503)
+      expect(await uploadRes.json()).toEqual({
+        error: 'Elected media storage adapter "missing.avatar" is not currently available for role "avatar". The plugin that provides it may be disabled.',
+      })
+
+      const after = await findUserByEmail(db, EMAIL)
+      expect(after?.avatarMediaId).toBeNull()
+      const { rows } = await db<{ count: number | string }>`select count(*) as count from media_assets`
+      expect(Number(rows[0]?.count ?? 0)).toBe(0)
+    } finally {
+      mediaStorageRegistry.__reset()
+      rmSync(uploadsDir, { recursive: true, force: true })
+    }
+  })
+
   it('PATCH /me/password requires step-up, changes the password, and revokes other sessions', async () => {
     const { db } = testDb
     const { cookie } = await login(db)
@@ -298,6 +486,36 @@ describe('Account security endpoints', () => {
     expect(await reenableRes.json()).toEqual({ error: 'step_up_required' })
   })
 
+  it('PATCH /me/security/step-up rejects unsupported policy values without changing settings', async () => {
+    const { db } = testDb
+    const { cookie } = await login(db)
+    const steppedCookie = await stepUp(db, cookie)
+
+    const invalidModeReq = new Request('http://localhost/admin/api/cms/me/security/step-up', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode: 'optional', windowMinutes: 30 }),
+    })
+    invalidModeReq.headers.set('cookie', steppedCookie)
+    const invalidModeRes = await handleCmsRequest(invalidModeReq, db)
+    expect(invalidModeRes.status).toBe(400)
+    expect(await invalidModeRes.json()).toEqual({ error: 'Invalid step-up settings' })
+
+    const invalidWindowReq = new Request('http://localhost/admin/api/cms/me/security/step-up', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode: 'required', windowMinutes: 999 }),
+    })
+    invalidWindowReq.headers.set('cookie', steppedCookie)
+    const invalidWindowRes = await handleCmsRequest(invalidWindowReq, db)
+    expect(invalidWindowRes.status).toBe(400)
+    expect(await invalidWindowRes.json()).toEqual({ error: 'Invalid step-up settings' })
+
+    const unchanged = await findUserByEmail(db, EMAIL)
+    expect(unchanged?.stepUpAuthMode).toBe('required')
+    expect(unchanged?.stepUpWindowMinutes).toBe(15)
+  })
+
   it('uses the configured step-up window when re-authenticating', async () => {
     const { db } = testDb
     const { cookie } = await login(db)
@@ -387,6 +605,67 @@ describe('Account security endpoints', () => {
     verifiedMeReq.headers.set('cookie', verifiedCookie)
     const verifiedMeRes = await handleCmsRequest(verifiedMeReq, db)
     expect(verifiedMeRes.status).toBe(200)
+  })
+
+  it('rejects expired pending MFA sessions before verification', async () => {
+    const { db } = testDb
+    const { cookie } = await login(db)
+    const { secret } = await enableMfa(db, cookie)
+
+    const pending = await login(db)
+    expect(pending.body.mfaRequired).toBe(true)
+    const pendingToken = pending.cookie.split('=')[1]
+    if (!pendingToken) throw new Error('Pending MFA login did not return a session token')
+    const pendingIdHash = await hashSessionToken(pendingToken)
+    await db`
+      update sessions
+      set expires_at = ${new Date(Date.now() - 1000)}
+      where id_hash = ${pendingIdHash}
+    `
+
+    const verifyReq = new Request('http://localhost/admin/api/cms/auth/mfa/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: totpCode(secret) }),
+    })
+    verifyReq.headers.set('cookie', pending.cookie)
+    const verifyRes = await handleCmsRequest(verifyReq, db)
+    expect(verifyRes.status).toBe(401)
+    expect(await verifyRes.json()).toEqual({ error: 'Unauthorized' })
+    expect(verifyRes.headers.get('set-cookie')).toBeNull()
+
+    const meReq = new Request('http://localhost/admin/api/cms/me', { method: 'GET' })
+    meReq.headers.set('cookie', pending.cookie)
+    const meRes = await handleCmsRequest(meReq, db)
+    expect(meRes.status).toBe(401)
+    expect(await meRes.json()).toEqual({ error: 'Unauthorized' })
+  })
+
+  it('rejects unknown MFA session cookies before verification', async () => {
+    const { db } = testDb
+    const unknownCookies = [
+      `${SESSION_COOKIE_NAME}=not-a-real-pending-session-token`,
+      `${SESSION_COOKIE_NAME}=${createSessionToken()}`,
+    ]
+
+    for (const unknownCookie of unknownCookies) {
+      const verifyReq = new Request('http://localhost/admin/api/cms/auth/mfa/verify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code: '123456' }),
+      })
+      verifyReq.headers.set('cookie', unknownCookie)
+      const verifyRes = await handleCmsRequest(verifyReq, db)
+      expect(verifyRes.status).toBe(401)
+      expect(await verifyRes.json()).toEqual({ error: 'Unauthorized' })
+      expect(verifyRes.headers.get('set-cookie')).toBeNull()
+
+      const meReq = new Request('http://localhost/admin/api/cms/me', { method: 'GET' })
+      meReq.headers.set('cookie', unknownCookie)
+      const meRes = await handleCmsRequest(meReq, db)
+      expect(meRes.status).toBe(401)
+      expect(await meRes.json()).toEqual({ error: 'Unauthorized' })
+    }
   })
 
   it('locks the account after repeated failed MFA codes — even a correct code is then rejected (ISS-001)', async () => {

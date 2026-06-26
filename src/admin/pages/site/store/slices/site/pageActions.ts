@@ -13,6 +13,7 @@ import {
   reconcileSiteExplorerInPlace,
 } from '@core/page-tree'
 import type { SiteSlice, SiteSliceHelpers } from './types'
+import { clearCanvasSelectionDraft } from '../selectionSlice'
 
 type PageActions = Pick<
   SiteSlice,
@@ -38,7 +39,10 @@ export function createPageActions({
         reconcileSiteExplorerInPlace(p)
         return true
       })
-      set((state) => { state.activePageId = newPage.id })
+      set((state) => {
+        state.activePageId = newPage.id
+        clearCanvasSelectionDraft(state)
+      })
       return newPage
     },
 

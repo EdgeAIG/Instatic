@@ -45,6 +45,7 @@ const AuditActionSchema = Type.Union([
   Type.Literal('ai.credential.deleted'),
   Type.Literal('ai.credential.tested'),
   Type.Literal('ai.default.updated'),
+  Type.Literal('ai.default.cleared'),
   Type.Literal('ai.chat.started'),
   Type.Literal('ai.chat.completed'),
   Type.Literal('ai.chat.failed'),

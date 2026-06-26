@@ -42,6 +42,7 @@ import {
 import { useEditorPreference } from '@site/preferences/editorPreferences'
 import { useConfirmDelete } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import { LayerTreeNodeContent } from './LayerTreeNodeContent'
+import { isNarrowEditorChromeViewport } from '@site/layout/responsiveChrome'
 import styles from './TreeNode.module.css'
 
 // Stable empty fallback for the children selector (keeps referential equality).
@@ -115,8 +116,14 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
   const renameInputRef = useRef<HTMLInputElement>(null)
 
   const { activeId, target, invalidOverId, registerRow } = useDomPanelDndContext()
+  const selectLayerNode = (mode?: 'replace' | 'toggle' | 'range') => {
+    selectNode(nodeId, mode, {
+      preservePropertiesPanelCollapse: isNarrowEditorChromeViewport(),
+    })
+  }
 
   // ── dnd-kit draggable ─────────────────────────────────────────────────────
+  const draggableEnabled = editable && !!node && !isRoot && !node.locked && !isRenaming
   const {
     attributes,
     listeners,
@@ -124,8 +131,10 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
     isDragging,
   } = useDraggable({
     id: nodeId,
-    disabled: !editable || !node || isRoot || node.locked || isRenaming,
+    disabled: !draggableEnabled,
   })
+  const draggableAttributes = draggableEnabled ? attributes : undefined
+  const draggableListeners = draggableEnabled ? listeners : undefined
 
   const setRowNodeRef = (element: HTMLDivElement | null) => {
     rowRef.current = element
@@ -163,7 +172,7 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
       case 'Enter':
       case ' ':
         e.preventDefault()
-        selectNode(nodeId)
+        selectLayerNode()
         if (hasChildren && !isRoot) store.toggle(nodeId)
         break
       case 'ArrowRight':
@@ -248,8 +257,8 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
           dropPosition === 'inside' && treeDropStyles.dropInside,
           invalidOverId === nodeId && treeDropStyles.dropInvalid,
         )}
-        {...attributes}
-        {...listeners}
+        {...draggableAttributes}
+        {...draggableListeners}
         role="treeitem"
         aria-selected={isSelected}
         aria-expanded={hasChildren && !isRoot ? expanded : undefined}
@@ -279,14 +288,14 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
           // can build a multi-selection without accidentally rearranging the
           // tree's visible structure.
           if (e.shiftKey) {
-            selectNode(nodeId, 'range')
+            selectLayerNode('range')
             return
           }
           if (e.metaKey || e.ctrlKey) {
-            selectNode(nodeId, 'toggle')
+            selectLayerNode('toggle')
             return
           }
-          selectNode(nodeId)
+          selectLayerNode()
           if (hasChildren && !isRoot) store.toggle(nodeId)
         }}
         onDoubleClick={(e) => {
@@ -302,7 +311,7 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
           // otherwise replace with just this node. Matches the canvas + Figma.
           const currentIds = useEditorStore.getState().selectedNodeIds
           if (!currentIds.includes(nodeId)) {
-            selectNode(nodeId)
+            selectLayerNode()
           }
           setContextMenu({ x: e.clientX, y: e.clientY })
         }}

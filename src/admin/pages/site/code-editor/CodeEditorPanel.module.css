@@ -10,13 +10,15 @@
 .panel {
   position: fixed;
   /* Position driven by --panel-x / --panel-y CSS vars (useDraggablePanel) */
+  --code-editor-panel-width: min(800px, calc(100vw - 16px));
+  --code-editor-panel-height: min(500px, calc(100vh - 96px));
   --panel-x: calc(50vw - 400px);
   --panel-y: 80px;
-  left: var(--panel-x);
-  top: var(--panel-y);
+  left: max(8px, min(var(--panel-x), calc(100vw - var(--code-editor-panel-width) - 8px)));
+  top: max(48px, min(var(--panel-y), calc(100vh - var(--code-editor-panel-height) - 8px)));
   z-index: 80;
-  width: 800px;
-  height: 500px;
+  width: var(--code-editor-panel-width);
+  height: var(--code-editor-panel-height);
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
@@ -67,6 +69,16 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
+}
+
+@media (max-width: 760px) {
+  .panel {
+    z-index: 90;
+  }
+
+  .editorWorkspace {
+    flex-direction: column;
+  }
 }
 
 /* ── Loading skeleton (CodeMirror lazy chunk) ────────────────────────────── */

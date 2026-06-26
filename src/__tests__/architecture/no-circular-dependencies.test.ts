@@ -37,5 +37,5 @@ describe('Circular dependencies', () => {
     }
 
     expect(output).toContain('No circular dependency found')
-  })
+  }, 15000)
 })

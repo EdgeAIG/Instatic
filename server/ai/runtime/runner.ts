@@ -111,6 +111,7 @@ export async function runChat(args: RunChatArgs): Promise<void> {
           break
         }
         case 'usage': {
+          await flushPendingAssistantText()
           await persister.recordUsage({
             promptTokens: event.promptTokens,
             completionTokens: event.completionTokens,

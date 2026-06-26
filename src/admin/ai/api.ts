@@ -85,6 +85,8 @@ const ModelSchema = Type.Object({
   })),
   /** Max context window (total tokens) — feeds the composer context meter. */
   contextWindow: Type.Optional(Type.Number()),
+  /** Whether the server returned a live provider model or a local fallback hint. */
+  catalogueSource: Type.Optional(Type.Union([Type.Literal('live'), Type.Literal('fallback')])),
 })
 export type AiModel = Static<typeof ModelSchema>
 
@@ -246,6 +248,10 @@ export async function setDefault(
   body: { credentialId: string; modelId: string },
 ): Promise<void> {
   await apiRequest(`/admin/api/ai/defaults/${scope}`, { method: 'PUT', body })
+}
+
+export async function clearDefault(scope: 'site' | 'content' | 'data' | 'plugin'): Promise<void> {
+  await apiRequest(`/admin/api/ai/defaults/${scope}`, { method: 'DELETE' })
 }
 
 // ---------------------------------------------------------------------------

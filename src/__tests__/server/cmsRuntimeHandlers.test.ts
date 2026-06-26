@@ -157,6 +157,34 @@ describe('CMS runtime handlers', () => {
     })
   })
 
+  it('normalizes unsafe and non-runtime dependency manifest entries before resolving', async () => {
+    const res = await handleCmsRequest(runtimeRequest(
+      'http://localhost/admin/api/cms/runtime/dependencies/resolve',
+      {
+        packageJson: {
+          dependencies: {
+            'bad;pkg': '^1.0.0',
+            '': '^1.0.0',
+            'canvas-confetti': '',
+            motion: 12,
+          },
+          devDependencies: {
+            vite: '^7.0.0',
+          },
+        },
+      },
+    ), makeFakeDb())
+
+    expect(res.status).toBe(200)
+    await expect(res.json()).resolves.toEqual({
+      dependencyLock: {
+        version: 1,
+        packages: {},
+        updatedAt: expect.any(Number),
+      },
+    })
+  })
+
   it('builds a runtime preview document for a provided site and page', async () => {
     const res = await handleCmsRequest(runtimeRequest(
       'http://localhost/admin/api/cms/runtime/preview',

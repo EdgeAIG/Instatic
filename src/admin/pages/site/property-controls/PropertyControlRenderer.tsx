@@ -110,14 +110,13 @@ export function PropertyControlRenderer({
 }: RenderControlOptions) {
   const layout = resolveControlLayout(control)
 
-  // Caller-permission gate: a "Client / copy editor" with only
-  // `site.content.edit` can modify content-category controls; everything else
-  // is presented read-only. A user with neither structure nor content rights
-  // can't edit any prop. A user with structure rights can edit everything.
+  // Caller-permission gate: content props and structural module props are
+  // separate edit modes. Holding `site.structure.edit` does not imply copy
+  // editing permission.
   const permissions = useEditorPermissions()
   const category = resolvePropertyControlCategory(control)
   const allowedByCategory = category === 'content'
-    ? permissions.canEditContent || permissions.canEditStructure
+    ? permissions.canEditContent
     : permissions.canEditStructure
   const effectiveDisabled = disabled || !allowedByCategory
 

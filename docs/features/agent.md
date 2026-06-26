@@ -32,7 +32,7 @@ server/ai/
 │   ├── toolResult.ts       — POST /admin/api/ai/tool-result  (bridge POST)
 │   ├── conversations.ts    — CRUD for ai_conversations rows
 │   ├── credentials.ts      — CRUD for ai_credentials rows (encrypted secrets + endpoint credentials); auto-seeds defaults on create
-│   ├── defaults.ts         — GET /admin/api/ai/defaults (per-scope defaults)
+│   ├── defaults.ts         — GET/PUT/DELETE /admin/api/ai/defaults (per-scope defaults)
 │   ├── models.ts           — list available models per provider; enriches Anthropic/OpenAI with catalogue prices + context windows
 │   └── audit.ts            — GET /admin/api/ai/audit (usage rollups for the Audit tab; gated by ai.audit.read)
 ├── audit/
@@ -241,7 +241,7 @@ The handler (`server/ai/handlers/chat.ts`):
 4. Calls `selectToolsForScope('site', capabilities)` — write tools excluded without `ai.tools.write`.
 5. Builds the system prompt via `buildSiteSystemPrompt(snapshot)`.
 6. Creates a bridge (`createBridge(emit, req.signal)`), emits `bridgeReady`.
-7. Calls `runChat(...)` with the full history as `req.messages`. Direct HTTP drivers have no server-side session, so each driver maps the whole `AiMessage[]` log into the provider's native message array every turn (the Anthropic driver pairs assistant `tool_use` blocks with their following `tool_result` turns). The runner pipes all stream events to the HTTP response. The multi-turn agentic loop lives in `drivers/http/toolLoop.ts`, not in a provider SDK.
+7. Calls `runChat(...)` with the full history as `req.messages`. Direct HTTP drivers have no server-side session, so each driver maps the whole `AiMessage[]` log into the provider's native message array every turn (the Anthropic driver pairs assistant `tool_use` blocks with their following `tool_result` turns). The runner pipes all stream events to the HTTP response. Before recording a terminal usage event, the runner flushes any pending assistant text so text-only replies have an assistant message row for per-turn usage and audit rollups. The multi-turn agentic loop lives in `drivers/http/toolLoop.ts`, not in a provider SDK.
 8. Emits a terminal `ai.chat.completed` / `ai.chat.failed` audit event.
 
 ### `GET /admin/api/ai/audit?since=ISO&tz=IANA`
@@ -580,7 +580,11 @@ The `getModelCatalogue(db)` export (used by the models handler for picker enrich
 
 ### Auto-defaults on credential creation
 
-When `POST /admin/api/ai/credentials` creates a new credential, `seedEmptyDefaults` auto-assigns it as the default for every scope (`site`, `content`, `data`, `plugin`) that has no default yet. The default model is the `tier === 'smartest'` entry from `driver.listModels()`, or the first model if no smartest tier is found. If the model list can't be resolved (offline, bad key), seeding is skipped silently — it never fails the credential creation. Scopes that already point at a credential are left untouched.
+When `POST /admin/api/ai/credentials` creates a new credential, `seedEmptyDefaults` auto-assigns it as the default for every scope (`site`, `content`, `data`, `plugin`) that has no default yet. The default model is the `tier === 'smartest'` live-catalogue entry from `driver.listModels()`, or the first live model if no smartest tier is found. If the model list can't be resolved (offline, bad key), seeding is skipped silently — it never fails the credential creation. Driver fallback models can still help the picker explain common local options, but they are not trusted for automatic defaults. Scopes that already point at a credential are left untouched.
+
+Defaults can also be cleared per scope from the Defaults tab. The UI calls
+`DELETE /admin/api/ai/defaults/:scope`, removes the row from `ai_defaults`, and
+unblocks deletion of the credential that had been protected by the default FK.
 
 ---
 

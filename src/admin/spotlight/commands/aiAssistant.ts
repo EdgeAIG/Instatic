@@ -16,10 +16,8 @@ export function getAiAssistantCommands(): Command[] {
       group: 'ai',
       iconName: 'sparkles-solid',
       keywords: ['ai', 'assistant', 'claude', 'open', 'panel', 'agent'],
-      // AI mutates the site through standard store actions; permissions
-      // collapse to "user can perform any write." Aligns with editor.save.
       workspaces: ['site'],
-      capability: ['site.structure.edit', 'site.content.edit', 'site.style.edit'],
+      capability: 'ai.chat',
       run: async (ctx) => {
         ctx.closeSpotlight()
         try {
@@ -40,6 +38,7 @@ export function getAiAssistantCommands(): Command[] {
       iconName: 'ai-box-solid',
       keywords: ['ai', 'ask', 'prompt', 'claude', 'generate', 'agent'],
       workspaces: ['site'],
+      capability: 'ai.chat',
       args: [
         {
           id: 'prompt',

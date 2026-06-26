@@ -15,6 +15,7 @@ import { PropertiesPanel } from '@admin/pages/site/panels/PropertiesPanel'
 import { LeftSidebar } from '@admin/pages/site/sidebars/LeftSidebar'
 import { RightSidebar } from '@admin/pages/site/sidebars/RightSidebar'
 import { selectRightSidebarExpanded, useEditorStore } from '@admin/pages/site/store/store'
+import { useNarrowEditorChrome } from '@site/layout/responsiveChrome'
 import { ConfirmDeleteProvider } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import { Dialog } from '@ui/components/Dialog'
 import { Button } from '@ui/components/Button'
@@ -34,12 +35,14 @@ const ImportHtmlModal = lazy(() =>
 interface AdminCanvasEditorBodyProps {
   canEditDraftSite: boolean
   canSaveSite: boolean
+  canUseAiChat: boolean
   loadError: string | null
 }
 
 export function AdminCanvasEditorBody({
   canEditDraftSite,
   canSaveSite,
+  canUseAiChat,
   loadError,
 }: AdminCanvasEditorBodyProps) {
   // Keep `siteRuntime.dependencyLock` in lockstep with `packageJson` while
@@ -55,6 +58,7 @@ export function AdminCanvasEditorBody({
   const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)
   const importHtmlModalOpen = useEditorStore((s) => s.importHtmlModalOpen)
   const hasRightSidebar = rightSidebarExpanded
+  const narrowChrome = useNarrowEditorChrome()
 
   // Site Explorer organization hooks into this outer DndContext. DomPanel has
   // its own nested DndContext for DOM tree reordering, isolated by dnd-kit.
@@ -85,7 +89,12 @@ export function AdminCanvasEditorBody({
             and uses its own dedicated `PluginRemoveDialog` instead. */}
         <ConfirmDeleteProvider>
           <div className={styles.editorBody}>
-            <LeftSidebar workspace="site" editable={canEditDraftSite} />
+            <LeftSidebar
+              workspace="site"
+              editable={canEditDraftSite}
+              canUseAiChat={canUseAiChat}
+              railOnly={hasRightSidebar && narrowChrome}
+            />
             <div
               className={cn(styles.canvasStage, hasRightSidebar && styles.canvasStageRightSidebarOpen)}
               data-right-sidebar-expanded={hasRightSidebar ? 'true' : 'false'}

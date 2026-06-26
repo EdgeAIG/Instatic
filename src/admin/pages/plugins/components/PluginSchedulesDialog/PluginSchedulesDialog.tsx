@@ -62,10 +62,16 @@ async function runScheduleAction<T>(
 interface PluginSchedulesDialogProps {
   pluginId: string
   pluginName: string
+  canManageLifecycle: boolean
   onClose: () => void
 }
 
-export function PluginSchedulesDialog({ pluginId, pluginName, onClose }: PluginSchedulesDialogProps) {
+export function PluginSchedulesDialog({
+  pluginId,
+  pluginName,
+  canManageLifecycle,
+  onClose,
+}: PluginSchedulesDialogProps) {
   const { runStepUp } = useStepUp()
   const {
     data,
@@ -115,6 +121,7 @@ export function PluginSchedulesDialog({ pluginId, pluginName, onClose }: PluginS
               schedule={sched}
               recent={data.recent[sched.scheduleId] ?? []}
               busy={busyScheduleId === sched.scheduleId}
+              canManageLifecycle={canManageLifecycle}
               onRunNow={() =>
                 withStepUp(sched.scheduleId, () =>
                   runCmsPluginScheduleNow(pluginId, sched.scheduleId),
@@ -142,12 +149,21 @@ interface ScheduleRowProps {
   schedule: CmsPluginScheduleSummary
   recent: CmsPluginScheduleRunSummary[]
   busy: boolean
+  canManageLifecycle: boolean
   onRunNow: () => void
   onPause: () => void
   onResume: () => void
 }
 
-function ScheduleRow({ schedule, recent, busy, onRunNow, onPause, onResume }: ScheduleRowProps) {
+function ScheduleRow({
+  schedule,
+  recent,
+  busy,
+  canManageLifecycle,
+  onRunNow,
+  onPause,
+  onResume,
+}: ScheduleRowProps) {
   return (
     <div className={styles.scheduleRow}>
       <div className={styles.scheduleHeader}>
@@ -180,7 +196,7 @@ function ScheduleRow({ schedule, recent, busy, onRunNow, onPause, onResume }: Sc
 
       {/* A cancelled schedule (enabled=false) has no live registration — the
           plugin owns that state, so the admin gets no controls for it. */}
-      {schedule.enabled && (
+      {canManageLifecycle && schedule.enabled && (
         <div className={styles.scheduleActions}>
           <Button
             variant="secondary"

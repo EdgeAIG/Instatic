@@ -12,7 +12,10 @@ The audit log is **append-only** — events are never updated or deleted. They'r
 - Repo: `server/repositories/audit.ts` — `createAuditEvent(...)`, `listAuditEvents(...)`.
 - Schema: `AuditAction` is a closed TypeBox literal union — every event kind is enumerated. Adding a new kind = adding a new literal.
 - Handler: `server/handlers/cms/audit.ts` — `GET /admin/api/cms/audit` (gated by `audit.read`).
-- Consumer side: the Dashboard's Activity widget + the Audit admin page.
+- Consumer side: the Dashboard's Activity widget + the Users → Audit tab.
+- Users audit formatter: `src/admin/pages/users/utils/audit.ts` renders known
+  actions as readable titles and humanizes future dotted action ids instead of
+  exposing raw action strings.
 - Metadata is a `Record<string, string | number | boolean | null | string[]>` — flat, JSON-safe, no nested objects.
 
 ---
@@ -23,6 +26,7 @@ The audit log is **append-only** — events are never updated or deleted. They'r
 server/repositories/audit.ts        — AuditAction enum, createAuditEvent, listAuditEvents
 server/handlers/cms/audit.ts        — GET /admin/api/cms/audit (audit.read capability)
 src/admin/pages/dashboard/widgets/ActivityWidget.tsx   — feed display
+src/admin/pages/users/utils/audit.ts                   — Users → Audit title/detail formatting
 ```
 
 ---
@@ -39,7 +43,7 @@ Every event has a typed `action` string. The closed union is the source of truth
 | Data            | `data.table.create`, `data.table.update`, `data.table.delete`, `data.row.create`, `data.row.update`, `data.row.delete`, `data.row.publish`, `data.row.schedule`, `data.row.schedule.cancel`, `data.row.status`, `data.row.move`, `data.author.assign` |
 | Publishing      | `publish`                                                                                 |
 | Plugins         | `plugin.install`, `plugin.update`, `plugin.enable`, `plugin.disable`, `plugin.delete`, `plugin.pack.install`, `plugin.settings.update` |
-| AI              | `ai.credential.created`, `ai.credential.updated`, `ai.credential.deleted`, `ai.credential.tested`, `ai.default.updated`, `ai.chat.started`, `ai.chat.completed`, `ai.chat.failed` |
+| AI              | `ai.credential.created`, `ai.credential.updated`, `ai.credential.deleted`, `ai.credential.tested`, `ai.default.updated`, `ai.default.cleared`, `ai.chat.started`, `ai.chat.completed`, `ai.chat.failed` |
 
 If you add a new action that fits an existing group, append to the union. New groups (e.g. media-related audit) extend the same union.
 
@@ -81,6 +85,7 @@ No nested objects. The constraint keeps audit queries cheap and lets the UI rend
 | `plugin.*`           | `pluginId`, `version`, `permissions?`                                             |
 | `ai.credential.*`    | `providerId`, `authMode`, `displayLabel`; `tested` adds `ok`, `modelCount`, `error?` |
 | `ai.default.updated` | `scope`, `credentialId`, `modelId`, `auto?` (true when seeded at credential create) |
+| `ai.default.cleared` | `scope` |
 | `ai.chat.*`          | `scope`, `conversationId`, `providerId`, `modelId`; `completed`/`failed` add `promptTokens`, `completionTokens`, `costUsd?` |
 
 These aren't enforced by the schema (any flat key is valid) — they're conventions to keep the UI consistent.
@@ -210,7 +215,9 @@ await createAuditEvent(db, {
 1. Append the literal to `AuditActionSchema` in `server/repositories/audit.ts`.
 2. Add a typical-metadata-keys row to the table in this doc.
 3. Call `createAuditEvent(...)` at the right write site.
-4. Optionally render a friendly label in `ActivityWidget` (the widget has a `friendlyLabelFor(action)` switch).
+4. Add or verify friendly labels in the Dashboard Activity widget and the Users
+   audit formatter. `src/__tests__/users/auditFormat.test.ts` should cover
+   emitted action families and future-action fallback behavior.
 
 The closed union catches typos at compile time — a misspelled `'datas.row.publish'` is a type error.
 

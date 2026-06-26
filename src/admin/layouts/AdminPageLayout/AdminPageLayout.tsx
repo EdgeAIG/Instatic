@@ -37,6 +37,7 @@ import { usePluginEventBridge } from '@admin/pages/plugins/hooks/usePluginEventB
 import { useCurrentAdminUser } from '@admin/sessionContext'
 import { useAdminUi } from '@admin/state/adminUi'
 import { useSiteSummary } from '@admin/state/useSiteSummary'
+import { canRunPluginBackgroundWork } from '@admin/access'
 import type { AdminWorkspace } from '@admin/workspace'
 import styles from './AdminPageLayout.module.css'
 
@@ -100,6 +101,9 @@ export function AdminPageLayout({
   loading = false,
   children,
 }: AdminPageLayoutProps) {
+  const currentUser = useCurrentAdminUser()
+  const pluginBackgroundWorkEnabled = canRunPluginBackgroundWork(currentUser)
+
   // Lightweight admin-shell hydration:
   //   - useSiteSummary: fetches { name, faviconUrl } via cmsAdapter and
   //     publishes to adminUi. No editor store touched.
@@ -109,10 +113,9 @@ export function AdminPageLayout({
   // `useEditorLayoutPersistence` here — those hydrate / persist editor-only
   // state and would pull the full editor store into this layout's graph.
   useSiteSummary()
-  useInstalledEditorPlugins()
-  usePluginEventBridge()
+  useInstalledEditorPlugins(pluginBackgroundWorkEnabled)
+  usePluginEventBridge(pluginBackgroundWorkEnabled)
 
-  const currentUser = useCurrentAdminUser()
   const density = useEditorSelectPreference('density')
   const siteName = useAdminUi((s) => s.siteName)
   const faviconUrl = useAdminUi((s) => s.siteFaviconUrl)

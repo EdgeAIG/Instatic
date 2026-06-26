@@ -69,7 +69,7 @@
  * and clipped by the canvas root.
  */
 
-import { use, useEffect, useEffectEvent, useRef, type CSSProperties } from 'react'
+import { use, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditorStore } from '@site/store/store'
 import { styleRuleSelector } from '@core/page-tree'
@@ -90,14 +90,16 @@ import {
   unionCanvasOverlayRects,
   type CanvasOverlayRect,
 } from './canvasOverlayGeometry'
-import type {
-  CanvasDropAxis,
-  CanvasDropTarget,
-  CanvasRect,
-} from './canvasDnd'
+import {
+  dropIndicatorStyle,
+  hideOverlayElement,
+  measureSelectorHighlightRects,
+  positionOverlayElement,
+  positionToolbar,
+  rectStyle,
+  syncSelectorHighlightRings,
+} from './canvasSelectionOverlayPositioning'
 import styles from './BreakpointSelectionOverlay.module.css'
-
-const TOOLBAR_VERTICAL_OFFSET = 30
 
 interface BreakpointSelectionOverlayProps {
   /**
@@ -184,11 +186,20 @@ export function BreakpointSelectionOverlay({
   // from React state — there's no node-id list to map over.
   const selectorHighlightRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const [portalCanvasRoot, setPortalCanvasRoot] = useState<HTMLElement | null>(null)
   // nodeId → rendered iframe element, reused across RAF ticks so the
   // steady-state tick never pays a per-frame `querySelector` document scan.
   const nodeElementCacheRef = useRef<CanvasNodeElementCache | null>(null)
   if (nodeElementCacheRef.current === null) nodeElementCacheRef.current = new CanvasNodeElementCache()
   const viewportActions = use(CanvasViewportActionsContext)
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const root = viewportActions?.canvasRootRef.current ?? null
+      setPortalCanvasRoot((current) => (current === root ? current : root))
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [viewportActions])
 
   // Selection toolbar (drag / duplicate / delete) is purely structural —
   // hidden for callers without `site.structure.edit`. Content-only Clients
@@ -209,15 +220,16 @@ export function BreakpointSelectionOverlay({
     activeBreakpointId === breakpointId
 
   // Prefer the canvas root as the portal target so overlay chrome sits inside
-  // the canvas's stacking + clipping context. Fall back to document.body for
-  // tests or transient mount races where the ref isn't ready yet.
-  const canvasRoot = viewportActions?.canvasRootRef.current ?? null
-  const portalTarget = canvasRoot ?? document.body
-  const toolbarMode = canvasRoot ? 'scoped' : 'fixed'
+  // the canvas's stacking + clipping context. The root is captured into state
+  // after mount so the portal target and measurement coordinate space switch
+  // together instead of leaving body-portaled chrome positioned with
+  // canvas-root-local coordinates during the ref-availability race.
+  const portalTarget = portalCanvasRoot ?? document.body
+  const toolbarMode = portalCanvasRoot ? 'scoped' : 'fixed'
   const treeLadder = useCanvasTreeLadderOverlay({
     breakpointId,
     iframeElement,
-    canvasRoot,
+    canvasRoot: portalCanvasRoot,
     portalTarget,
     portalMode: toolbarMode,
     show: showRings,
@@ -253,9 +265,9 @@ export function BreakpointSelectionOverlay({
   //    stays exactly 1px at every zoom level.
   //  - `canvasRoot` is the editor canvas surface — the rings and toolbar are
   //    portaled into it (see render output below) and positioned in its
-  //    coordinate space, escaping the transform layer's scale. Null in the
-  //    fixed/body fallback mode (tests, transient mount race), where overlay
-  //    coords stay in viewport (client) space.
+  //    scroll-content coordinate space, escaping the transform layer's scale.
+  //    Null in the fixed/body fallback mode (tests, transient mount race),
+  //    where overlay coords stay in viewport (client) space.
   //
   // The tick is split into a READ phase (resolve cached elements, measure
   // every rect through one shared geometry session) and a WRITE phase
@@ -263,7 +275,7 @@ export function BreakpointSelectionOverlay({
   // header comment. Reordering measurements/writes here can reintroduce
   // per-frame forced reflows.
   const tickOnce = useEffectEvent((iframe: HTMLIFrameElement | null) => {
-    const canvasRoot = viewportActions?.canvasRootRef.current ?? null
+    const canvasRoot = portalCanvasRoot
     const iframeDoc = iframe?.contentDocument ?? null
     const elementCache = nodeElementCacheRef.current!
 
@@ -272,7 +284,7 @@ export function BreakpointSelectionOverlay({
       // chrome. Pure writes; they no-op once everything is already hidden.
       for (const id of selectedNodeIds) hideOverlayElement(ringRefs.current?.get(id) ?? null)
       hideOverlayElement(hoverRef.current)
-      if (selectorHighlightRef.current) hideSurplusRings(selectorHighlightRef.current, 0)
+      syncSelectorHighlightRings(selectorHighlightRef.current, null)
       hideOverlayElement(toolbarRef.current)
       return
     }
@@ -308,7 +320,12 @@ export function BreakpointSelectionOverlay({
     for (const { ring, rect } of ringPlacements) positionOverlayElement(ring, rect)
     positionOverlayElement(hoverRef.current, hoverRect)
     syncSelectorHighlightRings(selectorHighlightRef.current, selectorRects)
-    positionToolbar(toolbarRef.current, showToolbar ? toolbarUnion : null, session.canvasRect)
+    positionToolbar(
+      toolbarRef.current,
+      showToolbar ? toolbarUnion : null,
+      session.canvasRect,
+      { left: session.scrollLeft, top: session.scrollTop },
+    )
   })
 
   // The RAF loop exists to re-position overlay chrome as the tracked element
@@ -466,225 +483,4 @@ export function BreakpointSelectionOverlay({
       {treeLadder.portal}
     </>
   )
-}
-
-// ---------------------------------------------------------------------------
-// Positioning helpers — WRITE phase only. Every rect is measured up front in
-// the tick's READ phase; these apply the results, skipping writes that match
-// what is already on the element so steady-state frames touch no styles.
-// ---------------------------------------------------------------------------
-
-/**
- * Last placement applied per overlay element ('hidden' or the exact rect).
- * Lets the WRITE phase no-op when nothing moved — same-value style writes
- * are not guaranteed free across engines, and skipping them keeps the
- * steady-state tick read-only.
- */
-const appliedOverlayPlacements = new WeakMap<HTMLElement, CanvasOverlayRect | 'hidden'>()
-
-/**
- * Move/resize an overlay div (selection ring, hover ring, affinity ring) to
- * `rect`, in canvas-root-local coordinates (or viewport coordinates in the
- * fixed/body fallback). `rect === null` hides the element — the tracked node
- * is unmounted (page swap, hidden subtree) or the ring is inactive.
- */
-function positionOverlayElement(element: HTMLElement | null, rect: CanvasOverlayRect | null): void {
-  if (!element) return
-  if (!rect) {
-    hideOverlayElement(element)
-    return
-  }
-  const prev = appliedOverlayPlacements.get(element)
-  if (
-    prev !== undefined &&
-    prev !== 'hidden' &&
-    prev.x === rect.x &&
-    prev.y === rect.y &&
-    prev.width === rect.width &&
-    prev.height === rect.height
-  ) {
-    return
-  }
-  Object.assign(element.style, {
-    display: '',
-    transform: `translate(${rect.x}px, ${rect.y}px)`,
-    width: `${rect.width}px`,
-    height: `${rect.height}px`,
-  })
-  appliedOverlayPlacements.set(element, rect)
-}
-
-function hideOverlayElement(element: HTMLElement | null): void {
-  if (!element) return
-  if (appliedOverlayPlacements.get(element) === 'hidden') return
-  element.style.display = 'none'
-  appliedOverlayPlacements.set(element, 'hidden')
-}
-
-/**
- * Hard ceiling on how many affinity rings we draw for one selector. A utility
- * class (e.g. `text-muted`) can match hundreds of elements; measuring every one
- * via `getBoundingClientRect()` on each animation frame would jank the canvas.
- * The match count is already surfaced as the selector's usage badge in the
- * panel, so capping the *rings* (a transient hover affordance) is purely a
- * perf guard, not silent data truncation.
- */
-const SELECTOR_HIGHLIGHT_RING_CAP = 300
-
-/**
- * READ-phase half of the selector-affinity highlight: measure every element
- * matching `selector` inside the breakpoint iframe (capped). Returns null
- * when the highlight is inactive (clears the pool in the write phase).
- */
-function measureSelectorHighlightRects(
-  selector: string | null,
-  iframeDoc: Document,
-  session: ReturnType<typeof createCanvasOverlayMeasureSession>,
-): CanvasOverlayRect[] | null {
-  if (!selector) return null
-
-  // Ambient selectors are arbitrary author/CSS-importer strings; a malformed
-  // one makes querySelectorAll throw. Treat that as "matches nothing" rather
-  // than letting it bubble out of the RAF loop.
-  let matches: NodeListOf<HTMLElement>
-  try {
-    matches = iframeDoc.querySelectorAll<HTMLElement>(selector)
-  } catch {
-    return []
-  }
-
-  const count = Math.min(matches.length, SELECTOR_HIGHLIGHT_RING_CAP)
-  const rects: CanvasOverlayRect[] = []
-  for (let i = 0; i < count; i++) {
-    const rect = session.measure(matches[i])
-    if (rect) rects.push(rect)
-  }
-  return rects
-}
-
-/**
- * WRITE-phase half: sync the orange affinity ring pool under `container` to
- * the measured `rects` — grows the pool as needed, positions each ring, and
- * hides any surplus from a previous, larger match set (rings are reused, not
- * removed). `rects === null` clears the pool.
- */
-function syncSelectorHighlightRings(
-  container: HTMLDivElement | null,
-  rects: CanvasOverlayRect[] | null,
-): void {
-  if (!container) return
-  if (!rects) {
-    hideSurplusRings(container, 0)
-    return
-  }
-
-  for (let i = 0; i < rects.length; i++) {
-    let ring = container.children[i] as HTMLDivElement | undefined
-    if (!ring) {
-      ring = container.ownerDocument.createElement('div')
-      ring.className = cn(styles.ring, styles.selectorHighlight)
-      ring.setAttribute('data-canvas-selector-highlight-ring', 'true')
-      container.appendChild(ring)
-    }
-    positionOverlayElement(ring, rects[i])
-  }
-  hideSurplusRings(container, rects.length)
-}
-
-/** Hide every pooled ring from index `keep` onward (they're reused, not removed). */
-function hideSurplusRings(container: HTMLDivElement, keep: number): void {
-  for (let i = keep; i < container.children.length; i++) {
-    hideOverlayElement(container.children[i] as HTMLElement)
-  }
-}
-
-/**
- * Anchor the selection toolbar to `union` — the union of the selection-ring
- * rects already measured this tick (no second query/measure pass). Hides the
- * toolbar when there is no measurable selection or when the selection sits
- * entirely outside the canvas root's visible area — otherwise the toolbar
- * would "hang on screen" detached from the element it belongs to. For
- * partial overlap, the canvas root's overflow:hidden clips it.
- *
- * Scoped path: toolbar lives inside the canvas root (position: absolute), so
- * the CSS variables are in canvas-root-local coordinates — exactly the
- * coordinate space `union` is measured in. Fixed path (fallback,
- * `canvasRect === null`): toolbar lives in document.body (position: fixed)
- * and the same values are viewport (client) coordinates.
- */
-function positionToolbar(
-  toolbar: HTMLDivElement | null,
-  union: CanvasOverlayRect | null,
-  canvasRect: DOMRect | null,
-): void {
-  if (!toolbar) return
-  if (!union) {
-    hideOverlayElement(toolbar)
-    return
-  }
-
-  if (canvasRect) {
-    const elementFullyOutOfBounds =
-      union.x + union.width <= 0 ||
-      union.x >= canvasRect.width ||
-      union.y + union.height <= 0 ||
-      union.y >= canvasRect.height
-    if (elementFullyOutOfBounds) {
-      hideOverlayElement(toolbar)
-      return
-    }
-  }
-
-  // No horizontal clamping: the toolbar anchors to the selected element's
-  // left edge. A previous `Math.max(4, x)` clamp kept the toolbar visible at
-  // the canvas-left edge when the element panned off-screen left, but that
-  // decoupled the toolbar from the element and left it "hanging" far from
-  // the actual selection.
-  const placement: CanvasOverlayRect = {
-    x: union.x,
-    y: union.y - TOOLBAR_VERTICAL_OFFSET,
-    width: union.width,
-    height: union.height,
-  }
-  const prev = appliedOverlayPlacements.get(toolbar)
-  if (prev !== undefined && prev !== 'hidden' && prev.x === placement.x && prev.y === placement.y) {
-    return
-  }
-
-  toolbar.style.display = ''
-  toolbar.style.setProperty('--canvas-toolbar-x', `${placement.x}px`)
-  toolbar.style.setProperty('--canvas-toolbar-y', `${placement.y}px`)
-  appliedOverlayPlacements.set(toolbar, placement)
-}
-
-function dropIndicatorStyle(target: CanvasDropTarget): CSSProperties {
-  if (target.position === 'inside') return rectStyle(target.rect)
-  return lineStyle(target.rect, target.position, target.axis)
-}
-
-function lineStyle(
-  rect: CanvasRect,
-  position: 'before' | 'after',
-  axis: CanvasDropAxis,
-): CSSProperties {
-  if (axis === 'horizontal') {
-    const x = position === 'before' ? rect.left : rect.right
-    return indicatorVars(x, rect.top, 2, rect.height)
-  }
-
-  const y = position === 'before' ? rect.top : rect.bottom
-  return indicatorVars(rect.left, y, rect.width, 2)
-}
-
-function rectStyle(rect: CanvasRect): CSSProperties {
-  return indicatorVars(rect.left, rect.top, rect.width, rect.height)
-}
-
-function indicatorVars(x: number, y: number, width: number, height: number): CSSProperties {
-  return {
-    '--canvas-drop-x': `${x}px`,
-    '--canvas-drop-y': `${y}px`,
-    '--canvas-drop-w': `${width}px`,
-    '--canvas-drop-h': `${height}px`,
-  } as CSSProperties
 }

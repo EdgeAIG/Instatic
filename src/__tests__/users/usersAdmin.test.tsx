@@ -368,6 +368,46 @@ describe('UsersPage', () => {
     expect(calls).toContain('GET /admin/api/cms/audit')
   })
 
+  it('renders the audit empty state when the audit feed is empty', async () => {
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/audit' && init?.method === 'GET') return json({ events: [] })
+      const ambient = ambientFetchFallback(url)
+      if (ambient) return ambient
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <Wrapper user={currentUser(['audit.read'])}>
+        <UsersPage />
+      </Wrapper>,
+    )
+
+    expect(await screen.findByText('No audit events yet.')).toBeDefined()
+    expect(screen.queryByRole('table', { name: 'Audit events' })).toBeNull()
+  })
+
+  it('surfaces audit API load failures to audit readers', async () => {
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/audit' && init?.method === 'GET') {
+        return json({ error: 'Audit service unavailable' }, 503)
+      }
+      const ambient = ambientFetchFallback(url)
+      if (ambient) return ambient
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <Wrapper user={currentUser(['audit.read'])}>
+        <UsersPage />
+      </Wrapper>,
+    )
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Audit service unavailable')
+    expect(screen.getByText('No audit events yet.')).toBeDefined()
+  })
+
   it('locks the owner row and exposes edit/reset actions for regular users', async () => {
     render(
       <Wrapper user={currentUser(['users.manage', 'roles.manage', 'audit.read'])}>

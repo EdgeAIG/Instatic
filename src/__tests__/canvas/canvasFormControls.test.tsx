@@ -32,7 +32,7 @@ beforeEach(() => {
 })
 
 describe('canvas form controls', () => {
-  it('prevents native input/select activation while preserving canvas node selection', async () => {
+  it('prevents native form-control activation while preserving canvas node selection', async () => {
     const site = useEditorStore.getState().createSite('Form Controls')
     const page = site.pages[0]!
     const formId = useEditorStore.getState().insertNode('base.form', {
@@ -50,11 +50,22 @@ describe('canvas form controls', () => {
       name: 'plan',
       id: 'plan',
     }, formId)
+    const submitId = useEditorStore.getState().insertNode('base.submit', {
+      label: 'Send',
+      formId: '',
+    }, formId)
 
     renderCanvas()
 
+    const form = await waitForCanvasNodeInFrame<HTMLFormElement>('desktop', formId)
     const input = await waitForCanvasNodeInFrame<HTMLInputElement>('desktop', inputId)
     const select = await waitForCanvasNodeInFrame<HTMLSelectElement>('desktop', selectId)
+    const submit = await waitForCanvasNodeInFrame<HTMLButtonElement>('desktop', submitId)
+    let submitted = false
+    form.addEventListener('submit', (event) => {
+      submitted = true
+      event.preventDefault()
+    })
 
     let inputMouseDown = true
     await act(async () => {
@@ -79,5 +90,14 @@ describe('canvas form controls', () => {
       fireEvent.click(input!)
     })
     expect(useEditorStore.getState().selectedNodeId).toBe(inputId)
+
+    let submitMouseDown = true
+    await act(async () => {
+      submitMouseDown = fireEvent.mouseDown(submit)
+      fireEvent.click(submit)
+    })
+    expect(submitMouseDown).toBe(false)
+    expect(submitted).toBe(false)
+    expect(useEditorStore.getState().selectedNodeId).toBe(submitId)
   })
 })

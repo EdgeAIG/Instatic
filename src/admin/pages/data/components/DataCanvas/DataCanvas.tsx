@@ -57,6 +57,7 @@ interface DataCanvasProps {
   canCreate: boolean
   canEdit: boolean
   canDelete: boolean
+  canExport: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +84,7 @@ export function DataCanvas({
   canCreate,
   canEdit,
   canDelete,
+  canExport,
 }: DataCanvasProps) {
   // Tables still loading — render the layout skeleton (toolbar + chip
   // filter + grid placeholder) instead of the "Select a table" empty
@@ -128,7 +130,7 @@ export function DataCanvas({
         onOpenRow={onOpenRow}
         onDeleteRow={canDelete ? onDeleteRow : undefined}
         onSetRowStatus={canEdit ? onSetRowStatus : undefined}
-        onExportRows={canEdit ? onExportRows : undefined}
+        onExportRows={canExport ? onExportRows : undefined}
       />
     </section>
   )

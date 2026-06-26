@@ -18,6 +18,8 @@ import { FileUpload } from '@ui/components/FileUpload'
 import { FilterBar, type FilterBarItem } from '@ui/components/FilterBar'
 import { Select } from '@ui/components/Select'
 import { Skeleton } from '@ui/components/Skeleton'
+import { canDeleteMedia, canWriteMedia } from '@admin/access'
+import { useCurrentAdminUser } from '@admin/sessionContext'
 import {
   ExplorerItemContextMenu,
   ExplorerRenameDialog,
@@ -133,11 +135,14 @@ function folderMatchesQuery(folder: CmsMediaFolder, query: string): boolean {
 }
 
 export function MediaCanvas({ workspace }: MediaCanvasProps) {
+  const currentUser = useCurrentAdminUser()
   const [viewMode, setViewModeState] = useState<ViewMode>(readStoredViewMode)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renameTarget, setRenameTarget] = useState<CmsMediaAsset | null>(null)
   const [dragActive, setDragActive] = useState(false)
-  const dnd = useMediaDnd(workspace)
+  const canWrite = canWriteMedia(currentUser)
+  const canDelete = canDeleteMedia(currentUser)
+  const dnd = useMediaDnd(workspace, canWrite)
 
   function setViewMode(mode: ViewMode) {
     setViewModeState(mode)
@@ -189,6 +194,10 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
   }
 
   function handleAssetDragStart(asset: CmsMediaAsset, event: DragEvent<HTMLButtonElement>) {
+    if (!canWrite) {
+      event.preventDefault()
+      return
+    }
     const selectedIds = Array.from(workspace.selectedAssetIds)
     const dragIds = workspace.selectedAssetIds.has(asset.id) && selectedIds.length > 0
       ? selectedIds
@@ -197,12 +206,17 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
   }
 
   function handleFolderDragStart(folder: CmsMediaFolder, event: DragEvent<HTMLButtonElement>) {
+    if (!canWrite) {
+      event.preventDefault()
+      return
+    }
     writeMediaFolderDragData(event.dataTransfer, folder.id)
   }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? [])
     event.target.value = ''
+    if (!canWrite) return
     if (files.length === 0) return
     await workspace.uploadFiles(files)
   }
@@ -210,20 +224,20 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
   async function handleDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault()
     setDragActive(false)
-    if (trashView) return
+    if (trashView || !canWrite) return
     const files = Array.from(event.dataTransfer.files ?? [])
     if (files.length === 0) return
     await workspace.uploadFiles(files)
   }
 
   function handleDragEnter(event: DragEvent<HTMLElement>) {
-    if (trashView) return
+    if (trashView || !canWrite) return
     if (!event.dataTransfer.types.includes('Files')) return
     event.preventDefault()
     setDragActive(true)
   }
   function handleDragOver(event: DragEvent<HTMLElement>) {
-    if (trashView) return
+    if (trashView || !canWrite) return
     if (!event.dataTransfer.types.includes('Files')) return
     event.preventDefault()
   }
@@ -265,7 +279,7 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
         icon: <Copy2SolidIcon size={13} />,
       },
     ]
-    if (trashView) {
+    if (trashView && canWrite) {
       items.unshift({
         label: 'Restore',
         action: () => {
@@ -324,7 +338,7 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
             placeholder: 'Search media',
             ariaLabel: 'Search media',
           }}
-          searchLeading={!trashView && (
+          searchLeading={!trashView && canWrite && (
             <FileUpload
               multiple
               onChange={(e) => void handleUpload(e)}
@@ -460,7 +474,9 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
                 ? 'Soft-deleted assets show up here.'
                 : showingTotal > 0
                   ? 'Try a different search or filter.'
-                  : 'Drag files into this window or click Upload.'
+                  : canWrite
+                    ? 'Drag files into this window or click Upload.'
+                    : 'No assets have been uploaded yet.'
             }
           />
         ) : (
@@ -485,6 +501,7 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
                 folder={folder}
                 meta={folderItemMeta(folder, workspace.folders, workspace.assets)}
                 dropActive={dnd.isDropTarget(folder.id)}
+                canDrag={canWrite}
                 onOpen={() => workspace.setFolderSelection(folder.id)}
                 onDragStart={handleFolderDragStart}
                 onDragOver={dnd.handleDragOver}
@@ -497,6 +514,7 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
                 key={asset.id}
                 asset={asset}
                 selected={workspace.selectedAssetIds.has(asset.id)}
+                canDrag={canWrite}
                 onSelect={(event) => handleAssetClick(asset, event)}
                 onDragStart={handleAssetDragStart}
                 onDragEnd={dnd.clearDropTarget}
@@ -524,6 +542,8 @@ export function MediaCanvas({ workspace }: MediaCanvasProps) {
             if (trashView) void workspace.purgeAsset(target.id)
             else void workspace.trashAsset(target.id)
           }}
+          showRename={canWrite}
+          showDelete={canDelete}
           extraItems={buildExtraMenuItems(contextMenu.asset)}
         />
       )}

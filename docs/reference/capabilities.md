@@ -33,7 +33,7 @@ For the broader auth flow (sessions, MFA, step-up), see [docs/features/auth-and-
 | `site.content.edit`      | Modify content props (text, image src/alt, link href) on existing nodes — no structure or style edits | Owner, Admin, Client |
 | `site.style.edit`        | Modify CSS classes, style overrides, breakpoints, framework tokens  | Owner, Admin  |
 
-`SITE_WRITE_CAPABILITIES` is the convenience set `['site.structure.edit', 'site.content.edit', 'site.style.edit']` — defined locally in `server/handlers/cms/site.ts` and `src/admin/access.ts` at each point of use, not in a shared capabilities module. Used by the site shell save handler. The `/pages` and `/components` reconcile endpoints additionally require `site.structure.edit` because their wholesale reconcile can soft-delete entries.
+`SITE_WRITE_CAPABILITIES` is the convenience set `['site.structure.edit', 'site.content.edit', 'site.style.edit']` — defined locally in `server/handlers/cms/site.ts` and `src/admin/access.ts` at each point of use, not in a shared capabilities module. Used by the site shell save handler and the page-row save path. `/pages` accepts any site writer, then diff-validates each changed page by category: page roster, metadata, topology, module identity, non-content props, and dynamic bindings require `site.structure.edit`; content-category props require `site.content.edit`; inline styles/classes/breakpoint overrides require `site.style.edit`. `/components` and `/layouts` accept no-op saves from any site writer so the client can save one dirty family without tripping over empty batches, but actual changed components/layouts or roster removals still require `site.structure.edit`.
 
 ### Page publishing
 

@@ -4,6 +4,7 @@
  *   GET /admin/api/ai/defaults                Returns a record of every scope's
  *                                              default { credentialId, modelId }.
  *   PUT /admin/api/ai/defaults/:scope         Body: { credentialId, modelId }
+ *   DELETE /admin/api/ai/defaults/:scope      Clears the scope default.
  */
 
 import { Type } from '@core/utils/typeboxHelpers'
@@ -11,7 +12,7 @@ import { jsonResponse, readValidatedBody, badRequest } from '../../http'
 import { requireCapability } from '../../auth/authz'
 import type { DbClient } from '../../db/client'
 import { createAuditEvent } from '../../repositories/audit'
-import { listDefaults, setDefaultForScope } from '../defaults/store'
+import { clearDefaultForScope, listDefaults, setDefaultForScope } from '../defaults/store'
 import type { ToolScope } from '../runtime/types'
 
 const VALID_SCOPES: ToolScope[] = ['site', 'content', 'data', 'plugin']
@@ -31,7 +32,7 @@ export function tryHandleAiDefaults(
   }
   const match = pathname.match(/^\/admin\/api\/ai\/defaults\/([^/]+)$/)
   if (match) {
-    return handleSet(req, db, match[1]!)
+    return handleScope(req, db, match[1]!)
   }
   return null
 }
@@ -52,16 +53,30 @@ async function handleList(req: Request, db: DbClient): Promise<Response> {
   return jsonResponse({ defaults })
 }
 
+async function handleScope(req: Request, db: DbClient, scope: string): Promise<Response> {
+  if (req.method === 'PUT') {
+    return handleSet(req, db, scope)
+  }
+  if (req.method === 'DELETE') {
+    return handleClear(req, db, scope)
+  }
+  return jsonResponse({ error: 'Method not allowed' }, { status: 405 })
+}
+
+function validateScope(scope: string): Response | null {
+  if (VALID_SCOPES.includes(scope as ToolScope)) return null
+  return jsonResponse(
+    { error: `Unknown scope "${scope}". Must be one of: ${VALID_SCOPES.join(', ')}` },
+    { status: 400 },
+  )
+}
+
 async function handleSet(req: Request, db: DbClient, scope: string): Promise<Response> {
   if (req.method !== 'PUT') {
     return jsonResponse({ error: 'Method not allowed' }, { status: 405 })
   }
-  if (!VALID_SCOPES.includes(scope as ToolScope)) {
-    return jsonResponse(
-      { error: `Unknown scope "${scope}". Must be one of: ${VALID_SCOPES.join(', ')}` },
-      { status: 400 },
-    )
-  }
+  const scopeError = validateScope(scope)
+  if (scopeError) return scopeError
   const userOrResponse = await requireCapability(req, db, 'ai.providers.manage')
   if (userOrResponse instanceof Response) return userOrResponse
 
@@ -102,4 +117,21 @@ async function handleSet(req: Request, db: DbClient, scope: string): Promise<Res
     console.error('[ai/defaults] set failed:', err)
     return jsonResponse({ error: 'Failed to set default.' }, { status: 500 })
   }
+}
+
+async function handleClear(req: Request, db: DbClient, scope: string): Promise<Response> {
+  const scopeError = validateScope(scope)
+  if (scopeError) return scopeError
+  const userOrResponse = await requireCapability(req, db, 'ai.providers.manage')
+  if (userOrResponse instanceof Response) return userOrResponse
+
+  await clearDefaultForScope(db, scope as ToolScope)
+  await createAuditEvent(db, {
+    actorUserId: userOrResponse.id,
+    action: 'ai.default.cleared',
+    targetType: 'ai_default',
+    targetId: scope,
+    metadata: { scope },
+  })
+  return new Response(null, { status: 204 })
 }

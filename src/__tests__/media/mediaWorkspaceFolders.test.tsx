@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import { MediaCanvas } from '@admin/pages/media/components/MediaCanvas/MediaCanvas'
 import { MediaFolderPanel } from '@admin/pages/media/components/MediaFolderPanel/MediaFolderPanel'
+import { AdminSessionProvider } from '@admin/session'
 import {
   FOLDER_ALL,
   type FolderSelection,
@@ -10,6 +12,8 @@ import {
 } from '@admin/pages/media/hooks/useMediaWorkspace'
 import { buildFolderTree } from '@admin/pages/media/utils/folderTree'
 import { MEDIA_ASSET_DRAG_TYPE } from '@admin/pages/media/utils/mediaDragDrop'
+import type { CoreCapability } from '@core/capabilities'
+import type { CmsCurrentUser } from '@core/persistence'
 import type { CmsMediaAsset, CmsMediaFolder } from '@core/persistence/cmsMedia'
 
 const originalFetch = globalThis.fetch
@@ -93,6 +97,53 @@ function transferWithAssets(assetIds: string[]): DataTransfer {
   return transfer
 }
 
+const MEDIA_MANAGER_CAPABILITIES: CoreCapability[] = [
+  'media.read',
+  'media.write',
+  'media.replace',
+  'media.delete',
+]
+
+function currentUser(capabilities: CoreCapability[] = MEDIA_MANAGER_CAPABILITIES): CmsCurrentUser {
+  return {
+    id: 'user_media_manager',
+    email: 'media-manager@example.com',
+    displayName: 'Media Manager',
+    status: 'active',
+    role: {
+      id: 'role_media_manager',
+      slug: 'media-manager',
+      name: 'Media Manager',
+      description: 'Media test role',
+      isSystem: false,
+      capabilities,
+    },
+    capabilities,
+    lastLoginAt: null,
+    failedLoginCount: 0,
+    lockedUntil: null,
+    passwordUpdatedAt: null,
+    mfaEnabled: false,
+    mfaEnabledAt: null,
+    mfaRecoveryCodesRemaining: 0,
+    stepUpAuthMode: 'password',
+    stepUpWindowMinutes: 15,
+    avatarMediaId: null,
+    avatarUrl: null,
+    gravatarHash: '',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+}
+
+function renderWithMediaSession(ui: ReactElement) {
+  return render(
+    <AdminSessionProvider user={currentUser()}>
+      {ui}
+    </AdminSessionProvider>,
+  )
+}
+
 function workspace(overrides: Partial<UseMediaWorkspaceResult> = {}): UseMediaWorkspaceResult {
   const folders = overrides.folders ?? []
   const assets = overrides.assets ?? []
@@ -153,7 +204,7 @@ function workspace(overrides: Partial<UseMediaWorkspaceResult> = {}): UseMediaWo
 describe('Media workspace folder grid', () => {
   it('renders child folders as grid entries and opens them from the canvas', () => {
     const setFolderSelection = mock((selection: FolderSelection) => { void selection })
-    render(
+    renderWithMediaSession(
       <MediaCanvas
         workspace={workspace({
           folders: [folder()],
@@ -180,7 +231,7 @@ describe('Media workspace folder grid', () => {
     })
     const setFolderSelection = mock((selection: FolderSelection) => { void selection })
 
-    render(
+    renderWithMediaSession(
       <MediaCanvas
         workspace={workspace({
           folders: [parent, child],
@@ -203,7 +254,7 @@ describe('Media workspace folder grid', () => {
       void folderId
     })
 
-    render(
+    renderWithMediaSession(
       <MediaCanvas
         workspace={workspace({
           folders: [folder()],
@@ -229,7 +280,7 @@ describe('Media workspace folder grid', () => {
       void folderId
     })
 
-    render(
+    renderWithMediaSession(
       <MediaFolderPanel
         workspace={workspace({
           folders: [folder()],
@@ -249,7 +300,7 @@ describe('Media workspace folder grid', () => {
   })
 
   it('counts only images in image-metadata smart folders', () => {
-    render(
+    renderWithMediaSession(
       <MediaFolderPanel
         workspace={workspace({
           assets: [
@@ -270,7 +321,7 @@ describe('Media workspace folder grid', () => {
   })
 
   it('counts foldered assets in All files', () => {
-    render(
+    renderWithMediaSession(
       <MediaFolderPanel
         workspace={workspace({
           assets: [

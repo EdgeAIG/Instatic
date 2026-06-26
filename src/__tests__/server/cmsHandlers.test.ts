@@ -410,14 +410,14 @@ async function json(res: Response) {
   return res.json() as Promise<Record<string, unknown>>
 }
 
-async function stepUpCookie(
+async function completeStepUp(
   db: DbClient,
   cookie: string,
-  password = 'long-enough-password',
+  loginPhrase = 'long-enough-password',
 ): Promise<string> {
   const req = new Request('http://localhost/admin/api/cms/auth/step-up', {
     method: 'POST',
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ password: loginPhrase }),
     headers: { 'content-type': 'application/json' },
   })
   req.headers.set('cookie', cookie)
@@ -521,7 +521,7 @@ describe('CMS handlers', () => {
       headers: { 'content-type': 'application/json' },
     }), db)
     expect(loginRes.status).toBe(200)
-    const cookie = await stepUpCookie(db, (loginRes.headers.get('set-cookie') ?? '').split(';')[0])
+    const cookie = await completeStepUp(db, (loginRes.headers.get('set-cookie') ?? '').split(';')[0])
 
     const meReq = new Request('http://localhost/admin/api/cms/me', {
       method: 'GET',
@@ -552,7 +552,7 @@ describe('CMS handlers', () => {
       body: JSON.stringify({ email: 'owner-only@example.com', password: 'long-enough-password' }),
       headers: { 'content-type': 'application/json' },
     }), db)
-    const cookie = await stepUpCookie(db, (loginRes.headers.get('set-cookie') ?? '').split(';')[0])
+    const cookie = await completeStepUp(db, (loginRes.headers.get('set-cookie') ?? '').split(';')[0])
     const createReq = new Request('http://localhost/admin/api/cms/users', {
       method: 'POST',
       body: JSON.stringify({
@@ -584,7 +584,7 @@ describe('CMS handlers', () => {
       body: JSON.stringify({ email: 'owner-role@example.com', password: 'long-enough-password' }),
       headers: { 'content-type': 'application/json' },
     }), db)
-    const cookie = await stepUpCookie(db, (loginRes.headers.get('set-cookie') ?? '').split(';')[0])
+    const cookie = await completeStepUp(db, (loginRes.headers.get('set-cookie') ?? '').split(';')[0])
 
     const createReq = new Request('http://localhost/admin/api/cms/users', {
       method: 'POST',
@@ -639,7 +639,7 @@ describe('CMS handlers', () => {
       body: JSON.stringify({ email: 'real-owner@example.com', password: 'long-enough-password' }),
       headers: { 'content-type': 'application/json' },
     }), db)
-    const ownerCookie = await stepUpCookie(db, (ownerLogin.headers.get('set-cookie') ?? '').split(';')[0])
+    const ownerCookie = await completeStepUp(db, (ownerLogin.headers.get('set-cookie') ?? '').split(';')[0])
 
     // Owner creates an admin co-worker.
     const createAdminReq = new Request('http://localhost/admin/api/cms/users', {
@@ -647,7 +647,7 @@ describe('CMS handlers', () => {
       body: JSON.stringify({
         email: 'rogue-admin@example.com',
         displayName: 'Rogue Admin',
-        password: 'rogue-admin-password',
+        password: 'rogue-admin-phrase',
         roleId: 'admin',
       }),
       headers: { 'content-type': 'application/json' },
@@ -658,13 +658,13 @@ describe('CMS handlers', () => {
 
     const adminLogin = await handleCmsRequest(new Request('http://localhost/admin/api/cms/login', {
       method: 'POST',
-      body: JSON.stringify({ email: 'rogue-admin@example.com', password: 'rogue-admin-password' }),
+      body: JSON.stringify({ email: 'rogue-admin@example.com', password: 'rogue-admin-phrase' }),
       headers: { 'content-type': 'application/json' },
     }), db)
-    const adminCookie = await stepUpCookie(
+    const adminCookie = await completeStepUp(
       db,
       (adminLogin.headers.get('set-cookie') ?? '').split(';')[0],
-      'rogue-admin-password',
+      'rogue-admin-phrase',
     )
 
     const ownerId = String(db.users.find((user) => user.role_id === 'owner')?.id)

@@ -171,7 +171,8 @@ async function seedEmptyDefaults(
     apiKeyForRedaction = resolved.apiKey
     const driver = resolveDriver(record.providerId)
     const models = await driver.listModels(resolved)
-    const top = models.find((m) => m.tier === 'smartest') ?? models[0]
+    const liveModels = models.filter((model) => model.catalogueSource !== 'fallback')
+    const top = liveModels.find((m) => m.tier === 'smartest') ?? liveModels[0]
     topModelId = top?.id ?? null
   } catch (err) {
     console.warn(
@@ -180,7 +181,12 @@ async function seedEmptyDefaults(
     )
     return
   }
-  if (!topModelId) return
+  if (!topModelId) {
+    console.warn(
+      `[ai/credentials] auto-default skipped - no live models resolved for ${record.providerId}/${record.id}.`,
+    )
+    return
+  }
 
   for (const scope of emptyScopes) {
     await setDefaultForScope(db, scope, record.id, topModelId, userId)

@@ -23,6 +23,7 @@ import {
 import { resetForTests } from '../../../server/publish/renderCache'
 import { bumpPublishVersion, getPublishVersion } from '../../../server/publish/publishState'
 import { HOLE_RUNTIME_JS } from '../../../server/publish/holeRuntime'
+import { handleServerRequest } from '../../../server/router'
 import { makeModule } from '../publisher/helpers'
 import { registry } from '../../core/module-engine/registry'
 
@@ -153,6 +154,20 @@ function makeCountingDb(snapshot: ReturnType<typeof makeSnapshot>): {
   return { db: handle as DbClient, count: () => loads }
 }
 
+function makeThrowingDb(): { db: DbClient; wasQueried: () => boolean } {
+  let queried = false
+  const handle = async <Row extends Record<string, unknown> = Record<string, unknown>>(
+    _strings: TemplateStringsArray,
+    ..._values: unknown[]
+  ): Promise<DbResult<Row>> => {
+    queried = true
+    throw new Error('unexpected database query while serving hole namespace')
+  }
+  handle.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> =>
+    cb(handle as unknown as DbClient)
+  return { db: handle as DbClient, wasQueried: () => queried }
+}
+
 // ---------------------------------------------------------------------------
 // Setup — register minimal test modules in the singleton registry
 // (the hole handler uses the singleton registry to look up module renderers)
@@ -211,6 +226,54 @@ describe('serveHoleRuntimeAsset', () => {
     const res = serveHoleRuntimeAsset()
     const body = await res.text()
     expect(body).toBe(HOLE_RUNTIME_JS)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// router integration — namespace ownership
+// ---------------------------------------------------------------------------
+
+describe('server router — hole namespace ownership', () => {
+  it('serves the hole runtime asset before hole fragments or public routing', async () => {
+    const { db, wasQueried } = makeThrowingDb()
+
+    const res = await handleServerRequest(
+      new Request('http://localhost/_instatic/hole-runtime.js'),
+      { db },
+    )
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('application/javascript; charset=utf-8')
+    expect(await res.text()).toBe(HOLE_RUNTIME_JS)
+    expect(wasQueried()).toBe(false)
+  })
+
+  it('routes hole fragments through the router before public-page fallthrough', async () => {
+    const snapshot = makeSnapshot()
+    const db = makeFakeDb(snapshot)
+    const version = getPublishVersion()
+
+    const res = await handleServerRequest(
+      new Request(`http://localhost/_instatic/hole/text-node?v=${version}`),
+      { db },
+    )
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8')
+    expect(await res.text()).toContain('Hello from hole')
+  })
+
+  it('keeps malformed hole fragment URLs inside the exclusive namespace', async () => {
+    const { db, wasQueried } = makeThrowingDb()
+
+    const res = await handleServerRequest(
+      new Request('http://localhost/_instatic/hole/?v=0'),
+      { db },
+    )
+
+    expect(res.status).toBe(400)
+    expect(await res.text()).toContain('Missing node id')
+    expect(wasQueried()).toBe(false)
   })
 })
 

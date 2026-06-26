@@ -83,6 +83,12 @@ export interface AiProviderModel {
    * catalogue. Omitted when unknown (Ollama, or an uncatalogued model).
    */
   readonly contextWindow?: number
+  /**
+   * Source of the model descriptor. Drivers may return fallback models for UI
+   * picker affordances when a live catalogue is unavailable; those entries must
+   * not be used for automatic defaults or credential health checks.
+   */
+  readonly catalogueSource?: 'live' | 'fallback'
 }
 
 // ---------------------------------------------------------------------------

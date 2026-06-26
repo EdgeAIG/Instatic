@@ -22,7 +22,7 @@ function visualScale(visualSize: number, layoutSize: number): number {
   return visualSize / layoutSize
 }
 
-export function iframeWheelPointToParentClientPoint(
+export function iframeLocalPointToParentClientPoint(
   rect: TransformedIframeRect,
   viewport: IframeViewportSize,
   point: IframeLocalPoint,

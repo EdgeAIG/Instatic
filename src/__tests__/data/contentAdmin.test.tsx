@@ -233,6 +233,19 @@ function contentEditorUser(): CmsCurrentUser {
   }
 }
 
+function contentEditorWithoutAiChat(): CmsCurrentUser {
+  const base = contentEditorUser()
+  const capabilities = base.capabilities.filter((capability) => capability !== 'ai.chat')
+  return {
+    ...base,
+    capabilities,
+    role: {
+      ...base.role,
+      capabilities,
+    },
+  }
+}
+
 /**
  * Wraps test renders in the same provider stack production uses:
  *   MemoryRouter -> AdminSessionProvider -> StepUpProvider
@@ -849,6 +862,18 @@ describe('ContentPage', () => {
     // Layers + Dependencies remain editor-only and must NOT appear here.
     expect(screen.queryByLabelText('Open Layers panel')).toBeNull()
     expect(screen.queryByLabelText('Open Dependencies panel')).toBeNull()
+  })
+
+  it('hides the content AI assistant panel without ai.chat', async () => {
+    render(
+      <AdminTestProviders user={contentEditorWithoutAiChat()}>
+        <ContentPage />
+      </AdminTestProviders>,
+    )
+
+    await screen.findByTestId('content-explorer-panel')
+
+    expect(screen.queryByTestId('panel-rail-agent')).toBeNull()
   })
 
   it('reuses the shared media explorer panel in the content rail', async () => {

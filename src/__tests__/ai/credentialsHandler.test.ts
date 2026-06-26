@@ -6,12 +6,14 @@ describe('AI credential handler', () => {
   let harness: CapabilityTestHarness
   let originalFetch: typeof globalThis.fetch
   let originalWarn: typeof console.warn
+  let originalError: typeof console.error
   let originalNodeEnv: string | undefined
   let originalSecretKey: string | undefined
 
   beforeEach(async () => {
     originalFetch = globalThis.fetch
     originalWarn = console.warn
+    originalError = console.error
     originalNodeEnv = process.env.NODE_ENV
     originalSecretKey = process.env.INSTATIC_SECRET_KEY
     __resetMasterKeyCacheForTesting()
@@ -41,6 +43,7 @@ describe('AI credential handler', () => {
   afterEach(async () => {
     globalThis.fetch = originalFetch
     console.warn = originalWarn
+    console.error = originalError
     if (originalNodeEnv === undefined) {
       delete process.env.NODE_ENV
     } else {
@@ -91,6 +94,45 @@ describe('AI credential handler', () => {
       where provider_id = 'openai'
     `
     expect(rows[0]?.count).toBe(1)
+  })
+
+  it('does not auto-default an offline Ollama credential from fallback models', async () => {
+    const cookie = await harness.setupOwner()
+    const warnings: string[] = []
+    console.warn = (...args) => {
+      warnings.push(args.map(String).join(' '))
+    }
+    console.error = () => {}
+    globalThis.fetch = async (input) => {
+      const url = typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url
+      if (url === 'http://127.0.0.1:1/api/tags') {
+        throw new Error('ollama offline')
+      }
+      return originalFetch(input)
+    }
+
+    const res = await harness.ai('/admin/api/ai/credentials', {
+      method: 'POST',
+      cookie,
+      json: {
+        providerId: 'ollama',
+        authMode: 'baseUrl',
+        displayLabel: 'Local Ollama',
+        baseUrl: 'http://127.0.0.1:1',
+      },
+    })
+
+    expect(res.status).toBe(201)
+    const { rows } = await harness.db<{ count: number }>`
+      select count(*) as count
+      from ai_defaults
+    `
+    expect(rows[0]?.count).toBe(0)
+    expect(warnings.join('\n')).toContain('auto-default skipped')
   })
 
   it('redacts API keys from auto-default model lookup warnings', async () => {

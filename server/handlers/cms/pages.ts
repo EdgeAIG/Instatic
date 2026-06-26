@@ -14,16 +14,13 @@
  *                              exactly as the old full-replace protocol did
  *                              (subject to the ISS-041 baseline).
  *
- *                              **Gated by `site.structure.edit`** — the reconcile
- *                              soft-deletes any row not in the incoming roster,
- *                              so this endpoint can wipe pages wholesale. The
- *                              previous `SITE_WRITE_CAPABILITIES` gate let a
- *                              Client with `site.content.edit` only also send
- *                              an empty roster and erase every page. (A1
- *                              fix — see capabilities review.)
- *
- *                              Per-node content edits stay on the site-shell
- *                              save path, which IS diff-validated.
+ *                              Gated by any site-write capability, then
+ *                              diff-validated by category. The roster can
+ *                              still reap rows, so page deletion/creation and
+ *                              topology changes require `site.structure.edit`;
+ *                              existing-node copy/media/link edits can be saved
+ *                              by `site.content.edit`; class/inline/breakpoint
+ *                              styling can be saved by `site.style.edit`.
  *
  * The GET response intentionally returns raw DataRow objects (not Page objects)
  * so the client adapter can reconstruct Pages via pageFromRow without a
@@ -31,14 +28,14 @@
  * validates pages via validatePages immediately after conversion.
  */
 import type { DbClient } from '../../db/client'
-import { requireCapability } from '../../auth/authz'
+import { requireAnyCapability, requireCapability } from '../../auth/authz'
+import type { CoreCapability } from '../../auth/capabilities'
 import {
   listDataRows,
-  listDataRowIdSlugs,
   reconcileDataRowRoster,
   rowsToReap,
 } from '../../repositories/data'
-import { pageToCells } from '../../../src/core/data/pageFromRow'
+import { pageFromRow, pageToCells } from '../../../src/core/data/pageFromRow'
 import { visualComponentFromRow } from '../../../src/core/data/componentFromRow'
 import { validatePagesForPartialSave, SiteValidationError } from '@core/persistence/validate'
 import type { Page } from '@core/page-tree'
@@ -46,6 +43,14 @@ import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '.
 import { bumpPublishVersionSerialized } from '../../publish/publishState'
 import { Type } from '@core/utils/typeboxHelpers'
 import { CMS_API_PREFIX } from './shared'
+import { ForbiddenSiteChangeError } from './siteDiff'
+import { validatePageWriteDiff } from './pageDiff'
+
+const PAGE_WRITE_CAPABILITIES = [
+  'site.structure.edit',
+  'site.content.edit',
+  'site.style.edit',
+] satisfies CoreCapability[]
 
 export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Response | null> {
   const url = new URL(req.url)
@@ -60,11 +65,9 @@ export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Res
   }
 
   if (req.method === 'PUT') {
-    // Structural gate. The reconcile soft-deletes any row missing from
-    // the incoming roster — a Client with `site.content.edit` only must
-    // not be able to trigger that. Per-node content edits flow through
-    // the site-shell save endpoint, which has its own diff validator.
-    const user = await requireCapability(req, db, 'site.structure.edit')
+    // Any site writer may enter the endpoint; validatePageWriteDiff below
+    // rejects disallowed categories before reconcile can mutate rows.
+    const user = await requireAnyCapability(req, db, PAGE_WRITE_CAPABILITIES)
     if (user instanceof Response) return user
 
     const PagesBodySchema = Type.Object({
@@ -102,7 +105,9 @@ export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Res
     // write window at the DB level. Rows this request reaps are NOT slug
     // owners — a changed page may take the slug of a page deleted in the same
     // batch (homepage swap + delete of the old homepage saved together).
-    const existing = await listDataRowIdSlugs(db, 'pages')
+    const existingRows = await listDataRows(db, 'pages')
+    const existing = existingRows.map((r) => ({ id: r.id, slug: r.slug }))
+    const existingPages = existingRows.map(pageFromRow)
     const reapIds = new Set(rowsToReap(existing.map((r) => r.id), pageIds, baselineIds))
     const keptSlugs = existing.filter((r) => !reapIds.has(r.id))
     let pages: Page[]
@@ -113,8 +118,20 @@ export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Res
           throw new SiteValidationError(`changed page "${page.id}" missing from pageIds roster`, 'pageIds')
         }
       }
+      validatePageWriteDiff({
+        previousPages: existingPages,
+        changedPages: pages,
+        reapedPageIds: reapIds,
+        capabilities: user.capabilities,
+      })
     } catch (err) {
       if (err instanceof SiteValidationError) return badRequest(err.message)
+      if (err instanceof ForbiddenSiteChangeError) {
+        return jsonResponse(
+          { error: err.message, kind: err.kind, path: err.path },
+          { status: 403 },
+        )
+      }
       throw err
     }
 

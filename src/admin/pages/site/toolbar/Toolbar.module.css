@@ -294,6 +294,68 @@
     animation: instaticSpin 0.8s linear infinite;
 }
 
+@media (max-width: 760px) {
+    .header {
+        height: 68px;
+        flex-wrap: wrap;
+        align-content: center;
+        row-gap: var(--space-4xs);
+        padding: var(--space-4xs) var(--space-s);
+    }
+
+    .siteName,
+    .siteNameSkeleton,
+    .siteFavicon,
+    .workspaceToolbarItems {
+        order: 1;
+    }
+
+    .siteName {
+        max-width: 104px;
+        margin-right: var(--space-4xs);
+    }
+
+    .siteNameSkeleton {
+        width: 84px;
+        margin-right: var(--space-4xs);
+    }
+
+    .workspaceToolbarItems {
+        justify-content: flex-end;
+        flex: 1 1 0;
+    }
+
+    .spacer {
+        min-width: 0;
+    }
+
+    .zoomGroup,
+    .publishActionStatus,
+    .pluginButtonWrapper {
+        display: none;
+    }
+
+    .adminLink,
+    .activeSection {
+        order: 2;
+        justify-content: center;
+        width: 30px;
+        min-width: 30px;
+        padding: 0;
+        gap: 0;
+    }
+
+    .adminLink > span:not([role="status"]),
+    .activeSection > span:not([role="status"]) {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .workspaceToolbarItems {
         animation: none;

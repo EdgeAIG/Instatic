@@ -306,6 +306,7 @@ async function respondLoginSuccess(
   // Successful login → release this user's bucket so a forgotten password
   // followed by a correct attempt doesn't continue eating into the quota.
   loginRateLimit.reset(rateLimitKey)
+  if (ip) loginPerIpRateLimit.reset(ip)
 
   const wasPreviouslyLocked = previouslyLocked(user)
 
@@ -498,6 +499,7 @@ async function handleMfaVerify(req: Request, db: DbClient): Promise<Response> {
     result: 'success',
   })
   mfaRateLimit.reset(rateLimitKey)
+  if (ip) loginPerIpRateLimit.reset(ip)
   await createAuditEvent(db, {
     actorUserId: user.id,
     action: 'login.success',
@@ -773,6 +775,7 @@ async function handleStepUp(req: Request, db: DbClient): Promise<Response> {
     stepUpExpiresAt: expiresAt,
   })
   if (!rotatedSession) return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
+  if (ip) loginPerIpRateLimit.reset(ip)
 
   return setCookieHeader(
     jsonResponse({

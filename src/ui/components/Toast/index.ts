@@ -1,2 +1,2 @@
 export { ToastProvider } from './ToastProvider'
-export { pushToast } from './toastBus'
+export { dismissToast, pushToast } from './toastBus'

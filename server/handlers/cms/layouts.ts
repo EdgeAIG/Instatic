@@ -16,10 +16,12 @@
  *                                run against the merged post-save roster (see
  *                                validateSavedLayoutsForPartialWrite).
  *
- *                                Gated by `site.structure.edit` — the
- *                                reconcile soft-deletes any layout missing
- *                                from the incoming roster, mirroring the
- *                                components endpoint's gate.
+ *                                Gated by any site-write capability, then
+ *                                restricted to no-op saves unless the caller
+ *                                has `site.structure.edit`. The reconcile can
+ *                                soft-delete any layout missing from the
+ *                                incoming roster, so actual layout changes and
+ *                                roster reaps remain structural work.
  *
  * The GET response returns raw DataRow objects (not SavedLayout objects) so
  * the client adapter can reconstruct layouts via savedLayoutFromRow without a
@@ -27,7 +29,8 @@
  * validateSavedLayouts immediately after conversion.
  */
 import type { DbClient } from '../../db/client'
-import { requireCapability } from '../../auth/authz'
+import { requireAnyCapability, requireCapability } from '../../auth/authz'
+import type { CoreCapability } from '../../auth/capabilities'
 import { listDataRows, reconcileDataRowRoster } from '../../repositories/data'
 import { savedLayoutFromRow, savedLayoutToCells } from '../../../src/core/data/layoutFromRow'
 import { SiteValidationError } from '@core/persistence/validate'
@@ -36,6 +39,13 @@ import { SavedLayoutSchema, layoutSlugFromName, type SavedLayout } from '@core/l
 import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../http'
 import { Type } from '@core/utils/typeboxHelpers'
 import { CMS_API_PREFIX } from './shared'
+import { ForbiddenSiteChangeError } from './siteDiff'
+
+const LAYOUT_WRITE_CAPABILITIES = [
+  'site.structure.edit',
+  'site.content.edit',
+  'site.style.edit',
+] satisfies CoreCapability[]
 
 export async function handleLayoutsRoutes(req: Request, db: DbClient): Promise<Response | null> {
   const url = new URL(req.url)
@@ -50,8 +60,7 @@ export async function handleLayoutsRoutes(req: Request, db: DbClient): Promise<R
   }
 
   if (req.method === 'PUT') {
-    // Structural gate — reconcile soft-deletes missing layouts.
-    const user = await requireCapability(req, db, 'site.structure.edit')
+    const user = await requireAnyCapability(req, db, LAYOUT_WRITE_CAPABILITIES)
     if (user instanceof Response) return user
 
     const LayoutsBodySchema = Type.Object({
@@ -64,6 +73,7 @@ export async function handleLayoutsRoutes(req: Request, db: DbClient): Promise<R
     if (!body) return badRequest('Invalid request body')
 
     const layoutIds = new Set(body.layoutIds)
+    const canEditStructure = user.capabilities.includes('site.structure.edit')
 
     // Identity rules (unique id + name) are roster-wide, so validation merges
     // the changed batch over the stored roster. This runs OUTSIDE the
@@ -74,6 +84,21 @@ export async function handleLayoutsRoutes(req: Request, db: DbClient): Promise<R
       const layout = savedLayoutFromRow(r)
       return layout ? [layout] : []
     })
+    const reapedIds = existingLayouts.filter((layout) => !layoutIds.has(layout.id)).map((layout) => layout.id)
+    if (!canEditStructure && (body.changedLayouts.length > 0 || reapedIds.length > 0)) {
+      return jsonResponse(
+        {
+          error: new ForbiddenSiteChangeError(
+            'structure',
+            'layoutIds',
+            reapedIds.length > 0 ? `layout roster removed ${reapedIds.join(', ')}` : 'layout changed',
+          ).message,
+          kind: 'structure',
+          path: 'layoutIds',
+        },
+        { status: 403 },
+      )
+    }
 
     let layouts: SavedLayout[]
     try {

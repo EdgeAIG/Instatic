@@ -127,4 +127,17 @@ describe('useModuleInserterPreference', () => {
     expect(result.current.error).toBe('nope')
     expect(logged).toHaveBeenCalled()
   })
+
+  it('keeps defaults without logging when the session expires during preference load', async () => {
+    const logged = mock(() => {})
+    console.error = logged as typeof console.error
+    globalThis.fetch = mock(async () => jsonResponse({ error: 'Unauthorized' }, 401)) as typeof fetch
+
+    const { result } = renderHook(() => useModuleInserterPreference())
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.favorites).toEqual(DEFAULT_MODULE_INSERTER_PREFERENCE.favorites)
+    expect(result.current.error).toBeNull()
+    expect(logged).not.toHaveBeenCalled()
+  })
 })

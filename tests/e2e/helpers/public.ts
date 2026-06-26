@@ -14,6 +14,8 @@ export async function visitPublicPage(
   options: {
     /** Route to open, relative to the public origin. Defaults to the homepage. */
     path?: string
+    /** Optional visitor viewport to apply before the public page is loaded. */
+    viewport?: { width: number; height: number }
     /** Text that must be present in the published page. */
     visibleText?: string | string[]
     /** Text that must NOT appear (e.g. an unpublished draft edit). */
@@ -22,7 +24,9 @@ export async function visitPublicPage(
     assert?: (page: import('@playwright/test').Page) => Promise<void>
   },
 ): Promise<void> {
-  const context = await browser.newContext()
+  const context = await browser.newContext(
+    options.viewport ? { viewport: options.viewport } : {},
+  )
   const visitor = await context.newPage()
   try {
     await visitor.goto(`${PUBLIC_BASE_URL}${options.path ?? '/'}`)

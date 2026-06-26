@@ -14,8 +14,11 @@ import { CMS_SITE_BUNDLE_IMPORTED_EVENT } from '@admin/state/adminEvents'
 import { useAdminUi } from '@admin/state/adminUi'
 import { useWorkspaceLayout } from '@admin/state/workspaceLayout'
 import {
+  canAccessDataRows,
   canCreateContent,
   canEditAnyContent,
+  canExportData,
+  canImportData,
   canManageDataTables,
   canManageTable,
 } from '@admin/access'
@@ -41,12 +44,15 @@ export function DataPage() {
   // briefly painted full-admin UI in any session-rehydration race.)
   const permissionUser = useAuthenticatedAdminUser()
 
-  const canEdit = canEditAnyContent(permissionUser)
-  const canCreate = canCreateContent(permissionUser)
-  const canManage = canManageDataTables(permissionUser)
-  const canDelete = canManage
+  const canEditRows = canEditAnyContent(permissionUser)
+  const canCreateRows = canCreateContent(permissionUser)
+  const canManageCustomTables = canManageDataTables(permissionUser)
+  const canDeleteRows = canEditRows
+  const canExport = canExportData(permissionUser)
+  const canImport = canImportData(permissionUser)
+  const canLoadRows = canAccessDataRows(permissionUser)
 
-  const workspace = useDataWorkspace()
+  const workspace = useDataWorkspace({ shouldLoadRows: canLoadRows })
   const setRightPanel = useWorkspaceLayout((s) => s.setRightPanel)
   const openSiteImport = useAdminUi((s) => s.openSiteImport)
   const openSiteExport = useAdminUi((s) => s.openSiteExport)
@@ -193,7 +199,7 @@ export function DataPage() {
   // Schema management is kind-aware: custom tables need `data.custom.tables.manage`,
   // system tables need `data.system.tables.manage`. Deletion is never allowed on
   // a system table (the server blocks it; the UI hides the affordance).
-  const canManageSchema = selectedTable ? canManageTable(permissionUser, selectedTable) : canManage
+  const canManageSchema = selectedTable ? canManageTable(permissionUser, selectedTable) : canManageCustomTables
   const canDeleteTable = Boolean(selectedTable) && canManageSchema && !selectedTable?.system
 
   const rightPanel = selectedTable ? (
@@ -213,7 +219,7 @@ export function DataPage() {
       onOpenInSiteEditor={handleOpenInSiteEditor}
       onPublishRow={async (rowId) => workspace.publishRow(rowId)}
       onSetRowStatus={async (rowId, status) => workspace.setRowStatus(rowId, status)}
-      canEdit={canEdit}
+      canEdit={canEditRows}
       canManageSchema={canManageSchema}
       canDelete={canDeleteTable}
     />
@@ -242,8 +248,10 @@ export function DataPage() {
               initialScope: 'all',
             })}
             onOpenImport={openSiteImport}
-            canCreate={canCreate}
-            canManage={canManage}
+            canCreateTable={canManageCustomTables}
+            canManage={canManageCustomTables}
+            canExport={canExport}
+            canImport={canImport}
           />
         )}
         contentCanvas={(
@@ -268,9 +276,10 @@ export function DataPage() {
               selectedRowIds: rowIds,
               initialScope: 'selected',
             })}
-            canCreate={canCreate}
-            canEdit={canEdit}
-            canDelete={canDelete}
+            canCreate={canCreateRows}
+            canEdit={canEditRows}
+            canDelete={canDeleteRows}
+            canExport={canExport}
           />
         )}
         contentRightPanel={rightPanel}

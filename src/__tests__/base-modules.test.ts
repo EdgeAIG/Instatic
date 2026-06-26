@@ -31,27 +31,33 @@ import { escapeProps } from '@core/publisher'
 import { TextModule } from '@modules/base/text'
 import { ButtonModule } from '@modules/base/button'
 import { ContainerModule } from '@modules/base/container'
+import { LoopModule } from '@modules/base/loop'
 import { ImageModule } from '@modules/base/image'
+import { SvgModule } from '@modules/base/svg'
 import { VideoModule } from '@modules/base/video'
 import { ListModule } from '@modules/base/list'
 import { LinkModule } from '@modules/base/link'
 import { BodyModule } from '@modules/base/body'
 import { VisualComponentRefModule } from '@modules/base/visualComponentRef'
+import { SlotInstanceModule } from '@modules/base/slotInstance'
 import { SlotOutletModule } from '@modules/base/slotOutlet'
 
 // ---------------------------------------------------------------------------
-// Run the full conformance suite for every canonical base module (7 total)
+// Run the full conformance suite for every canonical base module.
 // Context #338 — Canonical Base Module List
 // ---------------------------------------------------------------------------
 
 runModuleConformanceSuite(TextModule)
 runModuleConformanceSuite(ButtonModule)
 runModuleConformanceSuite(ContainerModule)
+runModuleConformanceSuite(LoopModule)
 runModuleConformanceSuite(ImageModule)
+runModuleConformanceSuite(SvgModule)
 runModuleConformanceSuite(VideoModule)
 runModuleConformanceSuite(ListModule)
 runModuleConformanceSuite(LinkModule)
 runModuleConformanceSuite(VisualComponentRefModule)
+runModuleConformanceSuite(SlotInstanceModule)
 runModuleConformanceSuite(SlotOutletModule)
 
 describe('base module registration', () => {
@@ -66,7 +72,9 @@ describe('base module registration', () => {
     expect(baseIndex).not.toContain("import './heading'")
     expect(baseIndex).not.toContain("import './paragraph'")
 
-    // Component system modules — registered and shipped
+    // Media and component system modules — registered and shipped
+    expect(baseIndex).toContain("import './svg'")
+    expect(baseIndex).toContain("import './slotInstance'")
     expect(baseIndex).toContain("import './visualComponentRef'")
     expect(baseIndex).toContain("import './slotOutlet'")
   })
@@ -91,13 +99,16 @@ describe('base module registration', () => {
     for (const mod of [
       BodyModule,
       ContainerModule,
+      LoopModule,
       TextModule,
       ListModule,
       ImageModule,
+      SvgModule,
       VideoModule,
       ButtonModule,
       LinkModule,
       VisualComponentRefModule,
+      SlotInstanceModule,
       SlotOutletModule,
     ]) {
       // No module should declare CSS-only props as module schema fields.
@@ -106,6 +117,99 @@ describe('base module registration', () => {
         expect(Object.keys(mod.schema)).not.toContain(propName)
       }
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// base.visual-component-ref / slots — module contract specifics
+// ---------------------------------------------------------------------------
+
+describe('base.visual-component-ref and slot modules — contract specifics', () => {
+  it('declares the component-ref special renderer boundary', () => {
+    expect(VisualComponentRefModule.id).toBe('base.visual-component-ref')
+    expect(VisualComponentRefModule.canHaveChildren).toBe(true)
+    expect(VisualComponentRefModule.publishBehavior).toBe('special')
+    expect(Object.keys(VisualComponentRefModule.schema)).toEqual([])
+    expect(Object.keys(VisualComponentRefModule.defaults).sort()).toEqual(['componentId', 'propOverrides'])
+    expect(VisualComponentRefModule.render(VisualComponentRefModule.defaults, ['<p>slot</p>']).html)
+      .toBe('<p>slot</p>')
+  })
+
+  it('keeps slot placeholders transparent in published output', () => {
+    expect(SlotOutletModule.id).toBe('base.slot-outlet')
+    expect(SlotOutletModule.publishBehavior).toBe('transparent')
+    expect(SlotOutletModule.canHaveChildren).toBe(false)
+    expect(SlotOutletModule.defaults).toEqual({ slotName: 'children' })
+    expect(SlotOutletModule.render(SlotOutletModule.defaults, []).html).toBe('')
+
+    expect(SlotInstanceModule.id).toBe('base.slot-instance')
+    expect(SlotInstanceModule.publishBehavior).toBe('transparent')
+    expect(SlotInstanceModule.canHaveChildren).toBe(true)
+    expect(SlotInstanceModule.defaults).toEqual({ slotName: 'children' })
+    expect(SlotInstanceModule.render(SlotInstanceModule.defaults, ['<p>consumer content</p>']).html).toBe('')
+  })
+
+  it('keeps slot metadata structural rather than visual', () => {
+    expect(Object.keys(SlotOutletModule.schema)).toEqual(['slotName'])
+    expect(Object.keys(SlotInstanceModule.schema)).toEqual(['slotName'])
+    expect(SlotOutletModule.schema.slotName).toMatchObject({ type: 'text', label: 'Slot name' })
+    expect(SlotInstanceModule.schema.slotName).toMatchObject({ type: 'text', label: 'Slot name' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// base.loop — module-specific tests
+// ---------------------------------------------------------------------------
+
+describe('base.loop — module contract specifics', () => {
+  it('uses dynamic loop properties outside the generic schema renderer', () => {
+    expect(LoopModule.id).toBe('base.loop')
+    expect(LoopModule.canHaveChildren).toBe(true)
+    expect(LoopModule.publishBehavior).toBe('special')
+    expect(Object.keys(LoopModule.schema)).toEqual([])
+    expect(Object.keys(LoopModule.defaults).sort()).toEqual([
+      'customTag',
+      'direction',
+      'filters',
+      'limit',
+      'offset',
+      'orderBy',
+      'pageSize',
+      'pagination',
+      'sourceId',
+      'tag',
+    ])
+    expect(LoopModule.defaults).toMatchObject({
+      sourceId: '',
+      filters: {},
+      orderBy: '',
+      direction: 'desc',
+      limit: 10,
+      offset: 0,
+      pagination: 'none',
+      pageSize: 10,
+      tag: 'div',
+      customTag: '',
+    })
+  })
+
+  it('resolves safe wrapper tags for publisher and canvas affordances', () => {
+    const resolveLoopTag = LoopModule.htmlTag
+    if (typeof resolveLoopTag !== 'function') {
+      throw new Error('LoopModule.htmlTag must resolve from loop props')
+    }
+
+    expect(resolveLoopTag({ ...LoopModule.defaults, tag: 'section' })).toBe('section')
+    expect(resolveLoopTag({ ...LoopModule.defaults, tag: 'custom', customTag: 'Article-Card' })).toBe('article-card')
+    expect(resolveLoopTag({ ...LoopModule.defaults, tag: 'custom', customTag: '1-invalid' })).toBe('div')
+    expect(resolveLoopTag({ ...LoopModule.defaults, tag: 'script' })).toBe('div')
+  })
+
+  it('keeps direct render as a special-renderer fallback only', () => {
+    const { html } = LoopModule.render(LoopModule.defaults, ['<p>child</p>'])
+
+    expect(html).toContain('loop render fell through to default')
+    expect(html).not.toContain('<p>child</p>')
   })
 })
 
@@ -295,6 +399,68 @@ describe('base.button — render() specifics', () => {
   it('does not access DOM globals', () => {
     expect(() =>
       withBannedGlobals(() => ButtonModule.render(ButtonModule.defaults, []))
+    ).not.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// base.body — module-specific tests
+// ---------------------------------------------------------------------------
+
+describe('base.body — render() specifics', () => {
+  it('is a container module that represents the document body', () => {
+    expect(BodyModule.canHaveChildren).toBe(true)
+    expect(BodyModule.htmlTag).toBe('body')
+  })
+
+  it('renders children directly with no published wrapper element', () => {
+    const child1 = '<header>Header</header>'
+    const child2 = '<main>Body</main>'
+
+    const { html } = renderModule(BodyModule, { ignoredPersistedField: true }, [child1, child2])
+
+    expect(html).toBe(`${child1}${child2}`)
+    expect(html).not.toContain('<body')
+    expect(html).not.toContain('</body>')
+  })
+
+  it('applies editor identity to the iframe body without wrapping children', () => {
+    const editorDocument = document.implementation.createHTMLDocument('canvas')
+    const mount = editorDocument.createElement('div')
+    editorDocument.body.appendChild(mount)
+
+    const { container } = renderReact(
+      React.createElement(BodyModule.component, {
+        props: {},
+        nodeId: 'body-node',
+        isSelected: true,
+        mcClassName: 'ist-body',
+        nodeWrapperProps: {
+          'data-node-id': 'body-node',
+          'data-module-id': 'base.body',
+          'data-canvas-selected': 'true',
+          tabIndex: 0,
+        },
+        children: React.createElement('p', null, 'Body child'),
+      } as never),
+      { container: mount },
+    )
+
+    expect(editorDocument.body.getAttribute('data-node-id')).toBe('body-node')
+    expect(editorDocument.body.getAttribute('data-module-id')).toBe('base.body')
+    expect(editorDocument.body.getAttribute('data-canvas-selected')).toBe('true')
+    expect(editorDocument.body.getAttribute('tabindex')).toBe('0')
+    expect(editorDocument.body.className).toBe('ist-body')
+    expect(container.querySelector('[data-instatic-body-probe]')?.getAttribute('aria-hidden')).toBe('true')
+    expect(container.querySelector('p')?.textContent).toBe('Body child')
+    expect(container.firstElementChild?.nextElementSibling?.tagName).toBe('P')
+  })
+
+  it('does not access DOM globals during publish render', () => {
+    expect(() =>
+      withBannedGlobals(() =>
+        BodyModule.render(BodyModule.defaults, ['<main>child</main>'])
+      )
     ).not.toThrow()
   })
 })
@@ -631,6 +797,91 @@ describe('base.image — render() specifics', () => {
   it('does not access DOM globals', () => {
     expect(() =>
       withBannedGlobals(() => ImageModule.render(ImageModule.defaults, []))
+    ).not.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// base.svg — module-specific tests
+// ---------------------------------------------------------------------------
+
+describe('base.svg — render() specifics', () => {
+  it('has only inline markup and accessible-label settings', () => {
+    expect(Object.keys(SvgModule.schema).sort()).toEqual(['svg', 'title'])
+    expect(SvgModule.canHaveChildren).toBe(false)
+    expect(SvgModule.htmlTag).toBe('svg')
+  })
+
+  it('returns empty html when svg markup is empty', () => {
+    expect(renderModule(SvgModule, { svg: '' }).html).toBe('')
+    expect(renderModule(SvgModule, { svg: '   ' }).html).toBe('')
+  })
+
+  it('renders sanitized inline SVG from the publisher escape boundary', () => {
+    const preservedProps = escapeProps({
+      ...SvgModule.defaults,
+      svg: '<svg viewBox="0 0 24 24"><path d="M1 1h22"/></svg>',
+    }, SvgModule.schema)
+
+    const { html: preservedHtml } = SvgModule.render(preservedProps, [])
+
+    expect(preservedHtml).toContain('<svg')
+    expect(preservedHtml).toContain('viewBox="0 0 24 24"')
+    expect(preservedHtml).toContain('<path')
+
+    const unsafeProps = escapeProps({
+      ...SvgModule.defaults,
+      svg: '<svg onload="alert(1)"><script>alert(1)</script><foreignObject><p>x</p></foreignObject></svg>',
+    }, SvgModule.schema)
+
+    const { html: unsafeHtml } = SvgModule.render(unsafeProps, [])
+
+    expect(unsafeHtml.toLowerCase()).not.toContain('<script')
+    expect(unsafeHtml.toLowerCase()).not.toContain('onload')
+    expect(unsafeHtml.toLowerCase()).not.toContain('foreignobject')
+    expect(unsafeHtml).not.toContain('alert(1)')
+  })
+
+  it('adds an escaped accessible label to the root svg when title is set', () => {
+    const safeProps = escapeProps({
+      ...SvgModule.defaults,
+      svg: '<svg viewBox="0 0 10 10"><path d="M0 0"/></svg>',
+      title: 'Logo "mark"',
+    }, SvgModule.schema)
+
+    const { html } = SvgModule.render(safeProps, [])
+
+    expect(html).toContain('<svg role="img" aria-label="Logo &quot;mark&quot;"')
+  })
+
+  it('sanitizes SVG markup again in the editor preview', () => {
+    const { container } = renderReact(
+      React.createElement(SvgModule.component, {
+        props: {
+          svg: '<svg viewBox="0 0 10 10" onload="alert(1)"><script>alert(1)</script><path d="M0 0"/></svg>',
+          title: 'Preview mark',
+        },
+        nodeId: 'svg-node',
+        isSelected: false,
+        mcClassName: 'ist-svg',
+        nodeWrapperProps: { 'data-node-id': 'svg-node', 'data-module-id': 'base.svg', tabIndex: 0 },
+      } as never),
+    )
+
+    const wrapper = container.querySelector('span')
+    expect(wrapper?.getAttribute('role')).toBe('img')
+    expect(wrapper?.getAttribute('aria-label')).toBe('Preview mark')
+    expect(wrapper?.classList.contains('ist-svg')).toBe(true)
+    expect(wrapper?.querySelector('svg')).not.toBeNull()
+    expect(wrapper?.innerHTML.toLowerCase()).not.toContain('<script')
+    expect(wrapper?.innerHTML.toLowerCase()).not.toContain('onload')
+  })
+
+  it('does not access DOM globals during publish render', () => {
+    expect(() =>
+      withBannedGlobals(() =>
+        SvgModule.render(SvgModule.defaults, [])
+      )
     ).not.toThrow()
   })
 })

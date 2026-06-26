@@ -23,6 +23,8 @@
  * editor has hydrated once.
  */
 import { useEffect } from 'react'
+import { hasCapability } from '@admin/access'
+import { useCurrentAdminUser } from '@admin/sessionContext'
 import { cmsAdapter } from '@core/persistence/cms'
 import { useAdminUi } from './adminUi'
 import { CMS_SITE_RELOAD_EVENT } from './adminEvents'
@@ -42,7 +44,15 @@ async function fetchAndPublishSummary(): Promise<void> {
 }
 
 export function useSiteSummary(): void {
+  const currentUser = useCurrentAdminUser()
+  const canReadSite = currentUser === null || hasCapability(currentUser, 'site.read')
+
   useEffect(() => {
+    if (!canReadSite) {
+      useAdminUi.getState().setSiteSummary({ name: null, faviconUrl: null })
+      return
+    }
+
     // Share the single in-flight fetch across concurrent admin-shell mounts.
     if (initialFetchPromise === null) {
       initialFetchPromise = fetchAndPublishSummary()
@@ -57,5 +67,5 @@ export function useSiteSummary(): void {
     return () => {
       window.removeEventListener(CMS_SITE_RELOAD_EVENT, onReload)
     }
-  }, [])
+  }, [canReadSite])
 }

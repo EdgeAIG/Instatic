@@ -63,6 +63,7 @@ export function SavedLayoutManageMenu({
       y={menu.y}
       ariaLabel={`${menu.name} options`}
       onClose={onClose}
+      zIndex={10000}
     >
       <ContextMenuItem onClick={handleRename}>
         <span aria-hidden="true"><PenSquareSolidIcon size={13} /></span>

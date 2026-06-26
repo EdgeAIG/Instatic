@@ -12,6 +12,27 @@ import {
   SubmitModule,
   TextareaModule,
 } from '@modules/base/forms'
+import { escapeProps } from '@core/publisher'
+import { runModuleConformanceSuite } from '../helpers'
+import '../matchers'
+
+const FORM_MODULES = [
+  FormModule,
+  LabelModule,
+  InputModule,
+  TextareaModule,
+  SelectModule,
+  OptionModule,
+  OptionGroupModule,
+  CheckboxModule,
+  RadioModule,
+  SubmitModule,
+  FormMessageModule,
+]
+
+for (const mod of FORM_MODULES) {
+  runModuleConformanceSuite(mod)
+}
 
 describe('base form primitive modules', () => {
   // ISS-027: a control with fieldId set but `name` left blank must still render
@@ -142,5 +163,70 @@ describe('base form primitive modules', () => {
       kind: 'success',
       text: 'Thanks',
     }, []).html).toBe('<div data-instatic-form-message="success" data-instatic-form-id="newsletter" role="status">Thanks</div>')
+  })
+
+  it('escapes authored form text and attributes through the publisher boundary', () => {
+    const labelProps = escapeProps({
+      ...LabelModule.defaults,
+      text: '<b>Email</b>',
+      targetMode: 'explicit',
+      targetId: 'email" autofocus="true',
+    }, LabelModule.schema)
+    const labelHtml = LabelModule.render(labelProps, []).html
+
+    expect(labelHtml).toBeCleanHTML()
+    expect(labelHtml).toContain('for="email&quot; autofocus=&quot;true"')
+    expect(labelHtml).toContain('&lt;b&gt;Email&lt;/b&gt;')
+    expect(labelHtml).not.toContain('<b>Email</b>')
+
+    const inputProps = escapeProps({
+      ...InputModule.defaults,
+      fieldId: 'email',
+      name: 'email',
+      placeholder: 'Email "address"',
+      value: '" autofocus="true',
+      pattern: '[^"]+',
+    }, InputModule.schema)
+    const inputHtml = InputModule.render(inputProps, []).html
+
+    expect(inputHtml).toBeCleanHTML()
+    expect(inputHtml).toContain('placeholder="Email &quot;address&quot;"')
+    expect(inputHtml).toContain('value="&quot; autofocus=&quot;true"')
+    expect(inputHtml).toContain('pattern="[^&quot;]+"')
+
+    const textareaProps = escapeProps({
+      ...TextareaModule.defaults,
+      fieldId: 'message',
+      name: 'message',
+      value: '<script>alert(1)</script>',
+    }, TextareaModule.schema)
+    const textareaHtml = TextareaModule.render(textareaProps, []).html
+
+    expect(textareaHtml).toBeCleanHTML()
+    expect(textareaHtml).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+    expect(textareaHtml).not.toContain('<script>')
+  })
+
+  it('normalizes configured form ids while preserving safe custom-action URLs', () => {
+    const formOutput = FormModule.render({
+      ...FormModule.defaults,
+      mode: 'custom',
+      formId: 'Contact Form!',
+      action: 'https://example.com/submit',
+      method: 'post',
+      successBehavior: 'redirect',
+      redirectUrl: 'javascript:alert(1)',
+    }, [])
+
+    expect(formOutput.html).toContain('data-instatic-form-id="Contact-Form"')
+    expect(formOutput.html).toContain('action="https://example.com/submit"')
+    expect(formOutput.html).toContain('data-instatic-success-redirect="#"')
+    expect(formOutput.html).not.toContain('javascript:')
+    expect(formOutput.js).toBeUndefined()
+
+    expect(SubmitModule.render({ ...SubmitModule.defaults, formId: 'Contact Form!' }, []).html)
+      .toBe('<button type="submit" form="Contact-Form">Submit</button>')
+    expect(FormMessageModule.render({ ...FormMessageModule.defaults, formId: 'Contact Form!' }, []).html)
+      .toContain('data-instatic-form-id="Contact-Form"')
   })
 })

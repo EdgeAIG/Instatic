@@ -1,11 +1,13 @@
 .sidebar {
     position: relative;
-    z-index: 55;
+    z-index: 85;
     display: flex;
     --right-sidebar-panel-width: 0px;
     --right-sidebar-panel-layout-width: var(--right-sidebar-panel-width);
-    flex: 0 0 var(--right-sidebar-panel-width);
-    width: var(--right-sidebar-panel-width);
+    --right-sidebar-panel-render-width: min(var(--right-sidebar-panel-width), 100vw);
+    --right-sidebar-panel-render-layout-width: min(var(--right-sidebar-panel-layout-width), 100vw);
+    flex: 0 0 var(--right-sidebar-panel-render-width);
+    width: var(--right-sidebar-panel-render-width);
     min-width: 0;
     min-height: 0;
     overflow: hidden;
@@ -24,7 +26,7 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: var(--right-sidebar-panel-layout-width);
+    width: var(--right-sidebar-panel-render-layout-width);
     min-height: 0;
     overflow: hidden;
 }
@@ -32,5 +34,14 @@
 @media (prefers-reduced-motion: reduce) {
     .sidebar {
         transition: none;
+    }
+}
+
+@media (max-width: 760px) {
+    .sidebar {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
     }
 }

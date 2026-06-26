@@ -8,6 +8,7 @@ import {
   type Ref,
   type RefObject,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@ui/cn'
 import {
   type FloatingAlign,
@@ -273,7 +274,7 @@ export function ContextMenu({
     onKeyDown?.(event)
   }
 
-  return (
+  return createPortal(
     <div
       ref={setMenuRef}
       role="menu"
@@ -306,6 +307,7 @@ export function ContextMenu({
       ) : (
         children
       )}
-    </div>
+    </div>,
+    document.body,
   )
 }

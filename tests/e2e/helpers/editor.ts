@@ -30,9 +30,19 @@ export async function openSiteEditor(page: Page): Promise<void> {
   await expectEditorReady(page)
 }
 
-/** The first canvas iframe (the design-mode breakpoint frame). */
+/** The default Desktop design-mode canvas iframe. */
 export function canvasFrame(page: Page): FrameLocator {
-  return page.frameLocator('iframe[title^="Canvas frame"]').first()
+  return canvasFrameForBreakpoint(page, 'desktop')
+}
+
+/** A design-mode canvas iframe for a specific breakpoint. */
+export function canvasFrameForBreakpoint(
+  page: Page,
+  breakpointId: string,
+): FrameLocator {
+  return page
+    .getByTestId(`canvas-frame-${breakpointId}`)
+    .frameLocator('iframe[title^="Canvas frame"]')
 }
 
 /**
@@ -132,8 +142,16 @@ export async function createPage(
 
 /** Save the current draft and wait for the "Draft saved" status. */
 export async function saveDraft(page: Page): Promise<void> {
-  await page.getByTestId('toolbar-publish-actions-trigger').click()
-  await page.getByTestId('toolbar-save-draft-action').click()
+  const trigger = page.getByTestId('toolbar-publish-actions-trigger')
+  const saveAction = page.getByTestId('toolbar-save-draft-action')
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await trigger.click()
+    const opened = await saveAction.isVisible({ timeout: 1_000 }).catch(() => false)
+    if (opened) break
+    await page.keyboard.press('Escape')
+  }
+  await expect(saveAction).toBeVisible()
+  await saveAction.click()
   await expect(page.getByRole('status', { name: 'Draft saved' })).toBeVisible({
     timeout: 20_000,
   })

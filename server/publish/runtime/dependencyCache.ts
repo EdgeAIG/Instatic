@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { SiteDependencyLock } from '@core/site-runtime'
 
 export interface RuntimeDependencyCache {
@@ -81,7 +81,7 @@ export function runtimeDependencyLockHash(lock: SiteDependencyLock): string {
 
 /** Root of the runtime dependency cache. Overridable via `RUNTIME_CACHE_DIR`. */
 export function cacheRootDir(): string {
-  return process.env.RUNTIME_CACHE_DIR || join(tmpdir(), 'instatic-runtime-cache')
+  return resolve(process.env.RUNTIME_CACHE_DIR || join(tmpdir(), 'instatic-runtime-cache'))
 }
 
 /** Directory holding all per-hash workspaces under a cache root. */

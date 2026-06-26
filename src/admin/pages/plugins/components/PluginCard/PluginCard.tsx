@@ -60,6 +60,9 @@ interface PluginCardLoadingProps {
   onReinstall?: never
   onToggle?: never
   onRemove?: never
+  canConfigure?: never
+  canInstall?: never
+  canManageLifecycle?: never
 }
 
 interface PluginCardDataProps {
@@ -77,6 +80,9 @@ interface PluginCardDataProps {
    * editor canvas) so they're rendered as separate lines.
    */
   editorActivationError?: string
+  canConfigure: boolean
+  canInstall: boolean
+  canManageLifecycle: boolean
   onOpenSettings: (plugin: InstalledPlugin) => void
   onOpenSchedules: (plugin: InstalledPlugin) => void
   onInstallPack: (plugin: InstalledPlugin) => void
@@ -125,6 +131,9 @@ export function PluginCard(props: PluginCardProps) {
     plugin,
     busy,
     editorActivationError,
+    canConfigure,
+    canInstall,
+    canManageLifecycle,
     onOpenSettings,
     onOpenSchedules,
     onInstallPack,
@@ -172,7 +181,7 @@ export function PluginCard(props: PluginCardProps) {
         </div>
 
         <div className={styles.pluginActions}>
-          {status.status !== 'error' && plugin.manifest.settings && plugin.manifest.settings.length > 0 && (
+          {canConfigure && status.status !== 'error' && plugin.manifest.settings && plugin.manifest.settings.length > 0 && (
             <Button
               variant="secondary"
               size="sm"
@@ -194,7 +203,8 @@ export function PluginCard(props: PluginCardProps) {
               <span>Schedules</span>
             </Button>
           )}
-          {status.status !== 'error' &&
+          {canInstall &&
+            status.status !== 'error' &&
             plugin.manifest.pack &&
             plugin.grantedPermissions.includes('visualComponents.register') &&
             // Re-syncing a disabled plugin's pack would inject
@@ -214,7 +224,7 @@ export function PluginCard(props: PluginCardProps) {
                 <span>Re-sync pack</span>
               </Button>
             )}
-          {status.status === 'error' && (
+          {canInstall && status.status === 'error' && (
             <Button
               variant="secondary"
               size="sm"
@@ -226,7 +236,7 @@ export function PluginCard(props: PluginCardProps) {
               <span>Reinstall</span>
             </Button>
           )}
-          {plugin.enabled && status.status === 'error' && (
+          {canManageLifecycle && plugin.enabled && status.status === 'error' && (
             <Button
               variant="primary"
               size="sm"
@@ -238,7 +248,7 @@ export function PluginCard(props: PluginCardProps) {
               <span>Restart</span>
             </Button>
           )}
-          {status.status !== 'error' && (
+          {canManageLifecycle && status.status !== 'error' && (
             <Button
               variant="secondary"
               size="sm"
@@ -254,16 +264,18 @@ export function PluginCard(props: PluginCardProps) {
               <span>{plugin.enabled ? 'Disable' : 'Enable'}</span>
             </Button>
           )}
-          <Button
-            variant="destructive"
-            size="sm"
-            disabled={busy}
-            onClick={() => onRemove(plugin)}
-            aria-label={`Remove ${plugin.name}`}
-          >
-            <TrashSolidIcon size={14} aria-hidden="true" />
-            <span>Remove</span>
-          </Button>
+          {canInstall && (
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={busy}
+              onClick={() => onRemove(plugin)}
+              aria-label={`Remove ${plugin.name}`}
+            >
+              <TrashSolidIcon size={14} aria-hidden="true" />
+              <span>Remove</span>
+            </Button>
+          )}
         </div>
       </header>
 

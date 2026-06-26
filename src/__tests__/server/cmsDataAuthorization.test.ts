@@ -135,6 +135,61 @@ async function createRow(
   return payload.row.id
 }
 
+async function createTable(
+  db: DbClient,
+  cookie: string,
+  input: { name: string; slug: string; kind: 'data' | 'postType' },
+): Promise<string> {
+  const fields = input.kind === 'postType'
+    ? [
+        { id: 'title', label: 'Title', type: 'text', required: true },
+        { id: 'slug', label: 'Slug', type: 'text', required: true },
+      ]
+    : [
+        { id: 'title', label: 'Title', type: 'text', required: true },
+      ]
+  const res = await request(db, '/admin/api/cms/data/tables', {
+    method: 'POST',
+    cookie,
+    body: JSON.stringify({
+      name: input.name,
+      slug: input.slug,
+      kind: input.kind,
+      singularLabel: input.name,
+      pluralLabel: input.name,
+      fields,
+    }),
+  })
+  expect(res.status).toBe(201)
+  const payload = await body(res) as { table: { id: string } }
+  return payload.table.id
+}
+
+async function createRowInTable(
+  db: DbClient,
+  cookie: string,
+  tableId: string,
+  title: string,
+): Promise<string> {
+  return createRowInTableWithCells(db, cookie, tableId, { title })
+}
+
+async function createRowInTableWithCells(
+  db: DbClient,
+  cookie: string,
+  tableId: string,
+  cells: Record<string, unknown>,
+): Promise<string> {
+  const res = await request(db, `/admin/api/cms/data/tables/${tableId}/rows`, {
+    method: 'POST',
+    cookie,
+    body: JSON.stringify({ cells }),
+  })
+  expect(res.status).toBe(201)
+  const payload = await body(res) as { row: { id: string } }
+  return payload.row.id
+}
+
 describe('CMS data ownership authorization', () => {
   const cleanupFns: Array<() => Promise<void>> = []
 
@@ -270,5 +325,223 @@ describe('CMS data ownership authorization', () => {
     })
     expect(reassign.status).toBe(200)
     expect(await body(reassign)).toMatchObject({ row: { authorUserId: managerId } })
+  })
+
+  it('schedules and cancels row publication only through the schedule endpoint', async () => {
+    const { db } = await makeDb()
+    const ownerCookie = await setupOwner(db)
+    const rowId = await createRow(db, ownerCookie, 'Scheduled Draft')
+
+    const past = await request(db, `/admin/api/cms/data/rows/${rowId}/schedule`, {
+      method: 'POST',
+      cookie: ownerCookie,
+      body: JSON.stringify({ at: '2001-01-01T00:00:00.000Z' }),
+    })
+    expect(past.status).toBe(400)
+    expect(await body(past)).toEqual({ error: 'Scheduled time must be in the future' })
+
+    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    const schedule = await request(db, `/admin/api/cms/data/rows/${rowId}/schedule`, {
+      method: 'POST',
+      cookie: ownerCookie,
+      body: JSON.stringify({ at: scheduledAt }),
+    })
+    expect(schedule.status).toBe(200)
+    expect(await body(schedule)).toMatchObject({
+      row: {
+        id: rowId,
+        status: 'scheduled',
+        scheduledPublishAt: scheduledAt,
+      },
+    })
+
+    const cancel = await request(db, `/admin/api/cms/data/rows/${rowId}/schedule`, {
+      method: 'DELETE',
+      cookie: ownerCookie,
+    })
+    expect(cancel.status).toBe(200)
+    expect(await body(cancel)).toMatchObject({
+      row: {
+        id: rowId,
+        status: 'draft',
+        scheduledPublishAt: null,
+      },
+    })
+
+    const cancelAgain = await request(db, `/admin/api/cms/data/rows/${rowId}/schedule`, {
+      method: 'DELETE',
+      cookie: ownerCookie,
+    })
+    expect(cancelAgain.status).toBe(404)
+    expect(await body(cancelAgain)).toEqual({ error: 'Data row not found' })
+  })
+
+  it('clears scheduled publish metadata when a scheduled row is retracted by status', async () => {
+    const { db } = await makeDb()
+    const ownerCookie = await setupOwner(db)
+    const rowId = await createRow(db, ownerCookie, 'Scheduled Status Retraction')
+    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+
+    const schedule = await request(db, `/admin/api/cms/data/rows/${rowId}/schedule`, {
+      method: 'POST',
+      cookie: ownerCookie,
+      body: JSON.stringify({ at: scheduledAt }),
+    })
+    expect(schedule.status).toBe(200)
+    expect(await body(schedule)).toMatchObject({
+      row: {
+        id: rowId,
+        status: 'scheduled',
+        scheduledPublishAt: scheduledAt,
+      },
+    })
+
+    const retract = await request(db, `/admin/api/cms/data/rows/${rowId}/status`, {
+      method: 'PATCH',
+      cookie: ownerCookie,
+      body: JSON.stringify({ status: 'draft' }),
+    })
+    expect(retract.status).toBe(200)
+    expect(await body(retract)).toMatchObject({
+      row: {
+        id: rowId,
+        status: 'draft',
+        scheduledPublishAt: null,
+      },
+    })
+  })
+
+  it('rejects unsupported status payloads and leaves publish routed to the publish endpoint', async () => {
+    const { db } = await makeDb()
+    const ownerCookie = await setupOwner(db)
+    const rowId = await createRow(db, ownerCookie, 'Status Boundary')
+
+    const invalidStatus = await request(db, `/admin/api/cms/data/rows/${rowId}/status`, {
+      method: 'PATCH',
+      cookie: ownerCookie,
+      body: JSON.stringify({ status: 'published' }),
+    })
+    expect(invalidStatus.status).toBe(400)
+    expect(await body(invalidStatus)).toEqual({ error: 'Status must be draft or unpublished' })
+
+    const publish = await request(db, `/admin/api/cms/data/rows/${rowId}/publish`, {
+      method: 'POST',
+      cookie: ownerCookie,
+    })
+    expect(publish.status).toBe(200)
+    expect(await body(publish)).toMatchObject({ row: { id: rowId, status: 'published' } })
+
+    const unpublish = await request(db, `/admin/api/cms/data/rows/${rowId}/status`, {
+      method: 'PATCH',
+      cookie: ownerCookie,
+      body: JSON.stringify({ status: 'unpublished' }),
+    })
+    expect(unpublish.status).toBe(200)
+    expect(await body(unpublish)).toMatchObject({
+      row: {
+        id: rowId,
+        status: 'unpublished',
+        publishedAt: null,
+        publishedByUserId: null,
+      },
+    })
+  })
+
+  it('rejects blank or inactive row authors before changing attribution', async () => {
+    const { db } = await makeDb()
+    const ownerCookie = await setupOwner(db)
+    const rowId = await createRow(db, ownerCookie, 'Author Boundary')
+    const inactiveAuthorId = await createUser(db, ownerCookie, {
+      email: 'inactive-author@example.com',
+      displayName: 'Inactive Author',
+      roleId: 'member',
+    })
+    await db`update users set status = ${'suspended'} where id = ${inactiveAuthorId}`
+
+    const blank = await request(db, `/admin/api/cms/data/rows/${rowId}/author`, {
+      method: 'PATCH',
+      cookie: ownerCookie,
+      body: JSON.stringify({ authorUserId: '   ' }),
+    })
+    expect(blank.status).toBe(400)
+    expect(await body(blank)).toEqual({ error: 'Author is required' })
+
+    const inactive = await request(db, `/admin/api/cms/data/rows/${rowId}/author`, {
+      method: 'PATCH',
+      cookie: ownerCookie,
+      body: JSON.stringify({ authorUserId: inactiveAuthorId }),
+    })
+    expect(inactive.status).toBe(400)
+    expect(await body(inactive)).toEqual({ error: 'Author must be an active user' })
+
+    const row = await request(db, `/admin/api/cms/data/rows/${rowId}`, {
+      method: 'GET',
+      cookie: ownerCookie,
+    })
+    expect(row.status).toBe(200)
+    expect(await body(row)).not.toMatchObject({ row: { authorUserId: inactiveAuthorId } })
+  })
+
+  it('rejects draft previews for plain data tables before template rendering', async () => {
+    const { db } = await makeDb()
+    const ownerCookie = await setupOwner(db)
+    const tableId = await createTable(db, ownerCookie, {
+      name: 'Preview Plain Data',
+      slug: 'preview-plain-data',
+      kind: 'data',
+    })
+    const rowId = await createRowInTable(db, ownerCookie, tableId, 'Plain Data Row')
+
+    const preview = await request(db, `/admin/api/cms/data/rows/${rowId}/preview`, {
+      method: 'POST',
+      cookie: ownerCookie,
+      body: JSON.stringify({ cells: { title: 'Draft title' } }),
+    })
+    expect(preview.status).toBe(400)
+    expect(await body(preview)).toEqual({ error: 'Only post-type rows can be previewed' })
+  })
+
+  it('rejects table moves that would collide with an existing target slug', async () => {
+    const { db } = await makeDb()
+    const ownerCookie = await setupOwner(db)
+    const sourceTableId = await createTable(db, ownerCookie, {
+      name: 'Move Source',
+      slug: 'move-source',
+      kind: 'postType',
+    })
+    const targetTableId = await createTable(db, ownerCookie, {
+      name: 'Move Target',
+      slug: 'move-target',
+      kind: 'postType',
+    })
+    const sourceRowId = await createRowInTableWithCells(db, ownerCookie, sourceTableId, {
+      title: 'Source row',
+      slug: 'shared-slug',
+    })
+    await createRowInTableWithCells(db, ownerCookie, targetTableId, {
+      title: 'Target row',
+      slug: 'shared-slug',
+    })
+
+    const move = await request(db, `/admin/api/cms/data/rows/${sourceRowId}/table`, {
+      method: 'PATCH',
+      cookie: ownerCookie,
+      body: JSON.stringify({ tableId: targetTableId }),
+    })
+    expect(move.status).toBe(409)
+    expect(await body(move)).toEqual({ error: 'A row with this slug already exists in the target table' })
+
+    const row = await request(db, `/admin/api/cms/data/rows/${sourceRowId}`, {
+      method: 'GET',
+      cookie: ownerCookie,
+    })
+    expect(row.status).toBe(200)
+    expect(await body(row)).toMatchObject({
+      row: {
+        id: sourceRowId,
+        tableId: sourceTableId,
+        slug: 'shared-slug',
+      },
+    })
   })
 })

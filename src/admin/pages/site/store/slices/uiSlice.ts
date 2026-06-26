@@ -73,6 +73,7 @@ interface UiSlice {
   domTreePanel: PanelState
   propertiesPanel: PanelState
   propertiesPanelMode: PropertiesPanelMode
+  propertiesPanelAutoOpenSuppressed: boolean
   leftSidebarWidth: number
   focusedPanel: FocusedPanel
 
@@ -133,6 +134,7 @@ interface UiSlice {
   // Actions
   setDomTreePanel: (state: Partial<PanelState>) => void
   setPropertiesPanel: (state: Partial<PanelState>) => void
+  consumePropertiesPanelAutoOpenSuppression: () => boolean
   setPropertiesPanelMode: (mode: PropertiesPanelMode) => void
   setLeftSidebarWidth: (width: number) => void
   toggleDomTreePanel: () => void
@@ -303,6 +305,7 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
   domTreePanel: DEFAULT_DOM_TREE_PANEL,
   propertiesPanel: DEFAULT_PROPERTIES_PANEL,
   propertiesPanelMode: 'docked',
+  propertiesPanelAutoOpenSuppressed: false,
   leftSidebarWidth: LEFT_SIDEBAR_DEFAULT_WIDTH,
   focusedPanel: 'canvas',
   previewOpen: false,
@@ -362,6 +365,12 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
     set((state) => {
       state.propertiesPanel = { ...state.propertiesPanel, ...partial }
     })
+  },
+
+  consumePropertiesPanelAutoOpenSuppression: () => {
+    const suppressed = get().propertiesPanelAutoOpenSuppressed
+    if (suppressed) set({ propertiesPanelAutoOpenSuppressed: false })
+    return suppressed
   },
 
   setPropertiesPanelMode: (mode) => {

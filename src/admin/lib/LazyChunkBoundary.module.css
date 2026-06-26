@@ -6,35 +6,35 @@
   min-height: 260px;
   min-width: 0;
   place-items: center;
-  padding: 32px;
-  background: var(--editor-bg);
-  color: var(--editor-text);
+  padding: var(--space-8xl);
+  background: var(--bg-body);
+  color: var(--text);
 }
 
 .panel {
   display: flex;
   width: min(460px, 100%);
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-radius: var(--editor-radius);
-  box-shadow: var(--panel-shadow);
+  gap: var(--space-l);
+  padding: var(--space-2xl);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
 }
 
 .title {
   margin: 0;
-  color: var(--editor-text-bright);
-  font-size: 14px;
+  color: var(--text-bright);
+  font-size: var(--text-l);
   font-weight: 650;
   line-height: 1.3;
 }
 
 .message {
   margin: 0;
-  color: var(--editor-text-secondary);
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--text-s);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -42,5 +42,5 @@
 .actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-m);
 }

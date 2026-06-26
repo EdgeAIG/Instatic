@@ -23,6 +23,7 @@ interface ContentSidebarProps {
    * the workspace chrome instead of floating over it.
    */
   agentPanel: ReactNode
+  canUseAiChat: boolean
 }
 
 export function ContentSidebar({
@@ -31,6 +32,7 @@ export function ContentSidebar({
   contentPanel,
   mediaPanel,
   agentPanel,
+  canUseAiChat,
 }: ContentSidebarProps) {
   const sidebarRef = useRef<HTMLElement | null>(null)
   const leftSidebarWidth = useWorkspaceLayout((s) => s.leftSidebarWidth)
@@ -75,16 +77,18 @@ export function ContentSidebar({
             />
           </div>
         </div>
-        <div className={panelRailStyles.globalGroup} data-testid="panel-rail-global">
-          <ContentRailButton
-            id="agent"
-            label="AI assistant"
-            icon={AiSettingsSolidIcon}
-            iconName="ai-settings-solid"
-            active={activePanel === 'agent'}
-            onToggle={() => onActivePanelChange(activePanel === 'agent' ? null : 'agent')}
-          />
-        </div>
+        {canUseAiChat && (
+          <div className={panelRailStyles.globalGroup} data-testid="panel-rail-global">
+            <ContentRailButton
+              id="agent"
+              label="AI assistant"
+              icon={AiSettingsSolidIcon}
+              iconName="ai-settings-solid"
+              active={activePanel === 'agent'}
+              onToggle={() => onActivePanelChange(activePanel === 'agent' ? null : 'agent')}
+            />
+          </div>
+        )}
       </nav>
 
       <div
@@ -97,7 +101,7 @@ export function ContentSidebar({
             ? contentPanel
             : activePanel === 'media'
               ? mediaPanel
-              : activePanel === 'agent'
+              : activePanel === 'agent' && canUseAiChat
                 ? agentPanel
                 : null}
         </div>

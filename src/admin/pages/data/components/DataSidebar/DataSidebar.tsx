@@ -47,8 +47,10 @@ interface DataSidebarProps {
   onOpenExport: () => void
   /** Opens the canonical Site Import modal in the parent. */
   onOpenImport: () => void
-  canCreate: boolean
+  canCreateTable: boolean
   canManage: boolean
+  canExport: boolean
+  canImport: boolean
 }
 
 interface TableContextMenuState {
@@ -72,8 +74,10 @@ export function DataSidebar({
   onCreateTable,
   onOpenExport,
   onOpenImport,
-  canCreate,
+  canCreateTable,
   canManage,
+  canExport,
+  canImport,
 }: DataSidebarProps) {
   const sidebarRef = useRef<HTMLElement | null>(null)
   const tableListRef = useRef<HTMLDivElement | null>(null)
@@ -225,26 +229,30 @@ export function DataSidebar({
             onClose={() => setDataSidebarCollapsed(true)}
             headerActions={
               <>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  iconOnly
-                  aria-label="Export site"
-                  tooltip="Export site"
-                  onClick={onOpenExport}
-                >
-                  <ArrowDownIcon size={13} aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  iconOnly
-                  aria-label="Import site"
-                  tooltip="Import site"
-                  onClick={onOpenImport}
-                >
-                  <UploadIcon size={13} aria-hidden="true" />
-                </Button>
+                {canExport && (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    iconOnly
+                    aria-label="Export site"
+                    tooltip="Export site"
+                    onClick={onOpenExport}
+                  >
+                    <ArrowDownIcon size={13} aria-hidden="true" />
+                  </Button>
+                )}
+                {canImport && (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    iconOnly
+                    aria-label="Import site"
+                    tooltip="Import site"
+                    onClick={onOpenImport}
+                  >
+                    <UploadIcon size={13} aria-hidden="true" />
+                  </Button>
+                )}
               </>
             }
           >
@@ -300,7 +308,7 @@ export function DataSidebar({
                   <div className={styles.sectionHeader}>
                     <h3 className={styles.sectionTitle}>Custom tables</h3>
                     <span className={styles.sectionCount}>{customTables.length}</span>
-                    {canCreate && (
+                    {canCreateTable && (
                       <span className={styles.headerActions}>
                         <Button
                           variant="ghost"

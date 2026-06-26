@@ -28,6 +28,8 @@ import { useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@ui/components/Button'
 import { Input, Textarea } from '@ui/components/Input'
+import { canDeleteMedia, canReplaceMedia, canWriteMedia } from '@admin/access'
+import { useCurrentAdminUser } from '@admin/sessionContext'
 import { Copy2SolidIcon } from 'pixel-art-icons/icons/copy-2-solid'
 import { ExternalLinkSolidIcon } from 'pixel-art-icons/icons/external-link-solid'
 import { ReloadIcon } from 'pixel-art-icons/icons/reload'
@@ -96,9 +98,13 @@ function formatDate(iso: string): string {
 }
 
 function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
+  const currentUser = useCurrentAdminUser()
   const { asset } = editor
   const [replaceOpen, setReplaceOpen] = useState(false)
   const bucket = bucketForMime(asset.mimeType)
+  const canWrite = canWriteMedia(currentUser)
+  const canReplace = canReplaceMedia(currentUser)
+  const canDelete = canDeleteMedia(currentUser)
 
   // Persistent window position — same key the old detached inspector used,
   // so saved positions carry over for users who already moved it.
@@ -109,19 +115,24 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
 
   // ── Save callbacks ────────────────────────────────────────────────────────
   const saveTitle = async (next: string) => {
+    if (!canWrite) return
     await editor.updateAsset(asset.id, { title: next })
   }
   const saveFilename = async (next: string) => {
+    if (!canWrite) return
     if (!next.trim()) return
     await editor.renameAsset(asset.id, next.trim())
   }
   const saveAltText = async (next: string) => {
+    if (!canWrite) return
     await editor.updateAsset(asset.id, { altText: next })
   }
   const saveCaption = async (next: string) => {
+    if (!canWrite) return
     await editor.updateAsset(asset.id, { caption: next })
   }
   const saveTags = async (next: string[]) => {
+    if (!canWrite) return
     await editor.updateAsset(asset.id, { tags: next })
   }
 
@@ -180,6 +191,7 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
                 onBlur={() => void titleField.flush()}
                 placeholder="Untitled"
                 aria-label="Title"
+                disabled={!canWrite}
               />
             </Field>
             <Field label="Filename">
@@ -188,6 +200,7 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
                 onChange={(e) => filenameField.setLocal(e.target.value)}
                 onBlur={() => void filenameField.flush()}
                 aria-label="Filename"
+                disabled={!canWrite}
               />
             </Field>
           </Section>
@@ -212,16 +225,18 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
                 <ExternalLinkSolidIcon size={13} />
                 <span>Open</span>
               </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                aria-label="Replace file"
-                onClick={() => setReplaceOpen(true)}
-                disabled={asset.deletedAt !== null}
-              >
-                <ReloadIcon size={13} />
-                <span>Replace</span>
-              </Button>
+              {canReplace && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  aria-label="Replace file"
+                  onClick={() => setReplaceOpen(true)}
+                  disabled={asset.deletedAt !== null}
+                >
+                  <ReloadIcon size={13} />
+                  <span>Replace</span>
+                </Button>
+              )}
             </div>
           </Section>
 
@@ -235,6 +250,7 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
                   placeholder="Describe the image for screen readers"
                   aria-label="Alt text"
                   rows={2}
+                  disabled={!canWrite}
                 />
               </Field>
               <Field label="Caption">
@@ -245,6 +261,7 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
                   placeholder="Optional caption"
                   aria-label="Caption"
                   rows={2}
+                  disabled={!canWrite}
                 />
               </Field>
             </Section>
@@ -255,6 +272,7 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
               value={tagsField.local}
               onChange={(next) => tagsField.setLocal(next)}
               palette={editor.tagPalette}
+              disabled={!canWrite}
             />
           </Section>
 
@@ -297,33 +315,39 @@ function ViewerForAsset({ editor, onClose }: ViewerForAssetProps) {
                 In Trash since {formatDate(asset.deletedAt)}
               </p>
               <div className={styles.actionsRow}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void editor.restoreAsset(asset.id)}
-                >
-                  Restore
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => void editor.purgeAsset(asset.id)}
-                >
-                  <TrashSolidIcon size={13} />
-                  <span>Delete permanently</span>
-                </Button>
+                {canWrite && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void editor.restoreAsset(asset.id)}
+                  >
+                    Restore
+                  </Button>
+                )}
+                {canDelete && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => void editor.purgeAsset(asset.id)}
+                  >
+                    <TrashSolidIcon size={13} />
+                    <span>Delete permanently</span>
+                  </Button>
+                )}
               </div>
             </Section>
           )}
         </aside>
       </div>
 
-      <ReplaceFileDialog
-        asset={asset}
-        open={replaceOpen}
-        onClose={() => setReplaceOpen(false)}
-        onReplace={(file) => editor.replaceAssetFile(asset.id, file)}
-      />
+      {canReplace && (
+        <ReplaceFileDialog
+          asset={asset}
+          open={replaceOpen}
+          onClose={() => setReplaceOpen(false)}
+          onReplace={(file) => editor.replaceAssetFile(asset.id, file)}
+        />
+      )}
     </aside>,
     document.body,
   )

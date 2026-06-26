@@ -27,6 +27,7 @@ interface ContentToolbarProps {
   canPublish: boolean
   onSaveDraft: () => void
   onPublish: () => void
+  onSchedule: (entry: DataRow) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,7 @@ function deriveStatusText(args: {
   if (saveMessage === 'saving') return 'Saving draft'
   if (saveMessage === 'error') return 'Save failed'
   if (isDirty) return 'Unsaved draft'
+  if (selectedEntry?.status === 'scheduled') return 'Scheduled'
   if (saveMessage === 'saved') return 'Draft saved'
   if (isCleanPublished) return 'Published'
   if (selectedEntry?.status === 'unpublished') return 'Unpublished'
@@ -160,6 +162,7 @@ export function ContentToolbar({
   canPublish,
   onSaveDraft,
   onPublish,
+  onSchedule,
 }: ContentToolbarProps) {
   const entryLabel = (selectedCollection?.singularLabel ?? 'entry').toLowerCase()
   // Destructure the derived view state so the JSX below keeps reading like
@@ -228,15 +231,7 @@ export function ContentToolbar({
           rowId={selectedEntry.id}
           currentScheduledAt={selectedEntry.scheduledPublishAt}
           entityLabel={entryLabel}
-          onScheduled={() => {
-            // The Content workspace owns its own entry refresh logic
-            // (`useContentEntryDraft` re-fetches when the row id or
-            // version changes). The scheduled-publish status flip is
-            // picked up on the next refresh — for v1 we don't push a
-            // synchronous refresh signal from here. Future polish:
-            // route an onRefresh callback through the toolbar so
-            // scheduling shows immediate effect.
-          }}
+          onScheduled={onSchedule}
         />
       )}
     </>

@@ -64,6 +64,7 @@ import { CodeIcon } from 'pixel-art-icons/icons/code'
 import { BoxSolidIcon } from 'pixel-art-icons/icons/box-solid'
 import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
 import { EyeSolidIcon } from 'pixel-art-icons/icons/eye-solid'
+import { isNarrowEditorChromeViewport } from '@site/layout/responsiveChrome'
 import styles from './LayerNodeContextMenu.module.css'
 
 interface LayerNodeContextMenuProps {
@@ -220,7 +221,9 @@ export function LayerNodeContextMenu({
 
   const handleSelectModule = (mod: AnyModuleDefinition) => {
     if (!nodeId) return
-    insertModule(mod, nodeId)
+    insertModule(mod, nodeId, {
+      preservePropertiesPanelCollapse: isNarrowEditorChromeViewport(),
+    })
   }
 
   const handleSelectVC = (vcId: string) => {

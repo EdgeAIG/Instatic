@@ -80,3 +80,12 @@ export async function setDefaultForScope(
   return rowToRecord(rows[0]!)
 }
 
+export async function clearDefaultForScope(
+  db: DbClient,
+  scope: ToolScope,
+): Promise<void> {
+  await db`
+    delete from ai_defaults
+    where scope = ${scope}
+  `
+}

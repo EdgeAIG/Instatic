@@ -18,9 +18,19 @@ export function usePropertiesPanelAutoOpen() {
   const selectedSelectorClassId = useEditorStore((s) => s.selectedSelectorClassId)
   const hasSelectorMultiSelect = useEditorStore((s) => s.selectedSelectorClassIds.length > 0)
   const setPropertiesPanel = useEditorStore((s) => s.setPropertiesPanel)
+  const consumePropertiesPanelAutoOpenSuppression = useEditorStore(
+    (s) => s.consumePropertiesPanelAutoOpenSuppression,
+  )
   useEffect(() => {
-    setPropertiesPanel({
-      collapsed: !selectedNodeId && !selectedSelectorClassId && !hasSelectorMultiSelect,
-    })
-  }, [selectedNodeId, selectedSelectorClassId, hasSelectorMultiSelect, setPropertiesPanel])
+    const shouldCollapse = !selectedNodeId && !selectedSelectorClassId && !hasSelectorMultiSelect
+    const suppressed = consumePropertiesPanelAutoOpenSuppression()
+    if (suppressed && !shouldCollapse) return
+    setPropertiesPanel({ collapsed: shouldCollapse })
+  }, [
+    selectedNodeId,
+    selectedSelectorClassId,
+    hasSelectorMultiSelect,
+    consumePropertiesPanelAutoOpenSuppression,
+    setPropertiesPanel,
+  ])
 }

@@ -15,6 +15,12 @@
     pointer-events: none;
 }
 
+@media (max-width: 900px) {
+    .shell {
+        left: calc(50% + 24px);
+    }
+}
+
 /* Vertical stack of the notch + its floating control. In peek mode this is the
    element that rolls up out of view; everything else in the shell stays put. */
 .roller {
