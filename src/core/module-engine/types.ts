@@ -48,6 +48,35 @@ interface ModuleEditorRuntime {
 // Decision #309: render() returns { html, css? } not a plain string
 // ---------------------------------------------------------------------------
 
+/**
+ * The safe set of CSP directives a module may declare source requirements for.
+ * Scoped to content-loading directives only — modules cannot request
+ * 'script-src' relaxation through this channel (that would open arbitrary
+ * script execution; plugin frontend assets go through the server injection
+ * pipeline instead).
+ */
+export type CspDirective =
+  | 'frame-src'
+  | 'script-src'
+  | 'img-src'
+  | 'media-src'
+  | 'connect-src'
+  | 'style-src'
+  | 'font-src'
+
+/**
+ * A single CSP source requirement declared by a module's render() output.
+ * The publisher collects these across all rendered nodes on a page and merges
+ * them into the per-page CSP plan before emitting the `<meta>` tag.
+ *
+ * Declare sources ONLY for the provider ACTUALLY used by this node's current
+ * props — a YouTube node must not pull in Vimeo sources, and vice versa.
+ */
+export interface CspSourceRequirement {
+  directive: CspDirective
+  sources: string[]
+}
+
 export interface RenderOutput {
   /** Clean HTML string — no editor code, no React, no framework runtime */
   html: string
@@ -67,6 +96,19 @@ export interface RenderOutput {
    * React components, not published render() output).
    */
   js?: string
+  /**
+   * Optional CSP source requirements for this specific render instance.
+   *
+   * The publisher collects these per-page and merges them into the CSP plan
+   * so that only pages that actually embed an external resource carry relaxed
+   * directives. A page with no YouTube embeds keeps `frame-src 'none'`; a
+   * page with one YouTube node gets `frame-src https://www.youtube.com
+   * https://www.youtube-nocookie.com`.
+   *
+   * Omit when the module requires no additional CSP origins (self-hosted
+   * video, images on the same origin, plain HTML, etc.).
+   */
+  cspSources?: CspSourceRequirement[]
 }
 
 // ---------------------------------------------------------------------------

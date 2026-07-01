@@ -1005,6 +1005,43 @@ describe('base.video — render() specifics', () => {
       withBannedGlobals(() => VideoModule.render(VideoModule.defaults, []))
     ).not.toThrow()
   })
+
+  // --- cspSources ---
+
+  it('returns cspSources with frame-src YouTube origins for a youtube watch URL', () => {
+    const out = renderModule(VideoModule, {
+      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    })
+    expect(out.cspSources).toBeDefined()
+    const frameSrc = out.cspSources?.find((r) => r.directive === 'frame-src')
+    expect(frameSrc).toBeDefined()
+    expect(frameSrc?.sources).toContain('https://www.youtube.com')
+    expect(frameSrc?.sources).toContain('https://www.youtube-nocookie.com')
+  })
+
+  it('returns cspSources with frame-src YouTube origins for a youtu.be short link', () => {
+    const out = renderModule(VideoModule, { videoUrl: 'https://youtu.be/dQw4w9WgXcQ' })
+    const frameSrc = out.cspSources?.find((r) => r.directive === 'frame-src')
+    expect(frameSrc?.sources).toContain('https://www.youtube.com')
+    expect(frameSrc?.sources).toContain('https://www.youtube-nocookie.com')
+  })
+
+  it('returns cspSources with frame-src YouTube origins for a shorts URL', () => {
+    // Shorts ID must be exactly 11 base64-url chars (same as regular YouTube IDs)
+    const out = renderModule(VideoModule, { videoUrl: 'https://www.youtube.com/shorts/dQw4w9WgXcQ' })
+    const frameSrc = out.cspSources?.find((r) => r.directive === 'frame-src')
+    expect(frameSrc?.sources).toContain('https://www.youtube.com')
+  })
+
+  it('does not declare cspSources for a self-hosted video URL', () => {
+    const out = renderModule(VideoModule, { videoUrl: '/uploads/intro.mp4' })
+    expect(out.cspSources).toBeUndefined()
+  })
+
+  it('does not declare cspSources when videoUrl is empty (no embed)', () => {
+    const out = renderModule(VideoModule, { videoUrl: '' })
+    expect(out.cspSources).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------

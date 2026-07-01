@@ -142,6 +142,7 @@ export async function handleLoopRequest(
     jsMap: new Map(),
     infiniteLoopIds: new Set(),
     holeNodeIds: new Set(),
+    cspSources: new Map(),
   }
 
   // Render each item by walking each variant child once per iteration.

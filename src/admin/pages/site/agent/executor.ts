@@ -337,6 +337,7 @@ function runGetNodeHtml(input: GetNodeHtmlInput): AiToolOutput {
     jsMap: new Map(),
     infiniteLoopIds: new Set(),
     holeNodeIds: new Set(),
+    cspSources: new Map(),
   }
 
   const html = renderNode(input.nodeId, config, acc)

@@ -15,13 +15,17 @@ import {
   createBaseCspPlan,
   cspMetaTag,
   parseCspContent,
+  publishPage,
   serializeCsp,
   setCspDirective,
 } from '@core/publisher'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import {
   injectFrontendAssets,
   type FrontendInjections,
 } from '../../../server/publish/frontendInjections'
+import { VideoModule } from '@modules/base/video'
+import { makeModule, makeRegistry, makePage, makeSite } from './helpers'
 
 describe('CspPlan — serialization is deterministic and sorted', () => {
   it('sorts directives by name and sources within each directive', () => {
@@ -172,5 +176,75 @@ describe('frontend injection — CSP determinism', () => {
       const sources = directive.split(/\s+/).slice(1)
       expect(sources).toEqual([...sources].sort())
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// publishPage — CSP frame-src lifted by module cspSources
+//
+// Locks in the fix for the pre-existing publisher gap where frame-src was
+// hardcoded to 'none', blocking YouTube embeds on published pages even though
+// they rendered correctly in the editor canvas.
+// ---------------------------------------------------------------------------
+
+/** Extract the CSP policy string from a full publishPage HTML document. */
+function extractPublishedCsp(html: string): string {
+  const m = html.match(/<meta http-equiv="Content-Security-Policy"\s+content="([^"]*)"/i)
+  if (!m) throw new Error('no CSP meta found in published HTML')
+  return m[1]!
+}
+
+describe('publishPage — CSP frame-src from module cspSources', () => {
+  it('page with a youtube video has youtube.com in frame-src (not none)', () => {
+    const page = makePage({
+      root: {
+        moduleId: 'base.video',
+        props: { videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+      },
+    })
+    const reg = makeRegistry({ 'base.video': VideoModule as AnyModuleDefinition })
+    const { html } = publishPage(page, makeSite(), reg)
+    const csp = extractPublishedCsp(html)
+    expect(csp).toContain('https://www.youtube.com')
+    expect(csp).toContain('https://www.youtube-nocookie.com')
+    expect(csp).not.toContain("frame-src 'none'")
+  })
+
+  it('page with no video keeps frame-src none (no youtube leakage)', () => {
+    const page = makePage({
+      root: { moduleId: 'test.plain', props: {} },
+    })
+    const reg = makeRegistry({ 'test.plain': makeModule('test.plain') })
+    const { html } = publishPage(page, makeSite(), reg)
+    const csp = extractPublishedCsp(html)
+    expect(csp).toContain("frame-src 'none'")
+    expect(csp).not.toContain('youtube')
+  })
+
+  it('youtube sources are sorted deterministically across repeated builds', () => {
+    const page = makePage({
+      root: {
+        moduleId: 'base.video',
+        props: { videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+      },
+    })
+    const reg = makeRegistry({ 'base.video': VideoModule as AnyModuleDefinition })
+    const html1 = publishPage(page, makeSite(), reg).html
+    const html2 = publishPage(page, makeSite(), reg).html
+    expect(extractPublishedCsp(html1)).toBe(extractPublishedCsp(html2))
+    expect(extractPublishedCsp(html1)).not.toBe('')
+  })
+
+  it('frame-src contains both youtube.com and youtube-nocookie.com for the youtu.be URL form', () => {
+    const page = makePage({
+      root: {
+        moduleId: 'base.video',
+        props: { videoUrl: 'https://youtu.be/dQw4w9WgXcQ' },
+      },
+    })
+    const reg = makeRegistry({ 'base.video': VideoModule as AnyModuleDefinition })
+    const { html } = publishPage(page, makeSite(), reg)
+    const csp = extractPublishedCsp(html)
+    expect(csp).toContain('https://www.youtube-nocookie.com')
   })
 })

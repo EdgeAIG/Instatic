@@ -148,6 +148,7 @@ async function renderHoleFragment(
     jsMap: new Map(),
     infiniteLoopIds: new Set(),
     holeNodeIds: new Set(),
+    cspSources: new Map(),
   }
   // Hole fragments bypass the published-HTML pipeline, so CMS forms inside
   // them would never receive their page token. Stamp here — tokens are

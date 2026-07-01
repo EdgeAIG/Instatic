@@ -292,6 +292,7 @@ function collectPageModuleCss(page: Page, site: SiteDocument, registry: IModuleR
     jsMap: new Map<string, string>(),
     infiniteLoopIds: new Set<string>(),
     holeNodeIds: new Set<string>(),
+    cspSources: new Map<string, Set<string>>(),
   }
   renderNode(page.rootNodeId, { page, site, registry, breakpointId: undefined }, acc)
   return Array.from(acc.cssMap.values()).join('\n')

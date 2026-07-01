@@ -36,7 +36,7 @@ import { PUBLISHER_RESET_CSS } from './reset'
 import { buildSiteFrameworkCss } from './frameworkCss'
 import type { SiteCssBundle } from './siteCssBundle'
 import { escapeHtml, isSafeUrl } from './utils'
-import { createBaseCspPlan, cspMetaTag } from './cspPlan'
+import { addCspSources, createBaseCspPlan, cspMetaTag } from './cspPlan'
 import type { PublishedPageRuntimeAssets } from '@core/site-runtime/schemas'
 import { hasPublishedRuntimeScripts, scriptTagsForRuntimeAssets } from '@core/site-runtime'
 import { renderNode } from './renderNode'
@@ -403,8 +403,17 @@ function buildRuntimeAssetsBlock(
 function buildContentSecurityPolicy(
   anyScriptTag: boolean,
   importmap: PublishedRuntimePackageImportmap | undefined,
+  moduleCspSources: ReadonlyMap<string, ReadonlySet<string>>,
 ): string {
   const plan = createBaseCspPlan({ anyScriptTag, importmapSha: importmap?.sha256 })
+  // Merge per-page CSP requirements declared by module render() outputs.
+  // addCspSources automatically drops the lone 'none' when real sources are
+  // added, so frame-src 'none' becomes frame-src <origins> on pages that
+  // embed external iframes (e.g. YouTube). Pages with no such embeds are
+  // unaffected and keep frame-src 'none'.
+  for (const [directive, sources] of moduleCspSources) {
+    addCspSources(plan, directive, sources)
+  }
   return `\n  ${cspMetaTag(plan)}`
 }
 
@@ -507,6 +516,7 @@ export function publishPage(
   const acc: RenderAccumulators = {
     cssMap: new Map<string, string>(),
     jsMap: new Map<string, string>(),
+    cspSources: new Map<string, Set<string>>(),
     infiniteLoopIds: new Set<string>(),
     holeNodeIds: new Set<string>(),
   }
@@ -539,7 +549,7 @@ export function publishPage(
 
   const meta = buildDocumentMetaTags(site, page)
   const runtime = buildRuntimeAssetsBlock(options, acc)
-  const csp = buildContentSecurityPolicy(runtime.anyScriptTag, runtime.importmap)
+  const csp = buildContentSecurityPolicy(runtime.anyScriptTag, runtime.importmap, acc.cspSources)
 
   const html = assembleHtmlDocument({
     langAttr: meta.langAttr,

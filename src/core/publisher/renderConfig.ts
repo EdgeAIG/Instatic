@@ -159,6 +159,18 @@ export interface RenderAccumulators {
    * began).
    */
   readonly holeNodeIds: Set<string>
+  /**
+   * Per-directive CSP source requirements collected from module render() outputs
+   * during the walk. Maps directive name → set of source origins. Built up as
+   * the node walk proceeds; read after the walk by `buildContentSecurityPolicy`
+   * in `render.ts` to emit a per-page CSP that reflects exactly which external
+   * resources the page actually embeds.
+   *
+   * Using a plain Map instead of a per-directive typed structure keeps the
+   * accumulator consistent with `cssMap`/`jsMap` and avoids a proliferation
+   * of per-directive fields as more modules declare requirements over time.
+   */
+  readonly cspSources: Map<string, Set<string>>
 }
 
 /**

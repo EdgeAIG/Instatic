@@ -177,6 +177,19 @@ function renderStandardNode(
     acc.jsMap.set(node.moduleId, output.js)
   }
 
+  // CSP source requirements — union all sources declared by this render into
+  // the per-page accumulator. Deduplication is implicit (Set). addCspSources
+  // in cspPlan.ts will drop any existing 'none' when real sources are merged
+  // in at CSP-build time, so 'none' on frame-src is automatically lifted on
+  // any page that embeds an external resource (e.g. YouTube iframe).
+  if (output.cspSources) {
+    for (const { directive, sources } of output.cspSources) {
+      const existing = acc.cspSources.get(directive) ?? new Set<string>()
+      for (const source of sources) existing.add(source)
+      acc.cspSources.set(directive, existing)
+    }
+  }
+
   // base.body has no wrapper element — its classIds + inline styles go on
   // <body> in publishPage.
   if (node.moduleId === 'base.body') return output.html

@@ -10,6 +10,8 @@ export type {
   AnyModuleDefinition,
   IModuleRegistry,
   RenderOutput,
+  CspDirective,
+  CspSourceRequirement,
   ModuleComponentProps,
   InlineEditBinding,
   NodeWrapperProps,

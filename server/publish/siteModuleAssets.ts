@@ -31,6 +31,7 @@ export function collectSiteModuleAssets(
     jsMap: new Map<string, string>(),
     infiniteLoopIds: new Set<string>(),
     holeNodeIds: new Set<string>(),
+    cspSources: new Map<string, Set<string>>(),
   }
   for (const page of site.pages) {
     const config: RenderConfig = {
