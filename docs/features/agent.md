@@ -121,8 +121,9 @@ src/admin/pages/site/panels/AgentPanel/
 ├── usePendingImageAttachments.ts — ref-backed sequential image queue and per-item cancellation
 ├── ModelPicker.tsx         — credential + model selector used in the input bar
 ├── ConversationHistory.tsx — history popover (browse, restore, delete past threads)
-├── ContextMeter.tsx        — "context used / window" progress indicator (display only)
+├── ContextMeter.tsx        — compact five-segment context + conversation-usage tooltip
 ├── ContextMeter.module.css
+├── contextMeterMetrics.ts  — five-band fill/tone calculation
 ├── AgentPanel.module.css
 └── index.ts                — barrel export
 
@@ -133,9 +134,11 @@ src/admin/pages/ai/
     ├── ProvidersTab.tsx    — CRUD for ai_credentials rows (provider-derived API key or endpoint credential shape)
     ├── DefaultsTab.tsx     — per-scope model defaults editor
     ├── AuditTab.tsx        — usage audit view: totals strip, by-model/user/scope tables, daily bar chart
-    ├── UsageTablePanel.tsx — shared table scaffolding (title + hint header, numeric-aligned columns, empty row)
-    └── usageFormat.ts      — formatNumber / formatCost helpers (plain .ts leaf; importable by tests and components alike)
+    └── UsageTablePanel.tsx — shared table scaffolding (title + hint header, numeric-aligned columns, empty row)
 ```
+
+Shared AI number and spend formatting lives in `src/admin/ai/usageFormat.ts`, so
+the Audit workspace and compact composer usage detail use identical labels.
 
 The Agent Panel owns the credential list load for its header, lock-state empty states, and model picker. The header always contains a `ConversationHistory` popover (browse and restore past threads), a "New chat" button (`startNewAgentConversation`), a conditional "Clear conversation" button (visible when `agentMessages.length > 0`), a streaming badge, and an "AI settings" shortcut that routes to `/admin/ai`. The AI settings button is always visible in the header, independent of credential state.
 
@@ -149,7 +152,7 @@ While credentials are still loading, `lockReason` stays `null` so the panel does
 
 When the panel opens, `AgentPanel` calls `loadScopeDefault()` so the model picker immediately shows the configured scope default — no "Default" placeholder, no send-time no-provider surprise. `composerLocked` is gated by `hasActiveProvider` (`Boolean(activeCredentialId && activeModelId)`), meaning a stale "No AI provider configured" error string never locks out the UI once a credential + model is staged; picking a model via `setAgentProvider` clears `agentError` immediately, re-enabling the composer.
 
-The composer area includes a `<ContextMeter>` that shows "context used / window" as a progress bar. `AgentComposer` resolves the full active-model descriptor from `GET /admin/api/ai/providers/:id/models?credentialId=…` (the same catalogue-enriched response the picker uses), then uses its `contextWindow`, `capabilities.visionInput`, and `capabilities.toolCalling`. A model known not to support tools is blocked with an inline "choose an agent-capable model" message; the server repeats that gate authoritatively. The meter appears as soon as a model is selected — before the first turn. The "used" half comes from `agentContextTokens` in the store (see slice state below). The meter is hidden when no context window is known (Ollama, uncatalogued models).
+The composer action row includes a compact five-segment `<ContextMeter>` immediately before Attach images and Send. `AgentComposer` resolves the full active-model descriptor from `GET /admin/api/ai/providers/:id/models?credentialId=…` (the same catalogue-enriched response the picker uses), then uses its `contextWindow`, pricing, `capabilities.visionInput`, and `capabilities.toolCalling`. A model known not to support tools is blocked with an inline "choose an agent-capable model" message; the server repeats that gate authoritatively. The meter appears as soon as a model with a known window is selected. It represents **context remaining**: a fresh conversation is five green segments and the battery drains toward amber/red as context is consumed. Hover or keyboard focus opens a wide graphical tooltip with exact context used/available, cumulative conversation input/output/cache tokens, authoritative USD spend, and current-model list rates. A context snapshot belongs to the credential/model selection that measured it, so switching models renders the meter indeterminate until the next provider response rather than comparing stale usage to a new window. The meter stays hidden when no context window is known (Ollama, uncatalogued models).
 
 ### Attaching user images
 
@@ -244,7 +247,7 @@ NDJSON stream events (one JSON object + \n per line):
     { type: 'toolCall', toolCallId, toolName, input, status: 'pending' }
     { type: 'toolRequest', requestId, toolName, input }    ← browser-bridged tools only
     { type: 'toolResult', toolCallId, toolName, ok, error? }
-    { type: 'usage', promptTokens, completionTokens, costUsd?, cacheReadTokens?, cacheCreationTokens? }
+    { type: 'usage', promptTokens, completionTokens, costUsd, cacheReadTokens?, cacheCreationTokens? }
     { type: 'context', contextTokens }                     ← per-round meter update
     { type: 'done' }
     { type: 'error', message }                             ← on server error
@@ -336,7 +339,7 @@ tz?:    string   // IANA timezone (e.g. "Europe/Bratislava"); defaults to UTC
 
 `byDay` is the time-series chart data — each `day` field is `YYYY-MM-DD` in the viewer's local timezone (not UTC). The daily rollup pulls raw message rows and bins them in JS via `localDayKeyFactory(timeZone)` (`server/time.ts`) rather than SQL date-truncation, because the day boundary depends on the viewer's timezone which the database doesn't know. The client (see `AuditTab.tsx` → `listAiAudit`) reads `Intl.DateTimeFormat().resolvedOptions().timeZone` and passes it as `?tz=`.
 
-The Audit tab (`src/admin/pages/ai/tabs/AuditTab.tsx`) consumes this endpoint. The daily rollup there also aligns its "Today" range window to local midnight (`setHours(0, 0, 0, 0)`) so the day boundary is consistent both in the filter and in the bar chart. The by-model, by-user, and by-scope rollups all render through `UsageTablePanel` (`tabs/UsageTablePanel.tsx`) — a shared table component that takes a `columns` config and handles the empty-state row. Number and cost formatting (`formatNumber`, `formatCost`) live in `tabs/usageFormat.ts`, a plain `.ts` leaf that both the tab components and their tests can import without triggering React Fast Refresh's components-only export rule on the component file.
+The Audit tab (`src/admin/pages/ai/tabs/AuditTab.tsx`) consumes this endpoint. The daily rollup there also aligns its "Today" range window to local midnight (`setHours(0, 0, 0, 0)`) so the day boundary is consistent both in the filter and in the bar chart. The by-model, by-user, and by-scope rollups all render through `UsageTablePanel` (`tabs/UsageTablePanel.tsx`) — a shared table component that takes a `columns` config and handles the empty-state row. Number and cost formatting (`formatNumber`, `formatCost`) live in `src/admin/ai/usageFormat.ts`, a plain shared leaf used by both Audit and the composer context tooltip.
 
 ### `POST /admin/api/ai/tool-result`
 
@@ -643,13 +646,17 @@ interface AgentSlice {
   agentActiveModelId:        string | null
   /** Conversation summaries for the history popover. */
   agentConversations:        ConversationView[]
-  /**
-   * Provider-normalised total input the model processed on the latest turn,
-   * for the ContextMeter. Null for a fresh conversation (no turns yet); the
-   * meter then shows 0 against the window. Hydrated from `ConversationView.contextTokens`
-   * on loadAgentConversation; updated live from each turn's `usage` event.
-   */
-  agentContextTokens:        number | null
+  /** Current-context snapshot plus cumulative conversation billing totals. */
+  agentUsage: {
+    contextTokens:           number | null
+    contextCredentialId:     string | null
+    contextModelId:          string | null
+    promptTokens:            number
+    completionTokens:        number
+    cacheReadTokens:         number
+    cacheCreationTokens:     number
+    costUsd:                 number
+  }
   /** Blocks Send/navigation while a history load or delete may replace the active chat. */
   isAgentConversationPending: boolean
   /** Blocks Send/navigation while an existing chat's model PUT is pending. */
@@ -715,14 +722,16 @@ The server admits only one active writer per conversation. A concurrent tab rece
 
 ### Context meter
 
-The `<ContextMeter>` shows how much of the active model's context window the current conversation has consumed. Two data sources drive it:
+The `<ContextMeter>` is a five-segment battery-style status beside the image action. Its hover/focus tooltip deliberately separates current context from cumulative billing:
 
-- **Window** (`windowTokens` prop from `AgentPanel`): the model's max total tokens, resolved once from `GET /admin/api/ai/providers/:id/models?credentialId=…`. The models endpoint enriches Anthropic and OpenAI models with `contextWindow` from the live OpenRouter catalogue (`server/ai/pricing/`); OpenRouter populates it from its own native fetch. Ollama models and uncatalogued models have no window — the meter hides.
-- **Used** (`agentContextTokens` in the store): the provider-normalised "context used" — the CURRENT context size, computed by `normalizeContextTokens(providerId, buckets)` in `server/ai/contextTokens.ts`:
+- **Window** (`windowTokens` prop from `AgentComposer`): the model's max total tokens, resolved once from `GET /admin/api/ai/providers/:id/models?credentialId=…`. The models endpoint enriches Anthropic and OpenAI models with `contextWindow` from the live OpenRouter catalogue (`server/ai/pricing/`); OpenRouter populates it from its own native fetch. Ollama models and uncatalogued models have no window — the meter hides.
+- **Current context** (`agentUsage.contextTokens`): the provider-normalised input held by the LATEST provider round, tagged with the credential/model selection that produced it. `normalizeContextTokens(providerId, buckets)` in `server/ai/contextTokens.ts` computes it:
   - Anthropic reports `input_tokens` excluding cache buckets, so the true total is `promptTokens + cacheReadTokens + cacheCreationTokens`.
   - OpenAI / OpenRouter / Ollama / Custom Provider report `input_tokens` as the full input; `promptTokens` alone is the total.
 
-**Live, per-round, not summed.** A turn makes one provider round-trip per tool batch. The toolLoop emits a `context` event **each round** carrying THAT round's input buckets; the chat handler injects the normalised `contextTokens` and the browser updates the meter on every round — so it climbs *during* a long tool loop instead of only at the end. The meter is the LATEST round's input (the current window fill), never the sum across rounds (which would over-count, since each round re-sends the growing context). The terminal `usage` event is **billing only** — its `promptTokens` stays summed across rounds (you pay input per round). The persister keeps the latest `context` value in memory (`recordContext`) and writes it once to `ai_conversations.context_tokens` with the final `usage` (overwritten per turn), so `loadAgentConversation` restores the true context on reload.
+**Live context, cumulative billing.** A turn makes one provider round-trip per tool batch. The tool loop emits a `context` event **each round** carrying THAT round's input buckets; the chat handler injects the normalised `contextTokens` and the browser updates the meter on every round — so the remaining-capacity battery drains *during* a long tool loop instead of only at the end. The measurement is the LATEST round's input, never the sum across rounds (which would over-count, since each round re-sends the growing context). The terminal `usage` event is **billing only**: prompt/completion/cache counts are summed across rounds. Before forwarding that terminal event, the persister resolves authoritative cache-aware spend (or accepts OpenRouter's native cost), writes the usage, then includes the resolved `costUsd` on the wire. The browser accumulates those totals in `agentUsage`; `loadAgentConversation` hydrates the same totals from `ConversationView`. The tooltip labels the sections “Context remaining” and “Conversation billing” so the two token meanings cannot be confused.
+
+Five equal bands approximate remaining capacity: an empty conversation has all five filled, then the display drains by fifths until no capacity remains. More than 40% remaining is healthy, 20–40% warns, and below 20% is danger. An unmeasured model switch uses five neutral segments until its first response. The keyboard-focusable details button exposes the exact remaining/window counts and percentage in its accessible name; segment count is only the compact visual approximation.
 
 ### Live model catalogue
 
@@ -828,7 +837,7 @@ unblocks deletion of the credential that had been protected by the default FK.
   - `src/admin/pages/ai/AiPage.tsx` — `/admin/ai` workspace (Providers / Defaults / Audit tabs)
   - `src/admin/pages/ai/tabs/AuditTab.tsx` — usage audit view (totals strip, tables, daily bar chart)
   - `src/admin/pages/ai/tabs/UsageTablePanel.tsx` — shared table scaffolding for audit rollups
-  - `src/admin/pages/ai/tabs/usageFormat.ts` — `formatNumber` / `formatCost` formatting helpers
+  - `src/admin/ai/usageFormat.ts` — shared `formatNumber` / `formatCost` helpers
   - `src/admin/pages/site/agent/agentSlice.ts` — scope-agnostic slice factory (`createAgentSlice`)
   - `src/admin/pages/site/agent/agentProviderUpdate.ts` — timed provider/model update and ambiguous-commit reconciliation
   - `src/admin/pages/site/agent/agentSliceConfig.site.ts` — site-editor scope config
@@ -850,8 +859,9 @@ unblocks deletion of the credential that had been protected by the default FK.
   - `src/admin/pages/content/agent/contentAgentStore.ts` — standalone content-workspace agent store
   - `src/admin/pages/content/agent/contentBridge.ts` — content write-tool browser dispatcher
   - `src/admin/pages/content/agent/contentBridgeHandle.ts` — imperative bridge handle registered by ContentPage
-  - `src/admin/pages/site/panels/AgentPanel/AgentPanel.tsx` — Agent Panel; resolves `contextWindow` for the meter
-  - `src/admin/pages/site/panels/AgentPanel/ContextMeter.tsx` — context used / window progress bar
+  - `src/admin/pages/site/panels/AgentPanel/AgentComposer.tsx` — resolves model window/pricing/capabilities and places the meter in the action row
+  - `src/admin/pages/site/panels/AgentPanel/ContextMeter.tsx` — five-segment context status and rich usage tooltip
+  - `src/admin/pages/site/panels/AgentPanel/contextMeterMetrics.ts` — exact five-band fill/tone calculation
 - Gate tests:
   - `src/__tests__/architecture/ai-tool-schema-ssot.test.ts`
   - `src/__tests__/architecture/ai-driver-isolation.test.ts`

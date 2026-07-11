@@ -34,12 +34,17 @@ import {
 import { readNdjsonStream } from '@admin/ai/ndjsonStream'
 import { processStreamEvent, ServerStreamEventSchema } from './streamEvents'
 import type {
+  AgentConversationUsage,
   AgentSlice,
   AgentSliceConfig,
   AgentSliceGet,
   EditorStoreSet,
 } from './agentSliceTypes'
-export type { AgentSlice, AgentSliceConfig } from './agentSliceTypes'
+export type {
+  AgentConversationUsage,
+  AgentSlice,
+  AgentSliceConfig,
+} from './agentSliceTypes'
 import type {
   AgentBridgeRuntime,
   AgentMessage,
@@ -131,8 +136,8 @@ async function ensureConversationId(
 
 // The canonical conversation-reset key-set, in ONE place. clearAgentMessages,
 // startNewAgentConversation, and deleteAgentConversation all reset through here
-// so they can't drift apart again (agentContextTokens was omitted from one copy
-// once already; agentError from another). A factory (not a shared constant) so
+// so they can't drift apart again (usage was omitted from one copy once;
+// agentError from another). A factory (not a shared constant) so
 // each reset gets a fresh `agentMessages` array.
 type ConversationResetKeys =
   | 'agentMessages'
@@ -140,8 +145,21 @@ type ConversationResetKeys =
   | 'agentConversationId'
   | 'agentActiveCredentialId'
   | 'agentActiveModelId'
-  | 'agentContextTokens'
+  | 'agentUsage'
   | 'agentComposerEpoch'
+
+function emptyConversationUsage(): AgentConversationUsage {
+  return {
+    contextTokens: null,
+    contextCredentialId: null,
+    contextModelId: null,
+    promptTokens: 0,
+    completionTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    costUsd: 0,
+  }
+}
 
 function conversationResetState(agentComposerEpoch: number): Pick<AgentSlice, ConversationResetKeys> {
   return {
@@ -150,7 +168,7 @@ function conversationResetState(agentComposerEpoch: number): Pick<AgentSlice, Co
     agentConversationId: null,
     agentActiveCredentialId: null,
     agentActiveModelId: null,
-    agentContextTokens: null,
+    agentUsage: emptyConversationUsage(),
     agentComposerEpoch,
   }
 }
@@ -265,7 +283,7 @@ export function createAgentSlice(
     agentActiveCredentialId: null,
     agentActiveModelId: null,
     agentConversations: [],
-    agentContextTokens: null,
+    agentUsage: emptyConversationUsage(),
     isAgentConversationPending: false,
     isAgentProviderPending: false,
     agentComposerEpoch: 0,
@@ -351,9 +369,16 @@ export function createAgentSlice(
           state.agentActiveModelId = conv.modelId
           state.agentMessages = rehydrateMessages(conv.messages)
           state.agentError = null
-          // Restore the meter from the persisted snapshot (0 → null so the
-          // meter reads as "empty" against the window until the next turn).
-          state.agentContextTokens = conv.contextTokens > 0 ? conv.contextTokens : null
+          state.agentUsage = {
+            contextTokens: conv.contextTokens > 0 ? conv.contextTokens : null,
+            contextCredentialId: conv.contextTokens > 0 ? conv.credentialId : null,
+            contextModelId: conv.contextTokens > 0 ? conv.modelId : null,
+            promptTokens: conv.promptTokensTotal,
+            completionTokens: conv.completionTokensTotal,
+            cacheReadTokens: conv.cacheReadTokensTotal,
+            cacheCreationTokens: conv.cacheCreationTokensTotal,
+            costUsd: conv.costUsdTotal,
+          }
           state.agentComposerEpoch += 1
         })
       } catch (err) {
@@ -424,10 +449,9 @@ export function createAgentSlice(
       // displayed value updates immediately. Clearing agentError is essential:
       // a prior send with no configured default leaves a sticky "no provider
       // configured" error that keeps the composer disabled — picking a model
-      // IS configuring a provider, so the composer must re-enable. The context
-      // "used" count is left as-is — the history size is unchanged by a model
-      // switch and the next turn re-measures it; the window half (view layer)
-      // tracks the new model.
+      // IS configuring a provider, so the composer must re-enable. The prior
+      // context snapshot keeps its owner IDs; the view renders the new model's
+      // meter indeterminate until the next response re-measures it.
       set({
         agentActiveCredentialId: credentialId,
         agentActiveModelId: modelId,

@@ -54,10 +54,10 @@ export async function runChat(args: RunChatArgs): Promise<void> {
 
   try {
     for await (const event of driver.stream(request)) {
-      // Always forward to the wire first so the browser sees the event
-      // even if persistence fails (we never want to silently lose a UI
-      // update because the DB is slow).
-      emit(event)
+      // Forward live events immediately. Usage is the one exception: its USD
+      // value may need cache-aware server pricing, so that terminal event is
+      // emitted after persistence resolves the authoritative cost below.
+      if (event.type !== 'usage') emit(event)
 
       switch (event.type) {
         case 'text': {
@@ -112,13 +112,14 @@ export async function runChat(args: RunChatArgs): Promise<void> {
         }
         case 'usage': {
           await flushPendingAssistantText()
-          await persister.recordUsage({
+          const costUsd = await persister.recordUsage({
             promptTokens: event.promptTokens,
             completionTokens: event.completionTokens,
             costUsd: event.costUsd,
             cacheReadTokens: event.cacheReadTokens,
             cacheCreationTokens: event.cacheCreationTokens,
           })
+          emit({ ...event, costUsd })
           break
         }
         case 'error': {

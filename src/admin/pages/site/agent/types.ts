@@ -116,7 +116,10 @@ interface UsageEvent {
   type: 'usage'
   promptTokens: number
   completionTokens: number
-  costUsd?: number
+  /** Authoritative cache-aware turn cost resolved by the server persister. */
+  costUsd: number
+  cacheReadTokens?: number
+  cacheCreationTokens?: number
 }
 
 /** Per-round context size — drives the live "context used" meter. Emitted once

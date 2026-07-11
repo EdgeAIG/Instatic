@@ -28,6 +28,25 @@ export interface AgentSliceConfig {
   readonly noProviderMessage?: string
 }
 
+/**
+ * Usage attached to the active conversation.
+ *
+ * `contextTokens` is the latest provider round's input size, while the other
+ * fields are cumulative billing totals across every round in the conversation.
+ * Keeping both in one snapshot makes that distinction explicit at call sites.
+ */
+export interface AgentConversationUsage {
+  contextTokens: number | null
+  /** Selection that produced `contextTokens`; null until the first measured round. */
+  contextCredentialId: string | null
+  contextModelId: string | null
+  promptTokens: number
+  completionTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
+  costUsd: number
+}
+
 export interface AgentSlice {
   isAgentOpen: boolean
   isAgentStreaming: boolean
@@ -37,7 +56,7 @@ export interface AgentSlice {
   agentActiveCredentialId: string | null
   agentActiveModelId: string | null
   agentConversations: ConversationView[]
-  agentContextTokens: number | null
+  agentUsage: AgentConversationUsage
   /** True while a history load/delete can replace the active conversation. */
   isAgentConversationPending: boolean
   /** True while an existing conversation's provider/model update is pending. */

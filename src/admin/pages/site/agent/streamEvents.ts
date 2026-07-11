@@ -75,7 +75,9 @@ export const ServerStreamEventSchema = Type.Union([
     type: Type.Literal('usage'),
     promptTokens: Type.Number(),
     completionTokens: Type.Number(),
-    costUsd: Type.Optional(Type.Number()),
+    costUsd: Type.Number(),
+    cacheReadTokens: Type.Optional(Type.Number()),
+    cacheCreationTokens: Type.Optional(Type.Number()),
   }),
   Type.Object({
     // Per-round context size — drives the live meter mid-turn. `contextTokens`
@@ -222,8 +224,18 @@ export async function processStreamEvent(
     }
 
     case 'usage': {
-      // Token + cost totals are persisted server-side automatically; nothing
-      // to do client-side. The context meter is driven by `context` events.
+      // Billing totals are cumulative across provider rounds and therefore
+      // separate from current context. The server resolves authoritative,
+      // cache-aware USD cost before this terminal event reaches the browser.
+      set((state) => {
+        state.agentUsage.promptTokens += event.promptTokens
+        state.agentUsage.completionTokens += event.completionTokens
+        state.agentUsage.cacheReadTokens += event.cacheReadTokens ?? 0
+        state.agentUsage.cacheCreationTokens += event.cacheCreationTokens ?? 0
+        state.agentUsage.costUsd = Number(
+          (state.agentUsage.costUsd + event.costUsd).toFixed(6),
+        )
+      })
       break
     }
 
@@ -234,7 +246,9 @@ export async function processStreamEvent(
       // window half is supplied by the view layer from the model catalogue.
       const used = event.contextTokens
       set((state) => {
-        state.agentContextTokens = used
+        state.agentUsage.contextTokens = used
+        state.agentUsage.contextCredentialId = state.agentActiveCredentialId
+        state.agentUsage.contextModelId = state.agentActiveModelId
       })
       break
     }

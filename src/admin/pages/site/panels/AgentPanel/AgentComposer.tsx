@@ -81,7 +81,7 @@ export function AgentComposer({
       }
     },
     [activeProviderId, activeCredentialId, activeModelId],
-    { fallbackError: 'Could not verify image support for this model.' },
+    { fallbackError: 'Could not load details for this model.' },
   )
   const resolvedSelection = activeModelResource.data
   const activeModel =
@@ -180,7 +180,6 @@ export function AgentComposer({
 
   return (
     <div className={styles.inputBar}>
-      <ContextMeter windowTokens={activeModel?.contextWindow ?? null} />
       {hasAttachments && (
         <PendingImageAttachmentGrid
           entries={attachments.pending}
@@ -246,6 +245,12 @@ export function AgentComposer({
             disabled={isStreaming || conversationPending || providerPending || submitting}
           />
           <div className={styles.inputControlActions}>
+            <ContextMeter
+              credentialId={activeCredentialId}
+              modelId={activeModel?.id ?? activeModelId}
+              windowTokens={activeModel?.contextWindow ?? null}
+              pricing={activeModel?.pricing ?? null}
+            />
             <FileUpload
               multiple
               accept="image/png,image/jpeg,image/webp"

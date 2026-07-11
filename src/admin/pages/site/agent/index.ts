@@ -9,7 +9,11 @@
 
 // Slice factory + its public contract.
 export { createAgentSlice } from './agentSlice'
-export type { AgentSlice, AgentSliceConfig } from './agentSliceTypes'
+export type {
+  AgentConversationUsage,
+  AgentSlice,
+  AgentSliceConfig,
+} from './agentSliceTypes'
 
 // Site-editor wiring (scope, snapshot, dispatcher) handed to the factory.
 export { siteAgentSliceConfig } from './agentSliceConfig.site'

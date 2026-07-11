@@ -209,12 +209,13 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-s);
+  min-width: 0;
 }
 
 /* The picker takes the leftover width but never crowds out the button. */
 .inputControlsPicker {
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
 }
 
 .inputControlActions {

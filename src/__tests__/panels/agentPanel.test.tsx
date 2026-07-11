@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createStore } from 'zustand/vanilla'
 import { AgentStoreProvider } from '@admin/ai/AgentStoreContext'
-import { clearModelListCache } from '@admin/ai/api'
+import { clearModelListCache, type CredentialView } from '@admin/ai/api'
 import { MemoryRouter, useLocation } from '@admin/lib/routing'
 import { AdminSessionProvider } from '@admin/session'
 import type { AgentSlice } from '@site/agent'
@@ -23,11 +23,16 @@ const TEST_CREDENTIAL = {
   lastUsedAt: null,
 } as const
 
-function installModelFetch(visionInput: boolean, toolCalling = true): void {
+function installModelFetch(
+  visionInput: boolean,
+  toolCalling = true,
+  contextWindow: number | null = 128_000,
+  credential: CredentialView = TEST_CREDENTIAL,
+): void {
   globalThis.fetch = mock(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString()
     if (url.endsWith('/admin/api/ai/credentials')) {
-      return jsonResponse({ credentials: [TEST_CREDENTIAL] })
+      return jsonResponse({ credentials: [credential] })
     }
     if (url.includes('/admin/api/ai/providers/')) {
       return jsonResponse({
@@ -41,7 +46,8 @@ function installModelFetch(visionInput: boolean, toolCalling = true): void {
             promptCache: false,
             streaming: true,
           },
-          contextWindow: 128_000,
+          pricing: { inputPerMTok: 3, outputPerMTok: 15 },
+          ...(contextWindow === null ? {} : { contextWindow }),
         }],
       })
     }
@@ -143,7 +149,16 @@ function createAgentStore(overrides: Partial<AgentSlice> = {}) {
     agentActiveCredentialId: null,
     agentActiveModelId: null,
     agentConversations: [],
-    agentContextTokens: null,
+    agentUsage: {
+      contextTokens: null,
+      contextCredentialId: null,
+      contextModelId: null,
+      promptTokens: 0,
+      completionTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      costUsd: 0,
+    },
     isAgentConversationPending: false,
     isAgentProviderPending: false,
     agentComposerEpoch: 0,
@@ -328,6 +343,72 @@ describe('AgentPanel', () => {
     // independent of credential state.
     expect(screen.getByTestId('agent-settings-header-button')).toBeTruthy()
     expect(screen.getByTestId('agent-new-chat-header-button')).toBeTruthy()
+  })
+
+  it('shows compact context, token, and cost detail beside the image action', async () => {
+    const credential = { ...TEST_CREDENTIAL, id: 'cred_context_meter' }
+    installModelFetch(true, true, 128_000, credential)
+    renderAgentPanel({
+      agentActiveCredentialId: credential.id,
+      agentActiveModelId: 'model-1',
+      agentUsage: {
+        contextTokens: 80_000,
+        contextCredentialId: credential.id,
+        contextModelId: 'model-1',
+        promptTokens: 12_345,
+        completionTokens: 678,
+        cacheReadTokens: 4_000,
+        cacheCreationTokens: 321,
+        costUsd: 0.004,
+      },
+    })
+
+    const meter = await screen.findByRole('button', { name: /AI context remaining/ })
+    const attach = screen.getByRole('button', { name: 'Attach images' })
+    expect(meter.querySelectorAll('[data-context-segment]')).toHaveLength(5)
+    expect(meter.querySelectorAll('[data-filled="true"]')).toHaveLength(2)
+    expect(meter.getAttribute('data-tone')).toBe('warning')
+    expect(meter.getAttribute('aria-label')).toContain(
+      '48,000 of 128,000 context tokens available (38%)',
+    )
+    expect(meter.compareDocumentPosition(attach) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    fireEvent.focus(meter)
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip.textContent).toContain('38% available')
+    expect(tooltip.textContent).toContain('80K used')
+    expect(tooltip.textContent).toContain('48K available')
+    expect(tooltip.textContent).toContain('12,345')
+    expect(tooltip.textContent).toContain('< $0.01')
+    expect(tooltip.textContent).toContain('$3 in · $15 out')
+  })
+
+  it('shows a full healthy battery for an empty conversation', async () => {
+    const credential = { ...TEST_CREDENTIAL, id: 'cred_context_empty' }
+    installModelFetch(true, true, 128_000, credential)
+    renderAgentPanel({
+      agentActiveCredentialId: credential.id,
+      agentActiveModelId: 'model-1',
+    })
+
+    const meter = await screen.findByRole('button', { name: /AI context remaining/ })
+    expect(meter.querySelectorAll('[data-filled="true"]')).toHaveLength(5)
+    expect(meter.getAttribute('data-tone')).toBe('healthy')
+    expect(meter.getAttribute('aria-label')).toContain(
+      '128,000 of 128,000 context tokens available (100%)',
+    )
+  })
+
+  it('hides context status when the selected model has no known window', async () => {
+    const credential = { ...TEST_CREDENTIAL, id: 'cred_context_unknown' }
+    installModelFetch(true, true, null, credential)
+    renderAgentPanel({
+      agentActiveCredentialId: credential.id,
+      agentActiveModelId: 'model-1',
+    })
+
+    await screen.findByText('OpenAI · Model 1')
+    expect(screen.queryByRole('button', { name: /AI context remaining/ })).toBeNull()
   })
 
   it('prompts to choose a model when credentials exist but no default is set', async () => {

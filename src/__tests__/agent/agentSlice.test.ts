@@ -34,7 +34,16 @@ function freshAgentState() {
     agentConversationId: null,
     agentActiveCredentialId: null,
     agentActiveModelId: null,
-    agentContextTokens: null,
+    agentUsage: {
+      contextTokens: null,
+      contextCredentialId: null,
+      contextModelId: null,
+      promptTokens: 0,
+      completionTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      costUsd: 0,
+    },
     isAgentConversationPending: false,
     isAgentProviderPending: false,
     agentComposerEpoch: 0,
@@ -205,6 +214,67 @@ describe('processStreamEvent — bridge handshake', () => {
     )
 
     expect(bridge.bridgeId).toBe('bridge-xyz')
+  })
+})
+
+describe('processStreamEvent — context and billing usage', () => {
+  it('keeps the current model context separate from cumulative billing totals', async () => {
+    const { assistantId } = freshAgentState()
+    useEditorStore.setState({
+      agentActiveCredentialId: 'cred-1',
+      agentActiveModelId: 'model-1',
+    })
+
+    await processStreamEvent(
+      { type: 'context', contextTokens: 4096 },
+      assistantId,
+      noopTextSink,
+      useEditorStore.setState,
+      emptyBridge(),
+      null,
+      executeAgentTool,
+    )
+    await processStreamEvent(
+      {
+        type: 'usage',
+        promptTokens: 5000,
+        completionTokens: 300,
+        cacheReadTokens: 2000,
+        cacheCreationTokens: 400,
+        costUsd: 0.012345,
+      },
+      assistantId,
+      noopTextSink,
+      useEditorStore.setState,
+      emptyBridge(),
+      null,
+      executeAgentTool,
+    )
+    await processStreamEvent(
+      {
+        type: 'usage',
+        promptTokens: 2000,
+        completionTokens: 100,
+        costUsd: 0.001,
+      },
+      assistantId,
+      noopTextSink,
+      useEditorStore.setState,
+      emptyBridge(),
+      null,
+      executeAgentTool,
+    )
+
+    expect(useEditorStore.getState().agentUsage).toEqual({
+      contextTokens: 4096,
+      contextCredentialId: 'cred-1',
+      contextModelId: 'model-1',
+      promptTokens: 7000,
+      completionTokens: 400,
+      cacheReadTokens: 2000,
+      cacheCreationTokens: 400,
+      costUsd: 0.013345,
+    })
   })
 })
 
@@ -778,7 +848,16 @@ describe('conversation reset key-set', () => {
     agentConversationId: null,
     agentActiveCredentialId: null,
     agentActiveModelId: null,
-    agentContextTokens: null,
+    agentUsage: {
+      contextTokens: null,
+      contextCredentialId: null,
+      contextModelId: null,
+      promptTokens: 0,
+      completionTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      costUsd: 0,
+    },
     agentComposerEpoch: 1,
   }
 
@@ -791,7 +870,16 @@ describe('conversation reset key-set', () => {
       agentConversationId: 'conv-dirty',
       agentActiveCredentialId: 'cred-1',
       agentActiveModelId: 'model-1',
-      agentContextTokens: 4096,
+      agentUsage: {
+        contextTokens: 4096,
+        contextCredentialId: 'cred-1',
+        contextModelId: 'model-1',
+        promptTokens: 12_000,
+        completionTokens: 800,
+        cacheReadTokens: 4_000,
+        cacheCreationTokens: 500,
+        costUsd: 0.42,
+      },
     })
   }
 
@@ -803,7 +891,7 @@ describe('conversation reset key-set', () => {
       agentConversationId: s.agentConversationId,
       agentActiveCredentialId: s.agentActiveCredentialId,
       agentActiveModelId: s.agentActiveModelId,
-      agentContextTokens: s.agentContextTokens,
+      agentUsage: s.agentUsage,
       agentComposerEpoch: s.agentComposerEpoch,
     }
   }

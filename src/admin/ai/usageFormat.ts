@@ -1,10 +1,4 @@
-/**
- * Number/cost formatting for the AI usage audit tables.
- *
- * Lives in a non-component `.ts` leaf so both the AuditTab panels and the
- * shared `UsageTablePanel` (plus their tests) can import these without tripping
- * React Fast Refresh's "components-only export" rule on the component file.
- */
+/** Shared number and USD formatting for AI usage surfaces. */
 
 /** Whole-number with locale grouping, no fraction (e.g. token + chat counts). */
 export function formatNumber(value: number): string {
