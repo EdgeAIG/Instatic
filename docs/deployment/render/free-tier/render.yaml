@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: instatic
+    runtime: image
+    image:
+      url: ghcr.io/corebunch/instatic:latest
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: off
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: DATABASE_URL
+        sync: false
+      - key: UPLOADS_DIR
+        value: /tmp/uploads
+      - key: STATIC_DIR
+        value: /app/dist
+      - key: HF_TOKEN
+        sync: false
+      - key: HF_BUCKET_ID
+        sync: false
+      - key: HF_SNAPSHOT_ENABLED
+        value: "true"
+      - key: HF_SNAPSHOT_PATH
+        value: snapshots/instatic-uploads.tar.gz
+      - key: HF_SNAPSHOT_INTERVAL_SECONDS
+        value: "300"
+      - key: INSTATIC_SECRET_KEY
+        sync: false

@@ -99,6 +99,11 @@ describe('readServerConfig', () => {
       staticDir: './dist',
       trustedProxyCidrs: [],
       publicOrigins: [],
+      hfToken: '',
+      hfBucketId: '',
+      hfSnapshotEnabled: false,
+      hfSnapshotPath: 'snapshots/instatic-uploads.tar.gz',
+      hfSnapshotIntervalMs: 300_000,
     })
   })
 
@@ -113,6 +118,11 @@ describe('readServerConfig', () => {
         PUBLIC_ORIGIN: 'https://CMS.example.com/, http://localhost:5173',
         RENDER_EXTERNAL_URL: 'https://ignored.onrender.com',
         RAILWAY_PUBLIC_DOMAIN: 'ignored.up.railway.app',
+        HF_TOKEN: 'hf_test',
+        HF_BUCKET_ID: 'owner/media',
+        HF_SNAPSHOT_ENABLED: 'true',
+        HF_SNAPSHOT_PATH: 'snapshots/render.tar.gz',
+        HF_SNAPSHOT_INTERVAL_SECONDS: '60',
       }),
     ).toEqual({
       port: 4321,
@@ -121,6 +131,11 @@ describe('readServerConfig', () => {
       staticDir: '/srv/instatic/dist',
       trustedProxyCidrs: ['10.0.0.0/8', '192.168.0.0/16'],
       publicOrigins: ['https://cms.example.com', 'http://localhost:5173'],
+      hfToken: 'hf_test',
+      hfBucketId: 'owner/media',
+      hfSnapshotEnabled: true,
+      hfSnapshotPath: 'snapshots/render.tar.gz',
+      hfSnapshotIntervalMs: 60_000,
     })
   })
 })

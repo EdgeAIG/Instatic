@@ -12,6 +12,7 @@ Render can run Instatic from the published Docker image, provide a public web se
 |---|---|---|---|
 | SQLite | `docs/deployment/render/sqlite/render.yaml` | SQLite file | One Render disk mounted at `/app/storage` |
 | Postgres | `docs/deployment/render/postgres/render.yaml` | Render Postgres | One Render disk for uploads and published artefacts |
+| Free tier | `docs/deployment/render/free-tier/render.yaml` | External Postgres | Hugging Face Storage Bucket for media; no Render disk |
 
 Both templates use:
 
@@ -28,6 +29,8 @@ Render auto-injects `RENDER_EXTERNAL_URL` (the full public URL) into every web s
 
 Use SQLite for the default one-click install. Use Postgres when the operator wants managed database backups, several simultaneous admin writers, or a path to more app instances after the app storage layer moves off local disk.
 
+Use the free-tier template when the operator accepts Render's free-service sleep policy and supplies an external Postgres database plus a public Hugging Face Storage Bucket. This template does not provision paid Render disks or databases.
+
 ## Template Repositories
 
 Render's one-click flow reads a Blueprint from a Git repository. For public install buttons, keep tiny template repositories whose root `render.yaml` is copied from this repo:
@@ -36,6 +39,7 @@ Render's one-click flow reads a Blueprint from a Git repository. For public inst
 |---|---|
 | `corebunch/instatic-render-sqlite` | `docs/deployment/render/sqlite/render.yaml` |
 | `corebunch/instatic-render-postgres` | `docs/deployment/render/postgres/render.yaml` |
+| `corebunch/instatic-render-free` | `docs/deployment/render/free-tier/render.yaml` |
 
 Each template repo README can expose a button:
 
@@ -86,6 +90,30 @@ ipAllowList=[]
 
 `ipAllowList: []` keeps the database reachable only from Render's private network. The app still needs the persistent disk because Postgres stores content rows, but uploaded files, fonts, plugin packs, and published artefacts live under `UPLOADS_DIR`.
 
+## Free-Tier Template
+
+`docs/deployment/render/free-tier/render.yaml` provisions only a free Render web service. Configure these secret values when applying the Blueprint:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | External `postgres://` or `postgresql://` connection string from Neon, Supabase, or another reachable provider |
+| `HF_TOKEN` | Hugging Face User Access Token with write scope |
+| `HF_BUCKET_ID` | Public bucket id in `owner/bucket-name` form |
+| `HF_SNAPSHOT_ENABLED` | `true` to restore and checkpoint the complete `UPLOADS_DIR` filesystem |
+| `HF_SNAPSHOT_PATH` | Bucket object path, normally `snapshots/instatic-uploads.tar.gz` |
+| `HF_SNAPSHOT_INTERVAL_SECONDS` | Periodic checkpoint interval; the template uses `300` |
+| `INSTATIC_SECRET_KEY` | Output of `bun run scripts/generate-secret-key.ts` |
+
+The service stages media briefly under `/tmp`, then stores originals, generated variants, avatars, and fonts in the configured Hugging Face bucket. On first boot with Hugging Face configured, those roles are elected to the built-in `huggingface` adapter only when no election exists; later admin selections are preserved.
+
+When filesystem snapshots are enabled, the server restores `UPLOADS_DIR` before plugins activate and before HTTP traffic starts. It then checkpoints the complete directory every configured interval and once more during graceful `SIGTERM` shutdown. This archive includes plugin packages, published HTML/CSS/JS, fonts, local fallback media, and generated variants. The snapshot object is replaced on each successful checkpoint; a failed restore aborts startup instead of letting an empty filesystem overwrite the durable copy.
+
+This strategy is durable but not a distributed filesystem. Render can terminate a free instance without delivering enough shutdown time, so the periodic checkpoint is the primary protection and up to one interval of recent filesystem changes can be lost. Database data is committed directly to external Postgres and is not subject to that window. Run one service instance only: two writers sharing one snapshot object would overwrite each other's filesystem state.
+
+The bucket must be public because rendered pages emit stable URLs in the form `https://huggingface.co/buckets/<owner>/<bucket>/resolve/<path>`. Do not expose `HF_TOKEN` in page content or use it as a query parameter.
+
+Supabase users should use the IPv4-compatible pooler connection string when the direct database hostname is IPv6-only. Its username includes the project ref, for example `postgres.<project-ref>`, and the session-pooler hostname resembles `aws-0-<region>.pooler.supabase.com`. URL-encode special characters in the database password before placing it in `DATABASE_URL`.
+
 ## Runtime Notes
 
 Render web services use `PORT=10000` by default. The templates set `PORT` explicitly because the Docker image's default is `3001`.
@@ -94,7 +122,7 @@ Render terminates HTTPS at its public web service layer before forwarding traffi
 
 `TRUSTED_PROXY_CIDRS` is **not** used for CSRF and is omitted from the templates. It is an optional knob for client-IP attribution only (audit logs, rate-limit keys): set it to Render's ingress proxy CIDR if you want real client IPs in audit logs, and trust only your actual proxy CIDRs — never `0.0.0.0/0` for a public-facing service.
 
-`INSTATIC_SECRET_KEY` uses Render's `generateValue: true` support. Operators should copy the generated value from Render's environment settings into their password manager after first deploy. Losing the value means stored AI provider credentials and plugin secret settings must be re-entered and TOTP MFA must be re-enrolled.
+The paid templates use Render's `generateValue: true` support for `INSTATIC_SECRET_KEY`. The free-tier template requires an explicit value because Instatic validates that it decodes from base64 to exactly 32 bytes, while Render's generic generated value format does not guarantee that shape. Operators should keep the value in their password manager. Losing it means stored AI provider credentials and plugin secret settings must be re-entered and TOTP MFA must be re-enrolled.
 
 Do not add a separate migration command. `server/index.ts` creates the DB client from `DATABASE_URL` and runs the matching migrations before the HTTP server starts.
 
@@ -104,6 +132,7 @@ Back up both data stores:
 
 - SQLite template: back up the Render disk mounted at `/app/storage`; it contains both `data/cms.db` and `uploads/`.
 - Postgres template: back up the Render Postgres database and the Render disk mounted at `/app/storage`; the disk contains uploaded media, fonts, plugin packages, and published artefacts.
+- Free-tier template: back up the external Postgres database and Hugging Face bucket separately. Ephemeral local plugin packages and published disk artefacts are not durable across Render restarts.
 
 Render disk snapshots cover the app disk. Render Postgres backups cover the managed database according to the selected database plan.
 
@@ -117,6 +146,10 @@ Render disk snapshots cover the app disk. Render Postgres backups cover the mana
 | Uploaded files disappear after redeploy | `UPLOADS_DIR` must point under the mounted disk, e.g. `/app/storage/uploads`. |
 | First-run setup or login returns `Forbidden: invalid origin` | Render auto-injects `RENDER_EXTERNAL_URL`; confirm you are opening that exact URL. If you front the app with a custom domain, append it to `PUBLIC_ORIGIN` (comma-separated alongside the Render URL). |
 | Postgres app cannot connect | `DATABASE_URL` must use `fromDatabase` with `property: connectionString`. |
+| External Postgres app cannot connect | Confirm the connection string is reachable from Render. For Supabase, use a pooler URL when the direct hostname is IPv6-only. |
+| Media upload or filesystem snapshot fails on the free tier | Confirm the bucket is public, `HF_BUCKET_ID` is `owner/bucket-name`, and `HF_TOKEN` has write scope. |
+| Service fails immediately during snapshot restore | Do not disable restore and boot empty. Verify HF credentials and bucket availability, then redeploy. |
+| Media works in admin but not on the published page | Confirm the Hugging Face bucket is public; browser reads do not include `HF_TOKEN`. |
 | Adding an AI provider credential or enabling TOTP MFA returns 500 | Confirm `INSTATIC_SECRET_KEY` exists and has not been rotated. |
 | The service deploys from source instead of the release image | The Blueprint should use `runtime: image`, not `runtime: docker`. |
 
@@ -127,6 +160,7 @@ Render disk snapshots cover the app disk. Render Postgres backups cover the mana
 - [backup-restore.md](backup-restore.md) — backup rules
 - `docs/deployment/render/sqlite/render.yaml` — SQLite Render Blueprint
 - `docs/deployment/render/postgres/render.yaml` — Postgres Render Blueprint
+- `docs/deployment/render/free-tier/render.yaml` — external Postgres and Hugging Face free-tier Blueprint
 - `server/config.ts` — runtime env parsing
 - `server/db/index.ts` — database URL detection
 - `Dockerfile` — production image

@@ -95,6 +95,20 @@ export async function electAdapter(
   return mapRow(rows[0])
 }
 
+/** Set a deployment default without replacing an administrator's election. */
+export async function electAdapterIfUnset(
+  db: DbClient,
+  role: MediaAssetRole,
+  adapterId: string,
+): Promise<void> {
+  const nowIso = new Date().toISOString()
+  await db`
+    insert into active_media_storage_adapter (role, adapter_id, elected_at, elected_by_user_id)
+    values (${role}, ${adapterId}, ${nowIso}, ${null})
+    on conflict (role) do nothing
+  `
+}
+
 /**
  * How many asset rows are written by a given adapter id. The admin uses
  * this to (a) display "this adapter owns 1,247 assets" in the picker, and

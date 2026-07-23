@@ -5,6 +5,11 @@ interface ServerConfig {
   staticDir: string
   trustedProxyCidrs: string[]
   publicOrigins: string[]
+  hfToken: string
+  hfBucketId: string
+  hfSnapshotEnabled: boolean
+  hfSnapshotPath: string
+  hfSnapshotIntervalMs: number
 }
 
 function readCsvList(value: string | undefined): string[] {
@@ -12,6 +17,11 @@ function readCsvList(value: string | undefined): string[] {
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean)
+}
+
+function readPositiveNumber(value: string | undefined, fallback: number): number {
+  const number = Number(value ?? fallback)
+  return Number.isFinite(number) && number > 0 ? number : fallback
 }
 
 /**
@@ -88,5 +98,10 @@ export function readServerConfig(
     staticDir: env.STATIC_DIR ?? './dist',
     trustedProxyCidrs: readCsvList(env.TRUSTED_PROXY_CIDRS),
     publicOrigins: resolvePublicOrigins(env),
+    hfToken: env.HF_TOKEN ?? '',
+    hfBucketId: env.HF_BUCKET_ID ?? '',
+    hfSnapshotEnabled: env.HF_SNAPSHOT_ENABLED === 'true',
+    hfSnapshotPath: env.HF_SNAPSHOT_PATH ?? 'snapshots/instatic-uploads.tar.gz',
+    hfSnapshotIntervalMs: readPositiveNumber(env.HF_SNAPSHOT_INTERVAL_SECONDS, 300) * 1000,
   }
 }

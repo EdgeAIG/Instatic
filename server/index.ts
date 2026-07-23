@@ -5,6 +5,7 @@ import { readServerConfig } from './config'
 import { DEV_ORIGIN_ALLOWLIST, configurePublicOrigins, configureTrustedProxyCidrs, stampSocketIp } from './auth/security'
 import { applySecurityHeaders } from './securityHeaders'
 import { startConversationPurgeTick } from './ai/boot'
+import type { FilesystemSnapshotController } from './persistence/filesystemSnapshot'
 
 await import('./richtextSanitizer')
 const { handleServerRequest } = await import('./router')
@@ -14,6 +15,27 @@ const { mediaStorageRegistry } = await import('@core/plugins/mediaStorageRegistr
 const config = readServerConfig()
 configureTrustedProxyCidrs(config.trustedProxyCidrs)
 configurePublicOrigins(config.publicOrigins)
+
+let filesystemSnapshots: FilesystemSnapshotController | null = null
+if (config.hfSnapshotEnabled) {
+  if (!config.hfToken || !config.hfBucketId) {
+    throw new Error(
+      '[filesystem-snapshot] HF_TOKEN and HF_BUCKET_ID are required when HF_SNAPSHOT_ENABLED=true',
+    )
+  }
+  const snapshots = await import('./persistence/filesystemSnapshot')
+  const snapshotOptions = {
+    directory: config.uploadsDir,
+    token: config.hfToken,
+    bucketId: config.hfBucketId,
+    snapshotPath: config.hfSnapshotPath,
+    intervalMs: config.hfSnapshotIntervalMs,
+  }
+  const restoreResult = await snapshots.restoreFilesystemSnapshot(snapshotOptions)
+  console.log(`[filesystem-snapshot] Startup restore: ${restoreResult}`)
+  filesystemSnapshots = snapshots.startFilesystemSnapshots(snapshotOptions)
+}
+
 const { db, migrations } = createDbClient(config.databaseUrl)
 await runMigrations(db, migrations)
 // System role sync runs after migrations on every boot — the Owner row's
@@ -25,6 +47,23 @@ await syncSystemRoles(db)
 // plugin adapters register through the same registry but local-disk is
 // always the fallback for unset roles. See `mediaStorageRegistry.ts`.
 mediaStorageRegistry.configureLocalDisk({ uploadsDir: config.uploadsDir })
+
+// Wire the Hugging Face Storage Bucket adapter when credentials are
+// provided. This allows Render free-tier deploys (which have no persistent
+// disk) to store media assets in a HF bucket instead of local disk.
+if (config.hfToken && config.hfBucketId) {
+  const { createHuggingfaceAdapter } = await import('./handlers/cms/mediaStorageAdapterHuggingface')
+  const hfAdapter = createHuggingfaceAdapter(config.hfToken, config.hfBucketId)
+  if (hfAdapter) {
+    mediaStorageRegistry.register(hfAdapter)
+    const { electAdapterIfUnset } = await import('./repositories/mediaStorageAdapters')
+    for (const role of hfAdapter.roles) {
+      await electAdapterIfUnset(db, role, hfAdapter.id)
+    }
+    console.log('[server] Hugging Face Storage adapter registered')
+  }
+}
+
 await activateInstalledServerPlugins(db, config.uploadsDir)
 // AI runtime: start the nightly conversation-purge tick. Operators add
 // their own provider credentials via /admin/ai/providers on first install.
@@ -58,7 +97,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
   }
 }
 
-Bun.serve({
+const server = Bun.serve({
   port: config.port,
 
   // Disable Bun's default 10-second idle timeout. The agent endpoint streams
@@ -121,5 +160,28 @@ Bun.serve({
     return new Response('Internal Server Error', { status: 500 })
   },
 })
+
+let shuttingDown = false
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`[server] ${signal} received; stopping and checkpointing filesystem`)
+  server.stop(false)
+  filesystemSnapshots?.stop()
+  if (filesystemSnapshots) {
+    await Promise.race([
+      filesystemSnapshots.saveNow(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('shutdown checkpoint timed out')), 20_000)
+      }),
+    ]).catch((err) => {
+      console.error('[filesystem-snapshot] Shutdown checkpoint failed:', err)
+    })
+  }
+  process.exit(0)
+}
+
+process.once('SIGTERM', () => void shutdown('SIGTERM'))
+process.once('SIGINT', () => void shutdown('SIGINT'))
 
 console.log(`[server] Listening on http://localhost:${config.port}`)
